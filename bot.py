@@ -1,3 +1,6 @@
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+
 import asyncio, os, hashlib, random, string
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -547,18 +550,34 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
     except Exception:
         pass
 
-# ----------------- ENTRYPOINT -----------------
+# ---------------- ENTRYPOINT ----------------
 async def main():
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
     # 1) инициализация БД
     await init_db()
-    # 2) запускаем планировщик ПОСЛЕ создания event loop (мы внутри main)
+    logging.info("✅ База данных инициализирована")
+
+    # 2) запускаем планировщик
     scheduler.start()
-    # 3) Вызвать установку команд при старте бота
+    logging.info("✅ Планировщик запущен")
+
+    # 3) Проверяем токен и подключение к Telegram
+    me = await bot.get_me()
+    logging.info(f"🤖 Бот запущен как @{me.username} (ID: {me.id})")
+
+    # 4) Устанавливаем команды бота
     await set_bot_commands(bot)
-    # 4) Снимаем вебхук
+    logging.info("✅ Команды установлены")
+
+    # 5) Снимаем возможный старый вебхук
     await bot.delete_webhook(drop_pending_updates=True)
-    # 5) запускаем бота
-    await dp.start_polling(bot)
+    logging.info("🔁 Webhook удалён, включаю polling...")
+
+    # 6) Запускаем polling
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
 
 if __name__ == "__main__":
     import asyncio
