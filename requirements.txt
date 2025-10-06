@@ -1,0 +1,15 @@
+pip>=24.2
+setuptools>=70.0
+wheel>=0.43.0
+
+aiogram==3.6.0
+aiohttp==3.9.5
+yarl==1.9.4
+multidict==6.0.5
+frozenlist==1.4.1
+aiosignal==1.3.1
+
+SQLAlchemy==2.0.32
+aiosqlite==0.20.0
+APScheduler==3.10.4
+python-dotenv==1.0.1
