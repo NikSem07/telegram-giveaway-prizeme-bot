@@ -28,6 +28,19 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
 
+# ---- Health-check HTTP server for Timeweb ----
+import os, threading, http.server, socketserver
+
+def run_health_http():
+    port = int(os.getenv("PORT", "8080"))  # Timeweb проверит этот порт
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args, **kwargs):
+            pass  # без лишнего шума в лог
+    with socketserver.TCPServer(("0.0.0.0", port), Handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=run_health_http, daemon=True).start()
+
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
 
