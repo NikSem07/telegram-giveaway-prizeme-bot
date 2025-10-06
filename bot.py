@@ -555,7 +555,9 @@ async def main():
     scheduler.start()
     # 3) Вызвать установку команд при старте бота
     await set_bot_commands(bot)
-    # 4) запускаем бота
+    # 4) Снимаем вебхук
+    await bot.delete_webhook(drop_pending_updates=True)
+    # 5) запускаем бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
