@@ -451,7 +451,6 @@ async def got_video(m: Message, state: FSMContext):
             reply_markup=kb_skip_media()
         )
         return
-
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
         await m.answer(
             "⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
@@ -461,24 +460,6 @@ async def got_video(m: Message, state: FSMContext):
     await state.update_data(photo=pack_media("video", v.file_id))
     await state.set_state(CreateFlow.ENDAT)
     await m.answer(format_endtime_prompt(), parse_mode="HTML")
-
-
-from datetime import datetime, timezone, timedelta
-
-def format_endtime_prompt() -> str:
-    # Текущее московское время (UTC+3)
-    now_msk = datetime.now(timezone.utc) + timedelta(hours=3)
-    # Пример через 5 минут, как в референсе
-    example_time = (now_msk + timedelta(minutes=5)).strftime("%H:%M %d.%m.%Y")
-    current_time = now_msk.strftime("%H:%M %d.%m.%Y")
-
-    text = (
-        "⏰ <b>Укажите время окончания розыгрыша в формате (ЧЧ:ММ ДД.ММ.ГГГГ)</b>\n\n"
-        f"<i>Например:</i> <b>{example_time}</b>\n\n"
-        "⚠️ <b>Внимание!</b> Бот работает в соответствии с часовым поясом MSK (GMT+3).\n"
-        f"Текущее время в боте: <b>{current_time}</b>"
-    )
-    return text
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
