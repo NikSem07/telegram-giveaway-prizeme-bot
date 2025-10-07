@@ -356,7 +356,7 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
     await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no())
     await cq.answer()
 
-    @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
+@dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
 async def media_yes(cq: CallbackQuery, state: FSMContext):
     try:
         await cq.message.edit_reply_markup()
@@ -375,13 +375,6 @@ async def media_no(cq: CallbackQuery, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
     await cq.message.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
     await cq.answer()
-
-    await state.update_data(desc=text)
-
-    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
-    await m.answer(preview, parse_mode="HTML")
-    await m.answer("Выберите действие:", reply_markup=kb_confirm_description())
-    await state.set_state(CreateFlow.CONFIRM_DESC)
 
 MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 
