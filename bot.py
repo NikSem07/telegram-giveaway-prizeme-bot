@@ -380,7 +380,7 @@ async def media_no(cq: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_UPLOAD, F.data == "media:skip")
@@ -390,7 +390,7 @@ async def media_skip_btn(cq: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
     await cq.answer()
 
 MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
@@ -399,7 +399,7 @@ MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.text.casefold() == "пропустить")
 async def media_skip_by_text(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await m.answer(format_endtime_prompt(), parse_mode="HTML")
 
 # Фото
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
@@ -407,7 +407,7 @@ async def got_photo(m: Message, state: FSMContext):
     file_id = m.photo[-1].file_id
     await state.update_data(photo=pack_media("photo", file_id))
     await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Ок. Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await m.answer(format_endtime_prompt(), parse_mode="HTML")
 
 # GIF (Telegram шлёт как animation — это mp4-клип)
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
@@ -444,6 +444,22 @@ async def got_video(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
     await m.answer("Отлично! Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
 
+from datetime import datetime, timezone, timedelta
+
+def format_endtime_prompt() -> str:
+    # Текущее московское время (UTC+3)
+    now_msk = datetime.now(timezone.utc) + timedelta(hours=3)
+    # Пример через 5 минут, как в референсе
+    example_time = (now_msk + timedelta(minutes=5)).strftime("%H:%M %d.%m.%Y")
+    current_time = now_msk.strftime("%H:%M %d.%m.%Y")
+
+    text = (
+        "⏰ <b>Укажите время окончания розыгрыша в формате (ЧЧ:ММ ДД.ММ.ГГГГ)</b>\n\n"
+        f"<i>Например:</i> <b>{example_time}</b>\n\n"
+        "⚠️ <b>Внимание!</b> Бот работает в соответствии с часовым поясом MSK (GMT+3).\n"
+        f"Текущее время в боте: <b>{current_time}</b>"
+    )
+    return text
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
