@@ -22,11 +22,19 @@ from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from aiogram.types import BotCommand
 
+from html import escape
+
 from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
+DESCRIPTION_PROMPT = (
+    "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
+    "Можно использовать не более 2500 символов.\n\n"
+    "<i>Подробно опишите условия розыгрыша для ваших подписчиков.\n"
+    "После начала розыгрыша введённый текст будет опубликован\n"
+    "на всех связанных с ним каналах.</i>")
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -165,6 +173,7 @@ from aiogram.fsm.state import StatesGroup, State
 class CreateFlow(StatesGroup):
     TITLE = State()
     DESC = State()
+    CONFIRM_DESC = State()   # <-- НОВОЕ состояние
     PHOTO = State()
     ENDAT = State()
 
@@ -215,6 +224,13 @@ def kb_participate(gid:int, allow:bool, cancelled:bool=False):
             kb.button(text="Принять участие", callback_data=f"u:join:{gid}")
     return kb.as_markup()
 
+def kb_confirm_description() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✏️ Редактировать текст", callback_data="desc:edit")
+    kb.button(text="➡️ Продолжить", callback_data="desc:continue")
+    kb.adjust(1)
+    return kb.as_markup()
+
 @dp.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     await ensure_user(m.from_user.id, m.from_user.username)
@@ -233,7 +249,7 @@ async def cmd_start(m: Message, state: FSMContext):
 @dp.message(Command("create"))
 async def create_giveaway_start(message: Message, state: FSMContext):
     await state.clear()
-    await state.update_data(owner=message.from_user.id)  # <-- сохраняем владельца сразу
+    await state.update_data(owner=message.from_user.id)
     await message.answer(
         "Введите название розыгрыша:\n\n"
         "Максимум — <b>50 символов</b>.\n\n"
@@ -244,9 +260,10 @@ async def create_giveaway_start(message: Message, state: FSMContext):
         "<i>Пример названия:</i> <b>MacBook Pro от канала PrizeMe</b>",
         parse_mode="HTML"
     )
-    await state.set_state("giveaway_name")
+    await state.set_state(CreateFlow.TITLE)   # <-- ставим состояние титула
 
-@dp.message(StateFilter("giveaway_name"))
+
+@dp.message(CreateFlow.TITLE)
 async def handle_giveaway_name(m: Message, state: FSMContext):
     name = (m.text or "").strip()
     if not name:
@@ -256,28 +273,49 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
         await m.answer("Название не должно превышать 50 символов. Попробуйте снова.")
         return
 
-    # Сохраняем название
     await state.update_data(title=name)
 
     # Переходим к следующему шагу — описание
     await state.set_state(CreateFlow.DESC)
-    await message.answer(
-    "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
-    "Можно использовать не более 2500 символов.\n\n"
-    "<i>Подробно опишите условия розыгрыша для ваших подписчиков.\n"
-    "После начала розыгрыша введённый текст будет опубликован\n"
-    "на всех связанных с ним каналах.</i>",
-    parse_mode="HTML")
-
-@dp.message(CreateFlow.TITLE)
-async def step_title_too_long(m:Message, state:FSMContext):
-    await m.answer("Слишком длинно. Введите до 50 символов.")
+    await m.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
 
 @dp.message(CreateFlow.DESC, F.text)
-async def step_desc(m:Message, state:FSMContext):
-    await state.update_data(desc=m.text.strip())
+async def step_desc(m: Message, state: FSMContext):
+    text = (m.text or "").strip()
+    if len(text) > 2500:
+        await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
+        return
+    
+@dp.callback_query(CreateFlow.CONFIRM_DESC, F.data == "desc:edit")
+async def desc_edit(cq: CallbackQuery, state: FSMContext):
+    # уберём старые кнопки под сообщением (не обязательно, но красиво)
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+    await state.set_state(CreateFlow.DESC)
+    await cq.message.answer("Окей, пришлите новый текст описания.\n\n" + DESCRIPTION_PROMPT, parse_mode="HTML")
+    await cq.answer()
+
+
+@dp.callback_query(CreateFlow.CONFIRM_DESC, F.data == "desc:continue")
+async def desc_continue(cq: CallbackQuery, state: FSMContext):
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+
+    # Переходим к шагу фото — как у тебя было раньше
     await state.set_state(CreateFlow.PHOTO)
-    await m.answer("Пришлите <b>картинку</b> (или напишите «пропустить»):")
+    await cq.message.answer("Пришлите <b>картинку</b> (или напишите «пропустить»):", parse_mode="HTML")
+    await cq.answer()
+
+    await state.update_data(desc=text)
+
+    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
+    await m.answer(preview, parse_mode="HTML")
+    await m.answer("Выберите действие:", reply_markup=kb_confirm_description())
+    await state.set_state(CreateFlow.CONFIRM_DESC)
 
 @dp.message(CreateFlow.PHOTO, F.text.casefold() == "пропустить")
 async def step_photo_skip(m:Message, state:FSMContext):
