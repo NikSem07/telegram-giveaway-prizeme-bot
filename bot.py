@@ -292,8 +292,7 @@ async def step_desc(m: Message, state: FSMContext):
 
     # показываем предпросмотр + кнопки
     preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
-    await m.answer(preview, parse_mode="HTML")
-    await m.answer("Выберите действие:", reply_markup=kb_confirm_description())
+    await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
 
     # переходим в состояние подтверждения
     await state.set_state(CreateFlow.CONFIRM_DESC)
