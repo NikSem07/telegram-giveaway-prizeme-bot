@@ -261,7 +261,13 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
 
     # Переходим к следующему шагу — описание
     await state.set_state(CreateFlow.DESC)
-    await m.answer("Введите текст описания розыгрыша (до 2500 символов):")
+    await message.answer(
+    "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
+    "Можно использовать не более 2500 символов.\n\n"
+    "<i>Подробно опишите условия розыгрыша для ваших подписчиков.\n"
+    "После начала розыгрыша введённый текст будет опубликован\n"
+    "на всех связанных с ним каналах.</i>",
+    parse_mode="HTML")
 
 @dp.message(CreateFlow.TITLE)
 async def step_title_too_long(m:Message, state:FSMContext):
