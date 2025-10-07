@@ -279,35 +279,57 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.DESC)
     await m.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
 
+# --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
     text = (m.text or "").strip()
     if len(text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
-    
+
+    # сохраняем описание
+    await state.update_data(desc=text)
+
+    # показываем предпросмотр + кнопки
+    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
+    await m.answer(preview, parse_mode="HTML")
+    await m.answer("Выберите действие:", reply_markup=kb_confirm_description())
+
+    # переходим в состояние подтверждения
+    await state.set_state(CreateFlow.CONFIRM_DESC)
+
+# если прислали не текст
+@dp.message(CreateFlow.DESC)
+async def step_desc_wrong(m: Message):
+    await m.answer("Пришлите, пожалуйста, текст (до 2500 символов).")
+
+# --- кнопка «Редактировать текст» ---
 @dp.callback_query(CreateFlow.CONFIRM_DESC, F.data == "desc:edit")
 async def desc_edit(cq: CallbackQuery, state: FSMContext):
-    # уберём старые кнопки под сообщением (не обязательно, но красиво)
     try:
-        await cq.message.edit_reply_markup()
+        await cq.message.edit_reply_markup()  # скроем старые кнопки
     except Exception:
         pass
     await state.set_state(CreateFlow.DESC)
-    await cq.message.answer("Окей, пришлите новый текст описания.\n\n" + DESCRIPTION_PROMPT, parse_mode="HTML")
+    await cq.message.answer(
+        "Окей, пришлите новый текст описания.\n\n" + DESCRIPTION_PROMPT,
+        parse_mode="HTML"
+    )
     await cq.answer()
 
-
+# --- кнопка «Продолжить» ---
 @dp.callback_query(CreateFlow.CONFIRM_DESC, F.data == "desc:continue")
 async def desc_continue(cq: CallbackQuery, state: FSMContext):
     try:
         await cq.message.edit_reply_markup()
     except Exception:
         pass
-
-    # Переходим к шагу фото — как у тебя было раньше
+    # идём дальше — к шагу с фото
     await state.set_state(CreateFlow.PHOTO)
-    await cq.message.answer("Пришлите <b>картинку</b> (или напишите «пропустить»):", parse_mode="HTML")
+    await cq.message.answer(
+        "Пришлите <b>картинку</b> (или напишите «пропустить»):",
+        parse_mode="HTML"
+    )
     await cq.answer()
 
     await state.update_data(desc=text)
