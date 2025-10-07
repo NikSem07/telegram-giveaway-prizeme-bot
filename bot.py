@@ -36,6 +36,34 @@ DESCRIPTION_PROMPT = (
     "После начала розыгрыша введённый текст будет опубликован\n"
     "на всех связанных с ним каналах.</i>")
 
+MEDIA_QUESTION = "Хотите ли добавить изображение / gif / видео для текущего розыгрыша?"
+
+MEDIA_INSTRUCTION = (
+    "<b>Отправьте изображение / <i>gif</i> / видео для текущего розыгрыша.</b>\n\n"
+    "<i>Используйте стандартную доставку. Не отправляйте \"несжатым\" способом (НЕ как документ).</i>\n\n"
+    "<b>Внимание!</b> Видео должно быть в формате MP4, а его размер не должен превышать 5 МБ."
+)
+
+def kb_yes_no() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Да",  callback_data="media:yes")
+    kb.button(text="Нет", callback_data="media:no")
+    kb.adjust(2)
+    return kb.as_markup()
+
+# Храним тип вместе с file_id в одном поле БД
+def pack_media(kind: str, file_id: str) -> str:
+    return f"{kind}:{file_id}"
+
+def unpack_media(value: str | None) -> tuple[str|None, str|None]:
+    if not value:
+        return None, None
+    if ":" in value:
+        k, fid = value.split(":", 1)
+        return k, fid
+    # обратная совместимость: старое поле только с photo id
+    return "photo", value
+
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
 
@@ -170,11 +198,14 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
 
 # ----------------- FSM -----------------
 from aiogram.fsm.state import StatesGroup, State
+
 class CreateFlow(StatesGroup):
     TITLE = State()
     DESC = State()
-    CONFIRM_DESC = State()   # <-- НОВОЕ состояние
-    PHOTO = State()
+    CONFIRM_DESC = State()   # подтверждение описания
+    MEDIA_DECIDE = State()   # новый шаг: задать вопрос Да/Нет
+    MEDIA_UPLOAD = State()   # новый шаг: ожидать файл (photo/animation/video)
+    PHOTO = State()          # больше не используется, но пусть останется если где-то ссылаешься
     ENDAT = State()
 
 # ----------------- BOT -----------------
@@ -321,11 +352,28 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     # идём дальше — к шагу с фото
-    await state.set_state(CreateFlow.PHOTO)
-    await cq.message.answer(
-        "Пришлите <b>картинку</b> (или напишите «пропустить»):",
-        parse_mode="HTML"
-    )
+    await state.set_state(CreateFlow.MEDIA_DECIDE)
+    await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no())
+    await cq.answer()
+
+    @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
+async def media_yes(cq: CallbackQuery, state: FSMContext):
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+    await state.set_state(CreateFlow.MEDIA_UPLOAD)
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML")
+    await cq.answer()
+
+@dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:no")
+async def media_no(cq: CallbackQuery, state: FSMContext):
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+    await state.set_state(CreateFlow.ENDAT)
+    await cq.message.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
     await cq.answer()
 
     await state.update_data(desc=text)
@@ -335,18 +383,47 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
     await m.answer("Выберите действие:", reply_markup=kb_confirm_description())
     await state.set_state(CreateFlow.CONFIRM_DESC)
 
-@dp.message(CreateFlow.PHOTO, F.text.casefold() == "пропустить")
-async def step_photo_skip(m:Message, state:FSMContext):
-    await state.update_data(photo=None)
-    await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):")
+MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 
-@dp.message(CreateFlow.PHOTO, F.photo)
-async def step_photo(m:Message, state:FSMContext):
-    file_id = m.photo[-1].file_id
-    await state.update_data(photo=file_id)
+# Пользователь всё равно может прислать текст «пропустить»
+@dp.message(CreateFlow.MEDIA_UPLOAD, F.text.casefold() == "пропустить")
+async def media_skip_by_text(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Ок. Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):")
+    await m.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+
+# Фото
+@dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
+async def got_photo(m: Message, state: FSMContext):
+    file_id = m.photo[-1].file_id
+    await state.update_data(photo=pack_media("photo", file_id))
+    await state.set_state(CreateFlow.ENDAT)
+    await m.answer("Ок. Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+
+# GIF (Telegram шлёт как animation — это mp4-клип)
+@dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
+async def got_animation(m: Message, state: FSMContext):
+    anim = m.animation
+    if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «пропустить».")
+        return
+    await state.update_data(photo=pack_media("animation", anim.file_id))
+    await state.set_state(CreateFlow.ENDAT)
+    await m.answer("Отлично! Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+
+# Видео
+@dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
+async def got_video(m: Message, state: FSMContext):
+    v = m.video
+    if v.mime_type and v.mime_type != "video/mp4":
+        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «пропустить».")
+        return
+    if v.file_size and v.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «пропустить».")
+        return
+    await state.update_data(photo=pack_media("video", v.file_id))
+    await state.set_state(CreateFlow.ENDAT)
+    await m.answer("Отлично! Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
@@ -411,11 +488,19 @@ async def cmd_events(m:Message):
 async def show_event_card(chat_id:int, giveaway_id:int):
     async with session_scope() as s:
         gw = await s.get(Giveaway, giveaway_id)
+
     cap = (f"<b>{gw.internal_title}</b>\n\n{gw.public_description}\n\n"
            f"Статус: {gw.status}\nПобедителей: {gw.winners_count}\n"
            f"Дата окончания: {(gw.end_at_utc+timedelta(hours=3)).strftime('%H:%M %d.%m.%Y MSK')}")
-    if gw.photo_file_id:
-        await bot.send_photo(chat_id, gw.photo_file_id, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
+
+    kind, fid = unpack_media(gw.photo_file_id)
+
+    if kind == "photo" and fid:
+        await bot.send_photo(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
+    elif kind == "animation" and fid:
+        await bot.send_animation(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
+    elif kind == "video" and fid:
+        await bot.send_video(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
     else:
         await bot.send_message(chat_id, cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
 
