@@ -310,10 +310,7 @@ async def desc_edit(cq: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await state.set_state(CreateFlow.DESC)
-    await cq.message.answer(
-        "Окей, пришлите новый текст описания.\n\n" + DESCRIPTION_PROMPT,
-        parse_mode="HTML"
-    )
+    await cq.message.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
     await cq.answer()
 
 # --- кнопка «Продолжить» ---
