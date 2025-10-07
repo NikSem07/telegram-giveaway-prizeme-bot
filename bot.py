@@ -24,6 +24,8 @@ from aiogram.types import BotCommand
 
 from html import escape
 
+from zoneinfo import ZoneInfo
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -43,6 +45,20 @@ MEDIA_INSTRUCTION = (
     "<i>Используйте стандартную доставку. Не отправляйте \"несжатым\" способом (НЕ как документ).</i>\n\n"
     "<b>Внимание!</b> Видео должно быть в формате MP4, а его размер не должен превышать 5 МБ."
 )
+
+MSK_TZ = ZoneInfo("Europe/Moscow")
+
+def format_endtime_prompt() -> str:
+    now_msk = datetime.now(MSK_TZ)
+    example = now_msk.strftime("%H:%M %d.%m.%Y")
+    current = example  # показываем текущее время и как пример, и как "текущее"
+
+    return (
+        "🕰️ <b>Укажите время окончания розыгрыша в формате (ЧЧ:ММ ДД.ММ.ГГГГ)</b>\n\n"
+        f"<b>Например:</b> <code>{example}</code>\n\n"
+        "⚠️ <b>Внимание!</b> Бот работает в соответствии с часовым поясом MSK (GMT+3).\n"
+        f"Текущее время в боте: <code>{current}</code>"
+    )
 
 def kb_yes_no() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
@@ -409,6 +425,7 @@ async def got_photo(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
     await m.answer(format_endtime_prompt(), parse_mode="HTML")
 
+
 # GIF (Telegram шлёт как animation — это mp4-клип)
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
 async def got_animation(m: Message, state: FSMContext):
@@ -421,7 +438,8 @@ async def got_animation(m: Message, state: FSMContext):
         return
     await state.update_data(photo=pack_media("animation", anim.file_id))
     await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Отлично! Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await m.answer(format_endtime_prompt(), parse_mode="HTML")
+
 
 # Видео
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
@@ -442,7 +460,8 @@ async def got_video(m: Message, state: FSMContext):
         return
     await state.update_data(photo=pack_media("video", v.file_id))
     await state.set_state(CreateFlow.ENDAT)
-    await m.answer("Отлично! Теперь дата окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await m.answer(format_endtime_prompt(), parse_mode="HTML")
+
 
 from datetime import datetime, timezone, timedelta
 
