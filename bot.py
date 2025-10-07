@@ -51,6 +51,12 @@ def kb_yes_no() -> InlineKeyboardMarkup:
     kb.adjust(2)
     return kb.as_markup()
 
+def kb_skip_media() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Пропустить", callback_data="media:skip")
+    kb.adjust(1)
+    return kb.as_markup()
+
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
     return f"{kind}:{file_id}"
@@ -359,17 +365,28 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
 async def media_yes(cq: CallbackQuery, state: FSMContext):
     try:
-        await cq.message.edit_reply_markup()
+        await cq.message.edit_reply_markup()  # убираем старые кнопки Да/Нет
     except Exception:
         pass
     await state.set_state(CreateFlow.MEDIA_UPLOAD)
-    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML")
+    # ВАЖНО: показываем инструкцию И клавиатуру "Пропустить"
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:no")
 async def media_no(cq: CallbackQuery, state: FSMContext):
     try:
         await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+    await state.set_state(CreateFlow.ENDAT)
+    await cq.message.answer("Укажите время окончания: <b>HH:MM DD.MM.YYYY</b> (MSK):", parse_mode="HTML")
+    await cq.answer()
+
+@dp.callback_query(CreateFlow.MEDIA_UPLOAD, F.data == "media:skip")
+async def media_skip_btn(cq: CallbackQuery, state: FSMContext):
+    try:
+        await cq.message.edit_reply_markup()  # убираем кнопку "Пропустить" под инструкцией
     except Exception:
         pass
     await state.set_state(CreateFlow.ENDAT)
@@ -397,7 +414,10 @@ async def got_photo(m: Message, state: FSMContext):
 async def got_animation(m: Message, state: FSMContext):
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «пропустить».")
+        await m.answer(
+            "⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «Пропустить».",
+            reply_markup=kb_skip_media()
+        )
         return
     await state.update_data(photo=pack_media("animation", anim.file_id))
     await state.set_state(CreateFlow.ENDAT)
@@ -408,10 +428,17 @@ async def got_animation(m: Message, state: FSMContext):
 async def got_video(m: Message, state: FSMContext):
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
-        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «пропустить».")
+        await m.answer(
+            "⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
+            reply_markup=kb_skip_media()
+        )
         return
+
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «пропустить».")
+        await m.answer(
+            "⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
+            reply_markup=kb_skip_media()
+        )
         return
     await state.update_data(photo=pack_media("video", v.file_id))
     await state.set_state(CreateFlow.ENDAT)
