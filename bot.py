@@ -25,6 +25,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from io import BytesIO
 import aiohttp
+from aiohttp import ClientSession, ClientTimeout, FormData
 from aiogram.types import LinkPreviewOptions
 
 from html import escape
@@ -98,30 +99,57 @@ def unpack_media(value: str | None) -> tuple[str|None, str|None]:
 TELEGRAPH_UPLOAD_URL = "https://telegra.ph/upload"
 
 async def _upload_bytes_to_telegraph(data: bytes, filename: str = "image.jpg") -> str:
-    """
-    Заливает файл на telegra.ph и возвращает публичный URL вида https://telegra.ph/file/xxxx.jpg
-    """
-    form = aiohttp.FormData()
-    form.add_field(
-        name="file",
-        value=data,
-        filename=filename,
-        content_type="application/octet-stream"
-    )
-    async with aiohttp.ClientSession() as sess:
-        async with sess.post(TELEGRAPH_UPLOAD_URL, data=form, timeout=30) as resp:
+    """Заливает файл на telegra.ph и возвращает публичный URL."""
+    timeout = ClientTimeout(total=15)  # не «висим» бесконечно
+    form = FormData()
+    form.add_field("file", data, filename=filename, content_type="application/octet-stream")
+
+    async with ClientSession(timeout=timeout) as sess:
+        async with sess.post(TELEGRAPH_UPLOAD_URL, data=form) as resp:
             js = await resp.json()
-            if not isinstance(js, list) or "src" not in js[0]:
+            if not isinstance(js, list) or not js or "src" not in js[0]:
                 raise RuntimeError(f"Telegraph upload failed: {js}")
             return "https://telegra.ph" + js[0]["src"]
 
 async def file_id_to_public_url(bot: Bot, file_id: str, suggested_name: str = "image.jpg") -> str:
-    """
-    Скачивает media по file_id и получает публичный URL через telegra.ph
-    """
+    """Скачивает media по file_id и получает публичный URL через telegra.ph."""
     buf = BytesIO()
+    # Aiogram v3: download(file_id, destination=...)
     await bot.download(file_id, destination=buf)
     return await _upload_bytes_to_telegraph(buf.getvalue(), suggested_name)
+
+async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kind: str, fid: str) -> None:
+    """Показываем обычное медиа с подписью и той же клавиатурой (без линк-превью)."""
+    data = await state.get_data()
+    title = (data.get("title") or "").strip() or "Без названия"
+    prizes = int(data.get("winners_count") or 0)
+
+    caption = _compose_preview_text(title, prizes)
+    # Порядок «сверху/снизу» в одном сообщении тут невозможен — это fallback.
+    if kind == "photo":
+        msg = await m.answer_photo(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+    elif kind == "animation":
+        msg = await m.answer_animation(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+    else:
+        msg = await m.answer_video(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+
+    await state.update_data(
+        media_preview_msg_id=msg.message_id,
+        media_top=False,
+        media_url=None,      # важный маркер: работаем в fallback-режиме
+    )
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+
+async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
+    """Пробуем link-preview, при ошибке — обычное фото/гиф/видео."""
+    try:
+        url = await file_id_to_public_url(m.bot, fid, filename)
+        await state.update_data(media_url=url)
+        await render_link_preview_message(m, state)   # одно сообщение с «рамкой/полоской»
+        await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    except Exception as e:
+        logging.exception("Telegraph upload failed; fallback to native media: %r", e)
+        await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
     """
@@ -730,36 +758,31 @@ async def media_skip_by_text(m: Message, state: FSMContext):
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
-    file_id = m.photo[-1].file_id
-    await state.update_data(photo=pack_media("photo", file_id))
-    url = await file_id_to_public_url(m.bot, file_id, "image.jpg")
-    await state.update_data(media_url=url)
-    await render_link_preview_message(m, state)
-    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    fid = m.photo[-1].file_id
+    await state.update_data(photo=pack_media("photo", fid))
+    # пробуем «рамку», иначе — fallback
+    await _ensure_link_preview_or_fallback(m, state, "photo", fid, "image.jpg")
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
 async def got_animation(m: Message, state: FSMContext):
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media()); return
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
     await state.update_data(photo=pack_media("animation", anim.file_id))
-    url = await file_id_to_public_url(m.bot, anim.file_id, "animation.mp4")
-    await state.update_data(media_url=url)
-    await render_link_preview_message(m, state)
-    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await _ensure_link_preview_or_fallback(m, state, "animation", anim.file_id, "animation.mp4")
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
 async def got_video(m: Message, state: FSMContext):
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
-        await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media()); return
+        await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media())
+        return
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media()); return
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
     await state.update_data(photo=pack_media("video", v.file_id))
-    url = await file_id_to_public_url(m.bot, v.file_id, "video.mp4")
-    await state.update_data(media_url=url)
-    await render_link_preview_message(m, state)
-    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await _ensure_link_preview_or_fallback(m, state, "video", v.file_id, "video.mp4")
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
@@ -921,12 +944,20 @@ async def event_cb(cq:CallbackQuery):
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:up")
 async def preview_move_up(cq: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("media_url"):
+        await cq.answer("Перемещение доступно только в режиме предпросмотра с рамкой.", show_alert=True)
+        return
     await state.update_data(media_top=True)
-    await render_link_preview_message(cq.message, state, reedit=True)  # <— редактируем то же сообщение
+    await render_link_preview_message(cq.message, state, reedit=True)
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:down")
 async def preview_move_down(cq: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("media_url"):
+        await cq.answer("Перемещение доступно только в режиме предпросмотра с рамкой.", show_alert=True)
+        return
     await state.update_data(media_top=False)
     await render_link_preview_message(cq.message, state, reedit=True)
     await cq.answer()
