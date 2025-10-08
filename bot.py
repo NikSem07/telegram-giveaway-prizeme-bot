@@ -408,7 +408,6 @@ def kb_confirm_description() -> InlineKeyboardMarkup:
 @dp.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     await ensure_user(m.from_user.id, m.from_user.username)
-    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())  # <-- убрать старую
     text = (
         "Добро пожаловать в Бот с розыгрышами <b>PrizeMe!</b>\n\n"
         "Бот способен запускать розыгрыши среди участников одного "
@@ -424,9 +423,6 @@ async def cmd_start(m: Message, state: FSMContext):
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
 async def cmd_menu(m: Message):
-    # убрать возможную старую раскладку
-    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())
-    # показать актуальную клавиатуру с системными кнопками
     await m.answer("Главное меню:", reply_markup=reply_main_kb())
 
 @dp.message(Command("hide"))
