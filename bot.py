@@ -223,30 +223,71 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
         rank+=1
     return winners
 
-def kb_media_preview(media_top: bool) -> InlineKeyboardMarkup:
+def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Change the picture/gif/video", callback_data="media:change")
-    kb.button(text=("Move media down" if media_top else "Move media up"), callback_data="media:move")
-    kb.button(text="Continue", callback_data="media:continue")
+    kb.button(text="Change the picture/gif/video", callback_data="preview:change")
+    if media_on_top:
+        kb.button(text="Move media down", callback_data="preview:move:down")
+    else:
+        kb.button(text="Move media up", callback_data="preview:move:up")
+    kb.button(text="Continue", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
 
-def _preview_caption(title: str, prizes: int) -> str:
-    # каретка «00:00…» как в референсе — даты ещё нет
+def _preview_text(title: str, winners: int) -> str:
     return (
-        f"<b>{escape(title)}</b>\n\n"
+        f"{escape(title)}\n\n"
         f"Participants: 0\n"
-        f"Prizes: {max(0, prizes)}\n"
+        f"Prizes: {max(1, int(winners))}\n"
         f"Giveaway date: 00:00, 00.00.0000 (0 days)"
     )
 
-async def render_media_preview(m: Message, state: FSMContext) -> None:
-    """Показывает карточку превью после загрузки медиа или при смене порядка."""
+async def _send_media(chat_id: int, kind: str|None, fid: str|None):
+    if not kind or not fid:
+        return None
+    if kind == "photo":
+        return await bot.send_photo(chat_id, fid)
+    if kind == "animation":
+        return await bot.send_animation(chat_id, fid)
+    if kind == "video":
+        return await bot.send_video(chat_id, fid)
+    return None
+
+async def render_media_preview(chat_id: int, state: FSMContext):
     data = await state.get_data()
-    title = (data.get("title") or "").strip() or "Без названия"
-    prizes = int(data.get("winners") or data.get("winners_count") or 0)
-    media_top = bool(data.get("media_top") or False)
+    title   = (data.get("title") or "—").strip()
+    winners = int(data.get("winners_count") or 1)
+    media_top = bool(data.get("media_top", False))  # False => медиа снизу
     kind, fid = unpack_media(data.get("photo"))
+
+    # подчистим предыдущий превью-блок, если был
+    for key in ("preview_text_id", "preview_media_id"):
+        mid = data.get(key)
+        if mid:
+            try:
+                await bot.delete_message(chat_id, mid)
+            except Exception:
+                pass
+
+    text = _preview_text(title, winners)
+    kb   = kb_media_preview(media_on_top=media_top)
+
+    msg_text = None
+    msg_media = None
+
+    if media_top:
+        # медиа сверху
+        msg_media = await _send_media(chat_id, kind, fid)
+        msg_text  = await bot.send_message(chat_id, text, reply_markup=kb)
+    else:
+        # медиа снизу (по умолчанию)
+        msg_text  = await bot.send_message(chat_id, text, reply_markup=kb)
+        msg_media = await _send_media(chat_id, kind, fid)
+
+    await state.update_data(
+        preview_text_id=msg_text.message_id if msg_text else None,
+        preview_media_id=msg_media.message_id if msg_media else None,
+    )
 
     # удалим прошлую карточку, если была
     old_id = data.get("media_preview_msg_id")
@@ -283,6 +324,7 @@ class CreateFlow(StatesGroup):
     CONFIRM_DESC = State()   # подтверждение описания
     MEDIA_DECIDE = State()   # новый шаг: задать вопрос Да/Нет
     MEDIA_UPLOAD = State()   # новый шаг: ожидать файл (photo/animation/video)
+    MEDIA_PREVIEW = State()
     PHOTO = State()          # больше не используется, но пусть останется если где-то ссылаешься
     ENDAT = State()
 
@@ -642,8 +684,9 @@ async def media_skip_by_text(m: Message, state: FSMContext):
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
     file_id = m.photo[-1].file_id
-    await state.update_data(photo=pack_media("photo", file_id))
-    await render_media_preview(m, state)  # <-- показываем карточку
+    await state.update_data(photo=pack_media("photo", file_id), media_top=False)
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await render_media_preview(m.chat.id, state)
 
 
 # GIF (Telegram шлёт как animation — это mp4-клип)
@@ -651,40 +694,23 @@ async def got_photo(m: Message, state: FSMContext):
 async def got_animation(m: Message, state: FSMContext):
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «Пропустить».",
-                       reply_markup=kb_skip_media())
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ.", reply_markup=kb_skip_media())
         return
-    await state.update_data(photo=pack_media("animation", anim.file_id))
-    await render_media_preview(m, state)
+    await state.update_data(photo=pack_media("animation", anim.file_id), media_top=False)
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await render_media_preview(m.chat.id, state)
 
 # Видео
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
 async def got_video(m: Message, state: FSMContext):
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
-        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
-                       reply_markup=kb_skip_media())
-        return
+        await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media()); return
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
-                       reply_markup=kb_skip_media())
-        return
-    await state.update_data(photo=pack_media("video", v.file_id))
-    await render_media_preview(m, state)
-
-@dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
-async def got_video(m: Message, state: FSMContext):
-    v = m.video
-    if v.mime_type and v.mime_type != "video/mp4":
-        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
-                       reply_markup=kb_skip_media())
-        return
-    if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
-                       reply_markup=kb_skip_media())
-        return
-    await state.update_data(photo=pack_media("video", v.file_id))
-    await render_media_preview(m, state)
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ.", reply_markup=kb_skip_media()); return
+    await state.update_data(photo=pack_media("video", v.file_id), media_top=False)
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await render_media_preview(m.chat.id, state)
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
@@ -841,6 +867,38 @@ async def event_cb(cq:CallbackQuery):
         await cancel_giveaway(gid, cq.from_user.id, reason=None)
         await cq.message.answer("Розыгрыш отменён.")
         await show_event_card(cq.message.chat.id, gid)
+
+# ===== Карточка-превью медиа =====
+
+@dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:up")
+async def preview_move_up(cq: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("photo"):
+        await cq.answer("Сначала добавьте медиа.", show_alert=True); return
+    await state.update_data(media_top=True)
+    await render_media_preview(cq.message.chat.id, state)
+    await cq.answer()
+
+@dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:down")
+async def preview_move_down(cq: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("photo"):
+        await cq.answer("Сначала добавьте медиа.", show_alert=True); return
+    await state.update_data(media_top=False)
+    await render_media_preview(cq.message.chat.id, state)
+    await cq.answer()
+
+@dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:change")
+async def preview_change_media(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(CreateFlow.MEDIA_UPLOAD)
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
+    await cq.answer()
+
+@dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
+async def preview_continue(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(CreateFlow.ENDAT)
+    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+    await cq.answer()
 
 async def get_end_at(gid:int)->datetime:
     from sqlalchemy import text as stext
