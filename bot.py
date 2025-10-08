@@ -9,6 +9,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup,
                            InlineKeyboardButton, InputMediaPhoto)
+from aiogram.types import BotCommand
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -20,12 +22,9 @@ from sqlalchemy import (text, String, Integer, BigInteger,
                         Boolean, DateTime, ForeignKey)
 from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from aiogram.types import BotCommand
 
 from html import escape
-
 from zoneinfo import ZoneInfo
-
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -46,6 +45,12 @@ MEDIA_INSTRUCTION = (
     "<b>Внимание!</b> Видео должно быть в формате MP4, а его размер не должен превышать 5 МБ."
 )
 
+BTN_EVENTS = "Розыгрыши"
+BTN_CREATE = "Новый розыгрыш"
+BTN_ADD_CHANNEL = "Добавить канал"
+BTN_ADD_GROUP = "Добавить группу"
+BTN_SUBSCRIPTIONS = "Подписки"
+
 MSK_TZ = ZoneInfo("Europe/Moscow")
 
 def format_endtime_prompt() -> str:
@@ -54,7 +59,7 @@ def format_endtime_prompt() -> str:
     current = example  # показываем текущее время и как пример, и как "текущее"
 
     return (
-        "🕰️ <b>Укажите время окончания розыгрыша в формате (ЧЧ:ММ ДД.ММ.ГГГГ)</b>\n\n"
+        "⏰ <b>Укажите время окончания розыгрыша в формате (ЧЧ:ММ ДД.ММ.ГГГГ)</b>\n\n"
         f"<b>Например:</b> <code>{example}</code>\n\n"
         "⚠️ <b>Внимание!</b> Бот работает в соответствии с часовым поясом MSK (GMT+3).\n"
         f"Текущее время в боте: <code>{current}</code>"
@@ -253,6 +258,18 @@ def kb_main():
     kb.button(text="Мои каналы", callback_data="my_channels")
     return kb.as_markup()
 
+def reply_main_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_EVENTS), KeyboardButton(text=BTN_CREATE)],
+            [KeyboardButton(text=BTN_ADD_CHANNEL), KeyboardButton(text=BTN_ADD_GROUP)],
+            [KeyboardButton(text=BTN_SUBSCRIPTIONS)],
+        ],
+        resize_keyboard=True,              # компактнее и удобнее
+        input_field_placeholder="Выберите действие…",
+        is_persistent=True                 # клавиатура закрепится в чате
+    )
+
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
     if status==GiveawayStatus.DRAFT:
@@ -297,7 +314,12 @@ async def cmd_start(m: Message, state: FSMContext):
         "<b>/events</b> – розыгрыши\n"
         "<b>/subscriptions</b> – подписки"
     )
-    await m.answer(text, parse_mode="HTML")
+    await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
+
+# ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
+@dp.message(Command("menu"))
+async def cmd_menu(m: Message):
+    await m.answer("Главное меню:", reply_markup=reply_main_kb())
 
 @dp.message(Command("create"))
 async def create_giveaway_start(message: Message, state: FSMContext):
@@ -315,6 +337,42 @@ async def create_giveaway_start(message: Message, state: FSMContext):
     )
     await state.set_state(CreateFlow.TITLE)   # <-- ставим состояние титула
 
+# ===== Reply-кнопки: перенаправляем на готовые сценарии =====
+
+# "Розыгрыши" -> используем ваш cmd_events
+@dp.message(F.text == BTN_EVENTS)
+async def on_btn_events(m: Message, state: FSMContext):
+    await cmd_events(m)   # вызываем ваш уже написанный обработчик
+
+# "Новый розыгрыш" -> ваш create_giveaway_start
+@dp.message(F.text == BTN_CREATE)
+async def on_btn_create(m: Message, state: FSMContext):
+    await create_giveaway_start(m, state)
+
+# "Подписки" -> ваш cmd_subs
+@dp.message(F.text == BTN_SUBSCRIPTIONS)
+async def on_btn_subs(m: Message, state: FSMContext):
+    await cmd_subs(m)
+
+# ===== Кнопки "Добавить канал" и "Добавить группу" =====
+
+@dp.message(F.text == BTN_ADD_CHANNEL)
+async def on_btn_add_channel(m: Message, state: FSMContext):
+    await m.answer(
+        "Чтобы подключить канал, добавьте бота в канал (в приватном — админом), "
+        "затем перешлите сюда любой пост канала или отправьте @username канала."
+    )
+    # дальше пользователь пересылает пост/пишет @username — сработает ваш add_channel()
+
+@dp.message(F.text == BTN_ADD_GROUP)
+async def on_btn_add_group(m: Message, state: FSMContext):
+    await m.answer(
+        "Чтобы добавить группу:\n"
+        "1) Добавьте бота в группу и дайте ему права администратора (если нужны ограничения — минимальные).\n"
+        "2) Отправьте из группы любое сообщение и перешлите его сюда, или напишите @username группы.\n\n"
+        "После этого бот сможет учитывать участников/делать проверки в группе."
+    )
+    # пока используем ту же механику пересылки, позже можно вынести отдельный хендлер
 
 @dp.message(CreateFlow.TITLE)
 async def handle_giveaway_name(m: Message, state: FSMContext):
