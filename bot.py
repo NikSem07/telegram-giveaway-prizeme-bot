@@ -223,6 +223,56 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
         rank+=1
     return winners
 
+def kb_media_preview(media_top: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Change the picture/gif/video", callback_data="media:change")
+    kb.button(text=("Move media down" if media_top else "Move media up"), callback_data="media:move")
+    kb.button(text="Continue", callback_data="media:continue")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def _preview_caption(title: str, prizes: int) -> str:
+    # каретка «00:00…» как в референсе — даты ещё нет
+    return (
+        f"<b>{escape(title)}</b>\n\n"
+        f"Participants: 0\n"
+        f"Prizes: {max(0, prizes)}\n"
+        f"Giveaway date: 00:00, 00.00.0000 (0 days)"
+    )
+
+async def render_media_preview(m: Message, state: FSMContext) -> None:
+    """Показывает карточку превью после загрузки медиа или при смене порядка."""
+    data = await state.get_data()
+    title = (data.get("title") or "").strip() or "Без названия"
+    prizes = int(data.get("winners") or data.get("winners_count") or 0)
+    media_top = bool(data.get("media_top") or False)
+    kind, fid = unpack_media(data.get("photo"))
+
+    # удалим прошлую карточку, если была
+    old_id = data.get("media_preview_msg_id")
+    if old_id:
+        try:
+            await m.bot.delete_message(m.chat.id, old_id)
+        except Exception:
+            pass
+
+    caption = _preview_caption(title, prizes)
+
+    # В зависимости от порядка показываем: если media_top — сначала медиа, иначе просто подпись будет под/над медиа.
+    # В рамках Telegram сообщения порядок текста/медиа ограничен, поэтому визуально меняем только подпись к медиа.
+    # (Финальную публикацию потом учтём тем же флагом.)
+    if kind == "photo" and fid:
+        msg = await m.answer_photo(fid, caption=caption, reply_markup=kb_media_preview(media_top))
+    elif kind == "animation" and fid:
+        msg = await m.answer_animation(fid, caption=caption, reply_markup=kb_media_preview(media_top))
+    elif kind == "video" and fid:
+        msg = await m.answer_video(fid, caption=caption, reply_markup=kb_media_preview(media_top))
+    else:
+        # на всякий случай
+        msg = await m.answer(caption, reply_markup=kb_media_preview(media_top))
+
+    await state.update_data(media_preview_msg_id=msg.message_id)
+
 # ----------------- FSM -----------------
 from aiogram.fsm.state import StatesGroup, State
 
@@ -482,7 +532,7 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.WINNERS)
     await m.answer(
         "Укажите количество победителей в этом розыгрыше от 1 до 50 "
-        "(введите только число, не указывая других символов)"
+        "(введите только число, не указывая других символов):"
     )
 
 @dp.message(CreateFlow.WINNERS)
@@ -552,11 +602,11 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
 async def media_yes(cq: CallbackQuery, state: FSMContext):
     try:
-        await cq.message.edit_reply_markup()  # убираем старые кнопки Да/Нет
+        await cq.message.edit_reply_markup()
     except Exception:
         pass
     await state.set_state(CreateFlow.MEDIA_UPLOAD)
-    # ВАЖНО: показываем инструкцию И клавиатуру "Пропустить"
+    await state.update_data(media_top=False)   # <-- медиа изначально «внизу»
     await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
     await cq.answer()
 
@@ -593,8 +643,7 @@ async def media_skip_by_text(m: Message, state: FSMContext):
 async def got_photo(m: Message, state: FSMContext):
     file_id = m.photo[-1].file_id
     await state.update_data(photo=pack_media("photo", file_id))
-    await state.set_state(CreateFlow.ENDAT)
-    await m.answer(format_endtime_prompt(), parse_mode="HTML")
+    await render_media_preview(m, state)  # <-- показываем карточку
 
 
 # GIF (Telegram шлёт как animation — это mp4-клип)
@@ -602,35 +651,40 @@ async def got_photo(m: Message, state: FSMContext):
 async def got_animation(m: Message, state: FSMContext):
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
-        await m.answer(
-            "⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «Пропустить».",
-            reply_markup=kb_skip_media()
-        )
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший gif/видео или нажмите «Пропустить».",
+                       reply_markup=kb_skip_media())
         return
     await state.update_data(photo=pack_media("animation", anim.file_id))
-    await state.set_state(CreateFlow.ENDAT)
-    await m.answer(format_endtime_prompt(), parse_mode="HTML")
-
+    await render_media_preview(m, state)
 
 # Видео
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
 async def got_video(m: Message, state: FSMContext):
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
-        await m.answer(
-            "⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
-            reply_markup=kb_skip_media()
-        )
+        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
+                       reply_markup=kb_skip_media())
         return
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer(
-            "⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
-            reply_markup=kb_skip_media()
-        )
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
+                       reply_markup=kb_skip_media())
         return
     await state.update_data(photo=pack_media("video", v.file_id))
-    await state.set_state(CreateFlow.ENDAT)
-    await m.answer(format_endtime_prompt(), parse_mode="HTML")
+    await render_media_preview(m, state)
+
+@dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
+async def got_video(m: Message, state: FSMContext):
+    v = m.video
+    if v.mime_type and v.mime_type != "video/mp4":
+        await m.answer("⚠️ Видео должно быть в формате MP4. Пришлите другое или нажмите «Пропустить».",
+                       reply_markup=kb_skip_media())
+        return
+    if v.file_size and v.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ. Пришлите меньший файл или нажмите «Пропустить».",
+                       reply_markup=kb_skip_media())
+        return
+    await state.update_data(photo=pack_media("video", v.file_id))
+    await render_media_preview(m, state)
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
