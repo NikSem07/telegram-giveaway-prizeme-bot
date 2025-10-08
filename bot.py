@@ -10,7 +10,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup,
                            InlineKeyboardButton, InputMediaPhoto)
 from aiogram.types import BotCommand
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, KeyboardButtonRequestChat, ChatAdministratorRights
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -258,16 +258,120 @@ def kb_main():
     kb.button(text="Мои каналы", callback_data="my_channels")
     return kb.as_markup()
 
+# ===== Reply-кнопки: перенаправляем на готовые сценарии =====
+
 def reply_main_kb() -> ReplyKeyboardMarkup:
+    # Какие права хотим запросить у пользователя для канала
+    chan_rights = ChatAdministratorRights(
+        is_anonymous=False,
+        can_manage_chat=True,
+        can_post_messages=True,
+        can_edit_messages=True,
+        can_delete_messages=False,
+        can_invite_users=True,
+        can_restrict_members=False,
+        can_promote_members=True,
+        can_change_info=True,
+        can_pin_messages=False,
+        can_manage_topics=False,
+        can_post_stories=False,
+        can_edit_stories=False,
+        can_delete_stories=False,
+        can_manage_video_chats=False,
+    )
+
+    # Минимальные права для группы/супергруппы (можете скорректировать)
+    group_rights = ChatAdministratorRights(
+        is_anonymous=False,
+        can_manage_chat=True,
+        can_post_messages=False,
+        can_edit_messages=False,
+        can_delete_messages=True,
+        can_invite_users=True,
+        can_restrict_members=True,
+        can_promote_members=False,
+        can_change_info=True,
+        can_pin_messages=True,
+        can_manage_topics=True,
+        can_post_stories=False,
+        can_edit_stories=False,
+        can_delete_stories=False,
+        can_manage_video_chats=True,
+    )
+
+    btn_add_channel = KeyboardButton(
+        text=BTN_ADD_CHANNEL,
+        request_chat=KeyboardButtonRequestChat(
+            request_id=1,             # любой целый id (вернётся в chat_shared)
+            chat_is_channel=True,     # именно канал
+            bot_administrator_rights=chan_rights
+        )
+    )
+
+    btn_add_group = KeyboardButton(
+        text=BTN_ADD_GROUP,
+        request_chat=KeyboardButtonRequestChat(
+            request_id=2,
+            chat_is_channel=False,              # группы/супергруппы
+            bot_administrator_rights=group_rights
+        )
+    )
+
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_EVENTS), KeyboardButton(text=BTN_CREATE)],
-            [KeyboardButton(text=BTN_ADD_CHANNEL), KeyboardButton(text=BTN_ADD_GROUP)],
+            [btn_add_channel, btn_add_group],
             [KeyboardButton(text=BTN_SUBSCRIPTIONS)],
         ],
-        resize_keyboard=True, # компактнее и удобнее
-        one_time_keyboard=False, # не прячем автоматически
+        resize_keyboard=True,
+        one_time_keyboard=False,
         input_field_placeholder="Сообщение"
+    )
+
+# === СИСТЕМНОЕ окно выбора канала/группы (chat_shared) ===
+@dp.message(F.chat_shared)
+async def on_chat_shared(m: Message):
+    """
+    Вызывается, когда пользователь выбрал канал/группу в нативном окне Telegram.
+    """
+    shared = m.chat_shared
+    chat_id = shared.chat_id
+
+    try:
+        chat = await bot.get_chat(chat_id)
+        me = await bot.get_me()
+        cm = await bot.get_chat_member(chat_id, me.id)
+        role = "administrator" if cm.status == "administrator" else (
+            "member" if cm.status == "member" else "none"
+        )
+    except Exception as e:
+        await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
+        return
+
+    # сохраняем как раньше
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        await s.execute(
+            stext(
+                "INSERT OR IGNORE INTO organizer_channels("
+                "owner_user_id, chat_id, username, title, is_private, bot_role"
+                ") VALUES (:o, :cid, :u, :t, :p, :r)"
+            ),
+            {
+                "o": m.from_user.id,
+                "cid": chat.id,
+                "u": getattr(chat, "username", None),
+                "t": chat.title or (getattr(chat, "first_name", None) or "Без названия"),
+                "p": 0 if getattr(chat, "username", None) else 1,
+                "r": "admin" if role == "administrator" else "member",
+            }
+        )
+
+    kind = "канал" if chat.type == "channel" else "группа"
+    await m.answer(
+        f"{kind.capitalize()} <b>{chat.title}</b> подключён. Теперь откройте /events и нажмите «Подключить каналы».",
+        parse_mode="HTML",
+        reply_markup=reply_main_kb()
     )
 
 def kb_event_actions(gid:int, status:str):
