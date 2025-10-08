@@ -370,7 +370,7 @@ async def on_chat_shared(m: Message):
 
     kind = "канал" if chat.type == "channel" else "группа"
     await m.answer(
-        f"{kind.capitalize()} <b>{chat.title}</b> подключён. Теперь откройте /events и нажмите «Подключить каналы».",
+        f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.",
         parse_mode="HTML",
         reply_markup=reply_main_kb()
     )
