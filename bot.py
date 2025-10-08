@@ -1,6 +1,9 @@
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
+import uuid
+import mimetypes
+import boto3
 import asyncio, os, hashlib, random, string
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -35,6 +38,15 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT")
+S3_REGION   = os.getenv("S3_REGION", "ru-1")
+S3_BUCKET   = os.getenv("S3_BUCKET")
+S3_KEY      = os.getenv("S3_ACCESS_KEY")
+S3_SECRET   = os.getenv("S3_SECRET_KEY")
+
+if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
+    logging.warning("S3 env not fully set — uploads will fail.")
+
 DESCRIPTION_PROMPT = (
     "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
     "Можно использовать не более 2500 символов.\n\n"
@@ -83,6 +95,48 @@ def kb_skip_media() -> InlineKeyboardMarkup:
     kb.adjust(1)
     return kb.as_markup()
 
+def _s3_client():
+    return boto3.client(
+        "s3",
+        region_name=S3_REGION,
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=S3_KEY,
+        aws_secret_access_key=S3_SECRET,
+    )
+
+def _make_s3_key(filename: str) -> str:
+    """ключ в бакете: yyyy/mm/dd/<uuid>.<ext>"""
+    now = datetime.utcnow()
+    ext = (os.path.splitext(filename)[1] or "").lower() or ".bin"
+    return f"{now:%Y/%m/%d}/{uuid.uuid4().hex}{ext}"
+
+async def upload_bytes_to_s3(data: bytes, filename: str) -> str:
+    """
+    Кладём байты в S3 и возвращаем ПУБЛИЧНУЮ ссылку.
+    Используем path-style URL, который всегда работает: {endpoint}/{bucket}/{key}
+    """
+    key = _make_s3_key(filename)
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    # boto3 синхронный: выполняем в отдельном потоке, чтобы не блокировать loop
+    def _put():
+        _s3_client().put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+            # ACL='public-read',  # не нужно, если сам бакет публичный
+        )
+    await asyncio.to_thread(_put)
+
+    public_url = f"{S3_ENDPOINT.rstrip('/')}/{S3_BUCKET}/{key}"
+    return public_url
+
+async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: str) -> str:
+    buf = BytesIO()
+    await bot.download(file_id, destination=buf)
+    return await upload_bytes_to_s3(buf.getvalue(), suggested_name)
+
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
     return f"{kind}:{file_id}"
@@ -96,27 +150,6 @@ def unpack_media(value: str | None) -> tuple[str|None, str|None]:
     # обратная совместимость: старое поле только с photo id
     return "photo", value
 
-TELEGRAPH_UPLOAD_URL = "https://telegra.ph/upload"
-
-async def _upload_bytes_to_telegraph(data: bytes, filename: str = "image.jpg") -> str:
-    """Заливает файл на telegra.ph и возвращает публичный URL."""
-    timeout = ClientTimeout(total=15)  # не «висим» бесконечно
-    form = FormData()
-    form.add_field("file", data, filename=filename, content_type="application/octet-stream")
-
-    async with ClientSession(timeout=timeout) as sess:
-        async with sess.post(TELEGRAPH_UPLOAD_URL, data=form) as resp:
-            js = await resp.json()
-            if not isinstance(js, list) or not js or "src" not in js[0]:
-                raise RuntimeError(f"Telegraph upload failed: {js}")
-            return "https://telegra.ph" + js[0]["src"]
-
-async def file_id_to_public_url(bot: Bot, file_id: str, suggested_name: str = "image.jpg") -> str:
-    """Скачивает media по file_id и получает публичный URL через telegra.ph."""
-    buf = BytesIO()
-    # Aiogram v3: download(file_id, destination=...)
-    await bot.download(file_id, destination=buf)
-    return await _upload_bytes_to_telegraph(buf.getvalue(), suggested_name)
 
 async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kind: str, fid: str) -> None:
     """Показываем обычное медиа с подписью и той же клавиатурой (без линк-превью)."""
@@ -141,14 +174,13 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
 
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
-    """Пробуем link-preview, при ошибке — обычное фото/гиф/видео."""
     try:
-        url = await file_id_to_public_url(m.bot, fid, filename)
+        url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
         await state.update_data(media_url=url)
-        await render_link_preview_message(m, state)   # одно сообщение с «рамкой/полоской»
+        await render_link_preview_message(m, state)   # одно сообщение с рамкой/полоской
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
     except Exception as e:
-        logging.exception("Telegraph upload failed; fallback to native media: %r", e)
+        logging.exception("S3 upload failed; fallback to native media: %r", e)
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
