@@ -267,7 +267,7 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True, # компактнее и удобнее
         one_time_keyboard=False, # не прячем автоматически
-        input_field_placeholder="Выберите действие…"
+        input_field_placeholder="Сообщение"
     )
 
 def kb_event_actions(gid:int, status:str):
