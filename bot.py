@@ -241,6 +241,29 @@ bot = Bot(BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 
+# --- Требуемые права администратора для каналов и групп ---
+CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
+    is_anonymous=False,
+    can_manage_chat=True,
+    can_post_messages=True,
+    can_edit_messages=True,
+    can_invite_users=True,
+    can_promote_members=True,
+    can_change_info=True,
+    # остальное нам не обязательно
+)
+
+GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
+    is_anonymous=False,
+    can_manage_chat=True,
+    can_delete_messages=True,
+    can_restrict_members=True,
+    can_invite_users=True,
+    can_pin_messages=True,
+    can_manage_topics=True,
+    can_change_info=True,
+)
+
 async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="перезапустить бота"),
@@ -265,21 +288,20 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         text=BTN_ADD_CHANNEL,
         request_chat=KeyboardButtonRequestChat(
             request_id=1,
-            chat_is_channel=True,
-            # бот должен иметь такие права в канале
-            bot_administrator_rights=chan_rights,
-            # ВАЖНО: пользователь ДОЛЖЕН иметь такие же права (фильтрация + Requirements)
-            user_administrator_rights=chan_rights,
+            chat_is_channel=True,                 # только каналы
+            bot_administrator_rights=CHAN_ADMIN_RIGHTS,
+            user_administrator_rights=CHAN_ADMIN_RIGHTS,  # <-- обязательно
+            # bot_is_member=False  # можно не задавать
         )
     )
 
     btn_add_group = KeyboardButton(
-    text=BTN_ADD_GROUP,
-    request_chat=KeyboardButtonRequestChat(
-        request_id=2,
-        chat_is_channel=False,  # для групп/супергрупп
-        bot_administrator_rights=group_rights,
-        user_administrator_rights=group_rights,
+        text=BTN_ADD_GROUP,
+        request_chat=KeyboardButtonRequestChat(
+            request_id=2,
+            chat_is_channel=False,                # группы/супергруппы
+            bot_administrator_rights=GROUP_ADMIN_RIGHTS,
+            user_administrator_rights=GROUP_ADMIN_RIGHTS,  # <-- обязательно
         )
     )
 
@@ -670,6 +692,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 async def cmd_subs(m:Message):
     await m.answer("Чтобы подключить канал, добавьте бота в канал (в приватном — админом), "
                    "затем перешлите сюда любой пост канала или отправьте @username канала.")
+
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
