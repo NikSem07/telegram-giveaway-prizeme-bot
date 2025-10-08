@@ -111,31 +111,47 @@ def _make_s3_key(filename: str) -> str:
     return f"{now:%Y/%m/%d}/{uuid.uuid4().hex}{ext}"
 
 async def upload_bytes_to_s3(data: bytes, filename: str) -> str:
-    """
-    Кладём байты в S3 и возвращаем ПУБЛИЧНУЮ ссылку.
-    Используем path-style URL, который всегда работает: {endpoint}/{bucket}/{key}
-    """
     key = _make_s3_key(filename)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-    # boto3 синхронный: выполняем в отдельном потоке, чтобы не блокировать loop
     def _put():
         _s3_client().put_object(
             Bucket=S3_BUCKET,
             Key=key,
             Body=data,
             ContentType=content_type,
-            # ACL='public-read',  # не нужно, если сам бакет публичный
+            # ACL='public-read',  # не требуется, если бакет публичный
         )
     await asyncio.to_thread(_put)
 
-    public_url = f"{S3_ENDPOINT.rstrip('/')}/{S3_BUCKET}/{key}"
-    return public_url
+    # path-style:
+    base = S3_ENDPOINT.rstrip("/")
+    path_style = f"{base}/{S3_BUCKET}/{key}"
+
+    # если хочешь попробовать virtual-host style (иногда рендерится быстрее):
+    host = base.replace("https://", "").replace("http://", "").strip("/")
+    vhost_style = f"https://{S3_BUCKET}.{host}/{key}"
+
+    # Телеграму всё равно — обе ссылки публичные. Оставляем path-style:
+    return path_style
 
 async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: str) -> str:
+    """
+    Правильная для aiogram v3 цепочка:
+    1) get_file -> получаем File (с file_path)
+    2) bot.download(File, destination=...)
+    3) кладём в S3 и возвращаем публичный URL
+    """
+    tg_file = await bot.get_file(file_id)          # <-- ВАЖНО: сначала резолвим file_id
     buf = BytesIO()
-    await bot.download(file_id, destination=buf)
-    return await upload_bytes_to_s3(buf.getvalue(), suggested_name)
+    await bot.download(tg_file, destination=buf)   # <-- и только потом качаем его
+
+    # попытаемся взять расширение из пути Telegram
+    filename = os.path.basename(tg_file.file_path or "") or suggested_name
+    if not os.path.splitext(filename)[1]:
+        filename = suggested_name
+
+    return await upload_bytes_to_s3(buf.getvalue(), filename)
 
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
@@ -176,11 +192,12 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
     try:
         url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
+        logging.info("✅ S3 uploaded, preview URL: %s", url)
         await state.update_data(media_url=url)
         await render_link_preview_message(m, state)   # одно сообщение с рамкой/полоской
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
     except Exception as e:
-        logging.exception("S3 upload failed; fallback to native media: %r", e)
+        logging.exception("❌ S3 upload (or download) failed; fallback to native media: %r", e)
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
