@@ -247,21 +247,35 @@ CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
     can_manage_chat=True,
     can_post_messages=True,
     can_edit_messages=True,
+    can_delete_messages=False,
     can_invite_users=True,
+    can_restrict_members=False,
     can_promote_members=True,
     can_change_info=True,
-    # остальное нам не обязательно
+    can_pin_messages=False,
+    can_manage_topics=False,
+    can_post_stories=False,
+    can_edit_stories=False,
+    can_delete_stories=False,
+    can_manage_video_chats=False,
 )
 
 GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
     is_anonymous=False,
     can_manage_chat=True,
+    can_post_messages=False,
+    can_edit_messages=False,
     can_delete_messages=True,
-    can_restrict_members=True,
     can_invite_users=True,
+    can_restrict_members=True,
+    can_promote_members=False,
+    can_change_info=True,
     can_pin_messages=True,
     can_manage_topics=True,
-    can_change_info=True,
+    can_post_stories=False,
+    can_edit_stories=False,
+    can_delete_stories=False,
+    can_manage_video_chats=True,
 )
 
 async def set_bot_commands(bot: Bot):
@@ -288,10 +302,9 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         text=BTN_ADD_CHANNEL,
         request_chat=KeyboardButtonRequestChat(
             request_id=1,
-            chat_is_channel=True,                 # только каналы
+            chat_is_channel=True,
             bot_administrator_rights=CHAN_ADMIN_RIGHTS,
-            user_administrator_rights=CHAN_ADMIN_RIGHTS,  # <-- обязательно
-            # bot_is_member=False  # можно не задавать
+            user_administrator_rights=CHAN_ADMIN_RIGHTS,
         )
     )
 
@@ -299,9 +312,9 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         text=BTN_ADD_GROUP,
         request_chat=KeyboardButtonRequestChat(
             request_id=2,
-            chat_is_channel=False,                # группы/супергруппы
+            chat_is_channel=False,
             bot_administrator_rights=GROUP_ADMIN_RIGHTS,
-            user_administrator_rights=GROUP_ADMIN_RIGHTS,  # <-- обязательно
+            user_administrator_rights=GROUP_ADMIN_RIGHTS,
         )
     )
 
