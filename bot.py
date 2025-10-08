@@ -265,9 +265,9 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_ADD_CHANNEL), KeyboardButton(text=BTN_ADD_GROUP)],
             [KeyboardButton(text=BTN_SUBSCRIPTIONS)],
         ],
-        resize_keyboard=True,              # компактнее и удобнее
-        input_field_placeholder="Выберите действие…",
-        is_persistent=True                 # клавиатура закрепится в чате
+        resize_keyboard=True, # компактнее и удобнее
+        one_time_keyboard=False, # не прячем автоматически
+        input_field_placeholder="Выберите действие…"
     )
 
 def kb_event_actions(gid:int, status:str):
@@ -320,6 +320,11 @@ async def cmd_start(m: Message, state: FSMContext):
 @dp.message(Command("menu"))
 async def cmd_menu(m: Message):
     await m.answer("Главное меню:", reply_markup=reply_main_kb())
+
+@dp.message(Command("hide"))
+async def hide_menu(m: Message):
+    # Полностью убрать клавиатуру
+    await m.answer("Кнопки скрыты. Чтобы вернуть — отправьте /menu.", reply_markup=ReplyKeyboardRemove())
 
 @dp.message(Command("create"))
 async def create_giveaway_start(message: Message, state: FSMContext):
@@ -565,18 +570,30 @@ async def step_endat(m: Message, state: FSMContext):
         await state.clear()
         await m.answer(
             "Черновик сохранён.\n"
-            "Откройте /events, чтобы привязать каналы и запустить розыгрыш."
+            "Откройте /events, чтобы привязать каналы и запустить розыгрыш.",
+            reply_markup=reply_main_kb()
         )
     except ValueError:
         await m.answer("Неверный формат. Пример: 13:58 06.10.2025")
 
 @dp.message(Command("events"))
-async def cmd_events(m:Message):
+async def cmd_events(m: Message):
     async with session_scope() as s:
-        res = await s.execute(text("SELECT id, internal_title, status FROM giveaways WHERE owner_user_id=:u ORDER BY id DESC"), {"u":m.from_user.id})
+        res = await s.execute(
+            text("SELECT id, internal_title, status FROM giveaways "
+                 "WHERE owner_user_id=:u ORDER BY id DESC"),
+            {"u": m.from_user.id}
+        )
         row = res.first()
+
     if not row:
-        await m.answer("У вас нет розыгрышей. Нажмите «Создать розыгрыш».", reply_markup=kb_main()); return
+        await m.answer(
+            "У вас нет розыгрышей. Нажмите «Создать розыгрыш».",
+            reply_markup=reply_main_kb()
+        )
+        return  # <- ВНУТРИ if
+
+    # сюда попадём только если row есть
     await show_event_card(m.chat.id, row[0])
 
 async def show_event_card(chat_id:int, giveaway_id:int):
