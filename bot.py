@@ -261,50 +261,11 @@ def kb_main():
 # ===== Reply-кнопки: перенаправляем на готовые сценарии =====
 
 def reply_main_kb() -> ReplyKeyboardMarkup:
-    # Какие права хотим запросить у пользователя для канала
-    chan_rights = ChatAdministratorRights(
-        is_anonymous=False,
-        can_manage_chat=True,
-        can_post_messages=True,
-        can_edit_messages=True,
-        can_delete_messages=False,
-        can_invite_users=True,
-        can_restrict_members=False,
-        can_promote_members=True,
-        can_change_info=True,
-        can_pin_messages=False,
-        can_manage_topics=False,
-        can_post_stories=False,
-        can_edit_stories=False,
-        can_delete_stories=False,
-        can_manage_video_chats=False,
-    )
-
-    # Минимальные права для группы/супергруппы (можете скорректировать)
-    group_rights = ChatAdministratorRights(
-        is_anonymous=False,
-        can_manage_chat=True,
-        can_post_messages=False,
-        can_edit_messages=False,
-        can_delete_messages=True,
-        can_invite_users=True,
-        can_restrict_members=True,
-        can_promote_members=False,
-        can_change_info=True,
-        can_pin_messages=True,
-        can_manage_topics=True,
-        can_post_stories=False,
-        can_edit_stories=False,
-        can_delete_stories=False,
-        can_manage_video_chats=True,
-    )
-
     btn_add_channel = KeyboardButton(
         text=BTN_ADD_CHANNEL,
         request_chat=KeyboardButtonRequestChat(
-            request_id=1,             # любой целый id (вернётся в chat_shared)
-            chat_is_channel=True,     # именно канал
-            bot_administrator_rights=chan_rights
+            request_id=1,
+            chat_is_channel=True  # открыть выбор каналов
         )
     )
 
@@ -312,8 +273,7 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         text=BTN_ADD_GROUP,
         request_chat=KeyboardButtonRequestChat(
             request_id=2,
-            chat_is_channel=False,              # группы/супергруппы
-            bot_administrator_rights=group_rights
+            chat_is_channel=False  # открыть выбор групп/супергрупп
         )
     )
 
@@ -325,7 +285,7 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Сообщение"
+        input_field_placeholder="Сообщение",
     )
 
 # === СИСТЕМНОЕ окно выбора канала/группы (chat_shared) ===
@@ -408,6 +368,7 @@ def kb_confirm_description() -> InlineKeyboardMarkup:
 @dp.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     await ensure_user(m.from_user.id, m.from_user.username)
+    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())  # <-- убрать старую
     text = (
         "Добро пожаловать в Бот с розыгрышами <b>PrizeMe!</b>\n\n"
         "Бот способен запускать розыгрыши среди участников одного "
@@ -423,6 +384,9 @@ async def cmd_start(m: Message, state: FSMContext):
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
 async def cmd_menu(m: Message):
+    # убрать возможную старую раскладку
+    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())
+    # показать актуальную клавиатуру с системными кнопками
     await m.answer("Главное меню:", reply_markup=reply_main_kb())
 
 @dp.message(Command("hide"))
