@@ -23,6 +23,10 @@ from sqlalchemy import (text, String, Integer, BigInteger,
 from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from io import BytesIO
+import aiohttp
+from aiogram.types import LinkPreviewOptions
+
 from html import escape
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
@@ -90,6 +94,111 @@ def unpack_media(value: str | None) -> tuple[str|None, str|None]:
         return k, fid
     # обратная совместимость: старое поле только с photo id
     return "photo", value
+
+TELEGRAPH_UPLOAD_URL = "https://telegra.ph/upload"
+
+async def _upload_bytes_to_telegraph(data: bytes, filename: str = "image.jpg") -> str:
+    """
+    Заливает файл на telegra.ph и возвращает публичный URL вида https://telegra.ph/file/xxxx.jpg
+    """
+    form = aiohttp.FormData()
+    form.add_field(
+        name="file",
+        value=data,
+        filename=filename,
+        content_type="application/octet-stream"
+    )
+    async with aiohttp.ClientSession() as sess:
+        async with sess.post(TELEGRAPH_UPLOAD_URL, data=form, timeout=30) as resp:
+            js = await resp.json()
+            if not isinstance(js, list) or "src" not in js[0]:
+                raise RuntimeError(f"Telegraph upload failed: {js}")
+            return "https://telegra.ph" + js[0]["src"]
+
+async def file_id_to_public_url(bot: Bot, file_id: str, suggested_name: str = "image.jpg") -> str:
+    """
+    Скачивает media по file_id и получает публичный URL через telegra.ph
+    """
+    buf = BytesIO()
+    await bot.download(file_id, destination=buf)
+    return await _upload_bytes_to_telegraph(buf.getvalue(), suggested_name)
+
+def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
+    """
+    Текст карточки. Ссылку на media мы добавим отдельно (в начале или в конце — не важно),
+    а этот текст — сам «серый блок».
+    """
+    base = [
+        f"<b>{escape(title)}</b>",
+        "",
+        "Participants: 0",
+        f"Prizes: {max(0, prizes)}",
+    ]
+    if show_date and end_at_msk:
+        base.append(f"Giveaway date: {end_at_msk}")
+    else:
+        base.append("Giveaway date: 00:00, 00.00.0000 (0 days)")
+    return "\n".join(base)
+
+async def render_link_preview_message(
+    m: Message,
+    state: FSMContext,
+    *,
+    reedit: bool = False
+) -> None:
+    """
+    Рендерит ЕДИНОЕ сообщение с link preview:
+    - сам текст (название/участники/призы/дата-заглушка)
+    - ссылка на media (для предпросмотра с полоской)
+    Порядок (сверху/снизу) задаётся media_top=True/False.
+    """
+    data = await state.get_data()
+    title   = (data.get("title") or "").strip() or "Без названия"
+    prizes  = int(data.get("winners_count") or 0)
+    media   = data.get("media_url")            # ← здесь уже ДОЛЖЕН лежать публичный URL
+    media_top = bool(data.get("media_top") or False)
+
+    txt = _compose_preview_text(title, prizes)
+    if not media:
+        # fallback (вряд ли понадобится)
+        await m.answer(txt)
+        return
+
+    # Текст и ссылка — в одном сообщении. Если хотим «медиа снизу» — сначала текст, затем ссылка.
+    # Если «сверху» — сначала ссылка, затем текст.
+    if media_top:
+        full = f"{media}\n\n{txt}"
+    else:
+        full = f"{txt}\n\n{media}"
+
+    lp = LinkPreviewOptions(
+        is_disabled=False,
+        prefer_large_media=True,      # хотим большой предпросмотр
+        prefer_small_media=False,
+        show_above_text=media_top     # главное: управляет тем, где Telegram покажет превью
+    )
+
+    old_id = data.get("media_preview_msg_id")
+    if reedit and old_id:
+        try:
+            await m.bot.edit_message_text(
+                chat_id=m.chat.id,
+                message_id=old_id,
+                text=full,
+                link_preview_options=lp,
+                reply_markup=kb_media_preview(media_top)
+            )
+            return
+        except Exception:
+            # если редактирование не удалось (например, сообщение слишком старое) — вышлем новое
+            pass
+
+    msg = await m.answer(
+        full,
+        link_preview_options=lp,
+        reply_markup=kb_media_preview(media_top)
+    )
+    await state.update_data(media_preview_msg_id=msg.message_id)
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -252,67 +361,6 @@ async def _send_media(chat_id: int, kind: str|None, fid: str|None):
     if kind == "video":
         return await bot.send_video(chat_id, fid)
     return None
-
-async def render_media_preview(chat_id: int, state: FSMContext):
-    data = await state.get_data()
-    title   = (data.get("title") or "—").strip()
-    winners = int(data.get("winners_count") or 1)
-    media_top = bool(data.get("media_top", False))  # False => медиа снизу
-    kind, fid = unpack_media(data.get("photo"))
-
-    # подчистим предыдущий превью-блок, если был
-    for key in ("preview_text_id", "preview_media_id"):
-        mid = data.get(key)
-        if mid:
-            try:
-                await bot.delete_message(chat_id, mid)
-            except Exception:
-                pass
-
-    text = _preview_text(title, winners)
-    kb   = kb_media_preview(media_on_top=media_top)
-
-    msg_text = None
-    msg_media = None
-
-    if media_top:
-        # медиа сверху
-        msg_media = await _send_media(chat_id, kind, fid)
-        msg_text  = await bot.send_message(chat_id, text, reply_markup=kb)
-    else:
-        # медиа снизу (по умолчанию)
-        msg_text  = await bot.send_message(chat_id, text, reply_markup=kb)
-        msg_media = await _send_media(chat_id, kind, fid)
-
-    await state.update_data(
-        preview_text_id=msg_text.message_id if msg_text else None,
-        preview_media_id=msg_media.message_id if msg_media else None,
-    )
-
-    # удалим прошлую карточку, если была
-    old_id = data.get("media_preview_msg_id")
-    if old_id:
-        try:
-            await m.bot.delete_message(m.chat.id, old_id)
-        except Exception:
-            pass
-
-    caption = _preview_caption(title, prizes)
-
-    # В зависимости от порядка показываем: если media_top — сначала медиа, иначе просто подпись будет под/над медиа.
-    # В рамках Telegram сообщения порядок текста/медиа ограничен, поэтому визуально меняем только подпись к медиа.
-    # (Финальную публикацию потом учтём тем же флагом.)
-    if kind == "photo" and fid:
-        msg = await m.answer_photo(fid, caption=caption, reply_markup=kb_media_preview(media_top))
-    elif kind == "animation" and fid:
-        msg = await m.answer_animation(fid, caption=caption, reply_markup=kb_media_preview(media_top))
-    elif kind == "video" and fid:
-        msg = await m.answer_video(fid, caption=caption, reply_markup=kb_media_preview(media_top))
-    else:
-        # на всякий случай
-        msg = await m.answer(caption, reply_markup=kb_media_preview(media_top))
-
-    await state.update_data(media_preview_msg_id=msg.message_id)
 
 # ----------------- FSM -----------------
 from aiogram.fsm.state import StatesGroup, State
@@ -680,37 +728,38 @@ async def media_skip_by_text(m: Message, state: FSMContext):
     await state.set_state(CreateFlow.ENDAT)
     await m.answer(format_endtime_prompt(), parse_mode="HTML")
 
-# Фото
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
     file_id = m.photo[-1].file_id
-    await state.update_data(photo=pack_media("photo", file_id), media_top=False)
+    await state.update_data(photo=pack_media("photo", file_id))
+    url = await file_id_to_public_url(m.bot, file_id, "image.jpg")
+    await state.update_data(media_url=url)
+    await render_link_preview_message(m, state)
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
-    await render_media_preview(m.chat.id, state)
 
-
-# GIF (Telegram шлёт как animation — это mp4-клип)
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
 async def got_animation(m: Message, state: FSMContext):
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ.", reply_markup=kb_skip_media())
-        return
-    await state.update_data(photo=pack_media("animation", anim.file_id), media_top=False)
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media()); return
+    await state.update_data(photo=pack_media("animation", anim.file_id))
+    url = await file_id_to_public_url(m.bot, anim.file_id, "animation.mp4")
+    await state.update_data(media_url=url)
+    await render_link_preview_message(m, state)
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
-    await render_media_preview(m.chat.id, state)
 
-# Видео
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
 async def got_video(m: Message, state: FSMContext):
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
         await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media()); return
     if v.file_size and v.file_size > MAX_VIDEO_BYTES:
-        await m.answer("⚠️ Слишком большой файл. Ограничение — 5 МБ.", reply_markup=kb_skip_media()); return
-    await state.update_data(photo=pack_media("video", v.file_id), media_top=False)
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media()); return
+    await state.update_data(photo=pack_media("video", v.file_id))
+    url = await file_id_to_public_url(m.bot, v.file_id, "video.mp4")
+    await state.update_data(media_url=url)
+    await render_link_preview_message(m, state)
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
-    await render_media_preview(m.chat.id, state)
 
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
@@ -872,20 +921,14 @@ async def event_cb(cq:CallbackQuery):
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:up")
 async def preview_move_up(cq: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    if not data.get("photo"):
-        await cq.answer("Сначала добавьте медиа.", show_alert=True); return
     await state.update_data(media_top=True)
-    await render_media_preview(cq.message.chat.id, state)
+    await render_link_preview_message(cq.message, state, reedit=True)  # <— редактируем то же сообщение
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:move:down")
 async def preview_move_down(cq: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    if not data.get("photo"):
-        await cq.answer("Сначала добавьте медиа.", show_alert=True); return
     await state.update_data(media_top=False)
-    await render_media_preview(cq.message.chat.id, state)
+    await render_link_preview_message(cq.message, state, reedit=True)
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:change")
