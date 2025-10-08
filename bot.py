@@ -46,7 +46,7 @@ MEDIA_INSTRUCTION = (
 )
 
 BTN_EVENTS = "Розыгрыши"
-BTN_CREATE = "Новый розыгрыш"
+BTN_CREATE = "Создать розыгрыш"
 BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
