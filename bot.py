@@ -408,6 +408,7 @@ def kb_confirm_description() -> InlineKeyboardMarkup:
 @dp.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     await ensure_user(m.from_user.id, m.from_user.username)
+    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())  # <-- убрать старую
     text = (
         "Добро пожаловать в Бот с розыгрышами <b>PrizeMe!</b>\n\n"
         "Бот способен запускать розыгрыши среди участников одного "
@@ -423,6 +424,9 @@ async def cmd_start(m: Message, state: FSMContext):
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
 async def cmd_menu(m: Message):
+    # убрать возможную старую раскладку
+    await m.answer("Обновляю меню…", reply_markup=ReplyKeyboardRemove())
+    # показать актуальную клавиатуру с системными кнопками
     await m.answer("Главное меню:", reply_markup=reply_main_kb())
 
 @dp.message(Command("hide"))
@@ -462,26 +466,6 @@ async def on_btn_create(m: Message, state: FSMContext):
 @dp.message(F.text == BTN_SUBSCRIPTIONS)
 async def on_btn_subs(m: Message, state: FSMContext):
     await cmd_subs(m)
-
-# ===== Кнопки "Добавить канал" и "Добавить группу" =====
-
-@dp.message(F.text == BTN_ADD_CHANNEL)
-async def on_btn_add_channel(m: Message, state: FSMContext):
-    await m.answer(
-        "Чтобы подключить канал, добавьте бота в канал (в приватном — админом), "
-        "затем перешлите сюда любой пост канала или отправьте @username канала."
-    )
-    # дальше пользователь пересылает пост/пишет @username — сработает ваш add_channel()
-
-@dp.message(F.text == BTN_ADD_GROUP)
-async def on_btn_add_group(m: Message, state: FSMContext):
-    await m.answer(
-        "Чтобы добавить группу:\n"
-        "1) Добавьте бота в группу и дайте ему права администратора (если нужны ограничения — минимальные).\n"
-        "2) Отправьте из группы любое сообщение и перешлите его сюда, или напишите @username группы.\n\n"
-        "После этого бот сможет учитывать участников/делать проверки в группе."
-    )
-    # пока используем ту же механику пересылки, позже можно вынести отдельный хендлер
 
 @dp.message(CreateFlow.TITLE)
 async def handle_giveaway_name(m: Message, state: FSMContext):
