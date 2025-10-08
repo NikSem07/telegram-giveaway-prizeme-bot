@@ -45,7 +45,7 @@ MEDIA_INSTRUCTION = (
     "<b>Внимание!</b> Видео должно быть в формате MP4, а его размер не должен превышать 5 МБ."
 )
 
-BTN_EVENTS = "Розыгрыши"
+BTN_EVENTS = "Мои розыгрыши"
 BTN_CREATE = "Создать розыгрыш"
 BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
@@ -228,6 +228,7 @@ from aiogram.fsm.state import StatesGroup, State
 
 class CreateFlow(StatesGroup):
     TITLE = State()
+    WINNERS = State()
     DESC = State()
     CONFIRM_DESC = State()   # подтверждение описания
     MEDIA_DECIDE = State()   # новый шаг: задать вопрос Да/Нет
@@ -282,7 +283,7 @@ async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="перезапустить бота"),
         BotCommand(command="create", description="создать розыгрыш"),
-        BotCommand(command="events", description="розыгрыши"),
+        BotCommand(command="events", description="мои розыгрыши"),
         BotCommand(command="subscriptions", description="подписки"),
         # можно позже добавить: help, menu и др.
     ]
@@ -416,7 +417,7 @@ async def cmd_start(m: Message, state: FSMContext):
         "победителей в назначенное время.\n\n"
         "Команды бота:\n"
         "<b>/create</b> – создать розыгрыш\n"
-        "<b>/events</b> – розыгрыши\n"
+        "<b>/events</b> – мои розыгрыши\n"
         "<b>/subscriptions</b> – подписки"
     )
     await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
@@ -450,7 +451,7 @@ async def create_giveaway_start(message: Message, state: FSMContext):
 
 # ===== Reply-кнопки: перенаправляем на готовые сценарии =====
 
-# "Розыгрыши" -> используем ваш cmd_events
+# "Мои розыгрыши" -> используем ваш cmd_events
 @dp.message(F.text == BTN_EVENTS)
 async def on_btn_events(m: Message, state: FSMContext):
     await cmd_events(m)   # вызываем ваш уже написанный обработчик
@@ -477,7 +478,28 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
 
     await state.update_data(title=name)
 
-    # Переходим к следующему шагу — описание
+    # ➜ Новый следующий шаг: спросить количество победителей
+    await state.set_state(CreateFlow.WINNERS)
+    await m.answer(
+        "Укажите количество победителей в этом розыгрыше от 1 до 50 "
+        "(введите только число, не указывая других символов)"
+    )
+
+@dp.message(CreateFlow.WINNERS)
+async def handle_winners_count(m: Message, state: FSMContext):
+    raw = (m.text or "").strip()
+    if not raw.isdigit():
+        await m.answer("Нужно целое число от 1 до 50. Введите ещё раз:")
+        return
+
+    winners = int(raw)
+    if not (1 <= winners <= 50):
+        await m.answer("Число должно быть от 1 до 50. Введите ещё раз:")
+        return
+
+    await state.update_data(winners_count=winners)
+
+    # ➜ дальше идём к описанию (как и раньше)
     await state.set_state(CreateFlow.DESC)
     await m.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
 
@@ -633,6 +655,7 @@ async def step_endat(m: Message, state: FSMContext):
         title     = (data.get("title") or "").strip()          # наше ЕДИНОЕ название
         desc      = (data.get("desc")  or "").strip()          # описание (может быть пустым)
         photo_id  = data.get("photo")
+        winners   = int(data.get("winners_count") or 1)
 
         # минимальные проверки (чтоб не получить KeyError)
         if not owner_id or not title:
@@ -648,7 +671,7 @@ async def step_endat(m: Message, state: FSMContext):
                 public_description=desc,        # <-- текст описания
                 photo_file_id=photo_id,
                 end_at_utc=dt_utc,
-                winners_count=1,
+                winners_count=winners,
                 status=GiveawayStatus.DRAFT
             )
             s.add(gw)
