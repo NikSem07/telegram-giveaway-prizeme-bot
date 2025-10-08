@@ -36,6 +36,9 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 load_dotenv()
 
+logger_media = logging.getLogger("media")
+logger_media.setLevel(logging.DEBUG)
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
@@ -114,40 +117,51 @@ async def upload_bytes_to_s3(data: bytes, filename: str) -> str:
     key = _make_s3_key(filename)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
+    logger_media.info("S3 PUT start: bucket=%s key=%s ctype=%s", S3_BUCKET, key, content_type)
+
     def _put():
         _s3_client().put_object(
             Bucket=S3_BUCKET,
             Key=key,
             Body=data,
             ContentType=content_type,
-            # ACL='public-read',  # не требуется, если бакет публичный
         )
-    await asyncio.to_thread(_put)
 
-    # path-style:
+    try:
+        await asyncio.to_thread(_put)
+        logger_media.info("S3 PUT ok: key=%s size=%d", key, len(data))
+    except Exception:
+        logger_media.exception("S3 PUT failed")
+        raise
+
     base = S3_ENDPOINT.rstrip("/")
-    path_style = f"{base}/{S3_BUCKET}/{key}"
+    # надёжная path-style ссылка
+    public_url = f"{base}/{S3_BUCKET}/{key}"
+    logger_media.info("S3 public url: %s", public_url)
+    return public_url
 
-    # если хочешь попробовать virtual-host style (иногда рендерится быстрее):
-    host = base.replace("https://", "").replace("http://", "").strip("/")
-    vhost_style = f"https://{S3_BUCKET}.{host}/{key}"
-
-    # Телеграму всё равно — обе ссылки публичные. Оставляем path-style:
-    return path_style
 
 async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: str) -> str:
-    """
-    Правильная для aiogram v3 цепочка:
-    1) get_file -> получаем File (с file_path)
-    2) bot.download(File, destination=...)
-    3) кладём в S3 и возвращаем публичный URL
-    """
-    tg_file = await bot.get_file(file_id)          # <-- ВАЖНО: сначала резолвим file_id
-    buf = BytesIO()
-    await bot.download(tg_file, destination=buf)   # <-- и только потом качаем его
+    logger_media.info("TG download start: file_id=%s", file_id)
 
-    # попытаемся взять расширение из пути Telegram
-    filename = os.path.basename(tg_file.file_path or "") or suggested_name
+    try:
+        tg_file = await bot.get_file(file_id)
+        logger_media.info("TG get_file ok: file_path=%s file_size=%s",
+                          getattr(tg_file, "file_path", None),
+                          getattr(tg_file, "file_size", None))
+    except Exception:
+        logger_media.exception("TG get_file failed")
+        raise
+
+    buf = BytesIO()
+    try:
+        await bot.download(tg_file, destination=buf)
+        logger_media.info("TG download ok: %d bytes", buf.getbuffer().nbytes)
+    except Exception:
+        logger_media.exception("TG download failed")
+        raise
+
+    filename = os.path.basename(getattr(tg_file, "file_path", "") or "") or suggested_name
     if not os.path.splitext(filename)[1]:
         filename = suggested_name
 
@@ -190,14 +204,19 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
 
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
+    logger_media.info("ensure_link_preview_or_fallback: kind=%s fid=%s", kind, fid)
     try:
         url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
-        logging.info("✅ S3 uploaded, preview URL: %s", url)
+        logger_media.info("Preview URL ready: %s", url)
+
+        # Отладка: пришлём ссылку отдельной строкой, чтобы сразу увидеть превью
+        await m.answer(url)
+
         await state.update_data(media_url=url)
-        await render_link_preview_message(m, state)   # одно сообщение с рамкой/полоской
+        await render_link_preview_message(m, state)
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
-    except Exception as e:
-        logging.exception("❌ S3 upload (or download) failed; fallback to native media: %r", e)
+    except Exception:
+        logger_media.exception("Link-preview path failed; go fallback")
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
@@ -807,6 +826,7 @@ async def media_skip_by_text(m: Message, state: FSMContext):
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
+    logging.info("HANDLER photo: state=MEDIA_UPLOAD, sizes=%d", len(m.photo))
     fid = m.photo[-1].file_id
     await state.update_data(photo=pack_media("photo", fid))
     # пробуем «рамку», иначе — fallback
@@ -814,6 +834,7 @@ async def got_photo(m: Message, state: FSMContext):
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.animation)
 async def got_animation(m: Message, state: FSMContext):
+    logging.info("HANDLER animation: state=MEDIA_UPLOAD")
     anim = m.animation
     if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
         await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
@@ -823,6 +844,7 @@ async def got_animation(m: Message, state: FSMContext):
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.video)
 async def got_video(m: Message, state: FSMContext):
+    logging.info("HANDLER video: state=MEDIA_UPLOAD")
     v = m.video
     if v.mime_type and v.mime_type != "video/mp4":
         await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media())
