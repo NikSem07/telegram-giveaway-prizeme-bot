@@ -265,15 +265,21 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         text=BTN_ADD_CHANNEL,
         request_chat=KeyboardButtonRequestChat(
             request_id=1,
-            chat_is_channel=True  # открыть выбор каналов
+            chat_is_channel=True,
+            # бот должен иметь такие права в канале
+            bot_administrator_rights=chan_rights,
+            # ВАЖНО: пользователь ДОЛЖЕН иметь такие же права (фильтрация + Requirements)
+            user_administrator_rights=chan_rights,
         )
     )
 
     btn_add_group = KeyboardButton(
-        text=BTN_ADD_GROUP,
-        request_chat=KeyboardButtonRequestChat(
-            request_id=2,
-            chat_is_channel=False  # открыть выбор групп/супергрупп
+    text=BTN_ADD_GROUP,
+    request_chat=KeyboardButtonRequestChat(
+        request_id=2,
+        chat_is_channel=False,  # для групп/супергрупп
+        bot_administrator_rights=group_rights,
+        user_administrator_rights=group_rights,
         )
     )
 
@@ -664,30 +670,6 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 async def cmd_subs(m:Message):
     await m.answer("Чтобы подключить канал, добавьте бота в канал (в приватном — админом), "
                    "затем перешлите сюда любой пост канала или отправьте @username канала.")
-
-@dp.message(F.forward_from_chat | F.text.regexp(r"^@[\w\d_]+$"))
-async def add_channel(m:Message):
-    owner = m.from_user.id
-    chat = None
-    if m.forward_from_chat:
-        chat = m.forward_from_chat
-    else:
-        username = m.text.strip()
-        chat = await bot.get_chat(username)
-    try:
-        cm = await bot.get_chat_member(chat.id, (await bot.me()).id)
-        role = "administrator" if cm.status=="administrator" else ("member" if cm.status=="member" else "none")
-    except Exception:
-        role="none"
-    if role=="none":
-        await m.answer("Добавьте бота в канал (в приватном — админом), затем повторите."); return
-    from sqlalchemy import text as stext
-    async with session_scope() as s:
-        await s.execute(stext("INSERT INTO organizer_channels(owner_user_id,chat_id,username,title,is_private,bot_role) "
-                              "VALUES(:o,:cid,:u,:t,:p,:r)"),
-                        {"o":owner,"cid":chat.id,"u":getattr(chat,'username',None),"t":chat.title,
-                         "p":0 if getattr(chat,'username',None) else 1,"r":"admin" if role=='administrator' else 'member'})
-    await m.answer(f"Канал <b>{chat.title}</b> подключён. Теперь /events → «Подключить каналы».")
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
