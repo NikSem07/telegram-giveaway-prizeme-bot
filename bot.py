@@ -588,7 +588,7 @@ async def cmd_events(m: Message):
 
     if not row:
         await m.answer(
-            "У вас нет розыгрышей. Нажмите «Создать розыгрыш».",
+            "У вас пока нет розыгрышей. Вы можете создать новый роыгрыш и он появится здесь.",
             reply_markup=reply_main_kb()
         )
         return  # <- ВНУТРИ if
