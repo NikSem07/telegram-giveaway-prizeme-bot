@@ -41,7 +41,7 @@ import mimetypes
 from urllib.parse import urlencode
 
 DESCRIPTION_PROMPT = (
-    "<b>Введите текст подробногоогогогогог описания розыгрыша:</b>\n\n"
+    "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
     "Можно использовать не более 2500 символов.\n\n"
     "<i>Подробно опишите условия розыгрыша для ваших подписчиков.\n"
     "После начала розыгрыша введённый текст будет опубликован\n"
@@ -246,8 +246,8 @@ async def render_link_preview_message(
     - ссылка на media (для предпросмотра с полоской)
     Порядок (сверху/снизу) задаётся media_top=True/False.
     """
-    logger_media.info("RENDER media_url from state = %s", data.get("media_url"))
     data = await state.get_data()
+    logger_media.info("RENDER media_url from state = %s", data.get("media_url"))
     title   = (data.get("title") or "").strip() or "Без названия"
     prizes  = int(data.get("winners_count") or 0)
     media   = data.get("media_url")            # ← здесь уже ДОЛЖЕН лежать публичный URL
