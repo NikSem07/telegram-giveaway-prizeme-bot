@@ -199,26 +199,22 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
     logger_media.info("ensure_link_preview_or_fallback: kind=%s fid=%s", kind, fid)
     try:
-        # 1) качаем из TG и кладем в S3
         key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
 
-        # 2) собираем превью-ссылку на наш домен
         data = await state.get_data()
         title = (data.get("title") or "Giveaway").strip()
         desc  = (data.get("desc")  or "").strip()
         preview_url = _make_preview_url(key, title, desc)
 
-        logger_media.info("✅ S3 uploaded: key=%s s3_url=%s preview=%s", key, s3_url, preview_url)
+        logger_media.info("✅ S3 uploaded: key=%s s3=%s preview=%s", key, s3_url, preview_url)
 
-        # 3) кладем в state ИМЕННО preview_url (а не s3_url!)
-        await state.update_data(media_url=preview_url)
-
-        # 4) рисуем один общий блок (без отладочного отдельного сообщения)
+        await state.update_data(media_url=preview_url)   # ← ВАЖНО: кладём именно preview_url!
+        logger_media.info("WILL_RENDER preview_url=%s", preview_url)
         await render_link_preview_message(m, state)
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
 
     except Exception:
-        logger_media.exception("Link-preview path failed; go fallback")
+        logger_media.exception("Link-preview failed; fallback")
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
@@ -250,6 +246,7 @@ async def render_link_preview_message(
     - ссылка на media (для предпросмотра с полоской)
     Порядок (сверху/снизу) задаётся media_top=True/False.
     """
+    logger_media.info("RENDER media_url from state = %s", data.get("media_url"))
     data = await state.get_data()
     title   = (data.get("title") or "").strip() or "Без названия"
     prizes  = int(data.get("winners_count") or 0)
