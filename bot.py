@@ -35,6 +35,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 load_dotenv()
+MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 
 import mimetypes
 from urllib.parse import urlencode
@@ -61,8 +62,6 @@ BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
 
 MSK_TZ = ZoneInfo("Europe/Moscow")
-
-MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru").rstrip("/")
 
 logger_media = logging.getLogger("media")
 logger_media.setLevel(logging.DEBUG)
@@ -149,6 +148,18 @@ async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: s
 
     return await upload_bytes_to_s3(buf.getvalue(), filename)  # (key, s3_url)
 
+def _make_preview_url(key: str, title: str, desc: str) -> str:
+    """
+    Собираем ссылку на наш превью-сервис:
+    https://media.prizeme.ru/uploads/yyyy/mm/dd/uuid.ext?t=...&d=...
+    """
+    q = urlencode({
+        "t": (title or "")[:120],
+        "d": (desc or "")[:220],
+    })
+    base = MEDIA_BASE_URL.rstrip("/")
+    return f"{base}/uploads/{key}?{q}"
+
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
     return f"{kind}:{file_id}"
@@ -188,31 +199,26 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
     logger_media.info("ensure_link_preview_or_fallback: kind=%s fid=%s", kind, fid)
     try:
-        # 1) Скачиваем из Telegram и кладём в S3 -> получаем key и прямой S3-URL
+        # 1) качаем из TG и кладем в S3
         key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
-        logger_media.info("✅ S3 uploaded: key=%s s3=%s", key, s3_url)
 
-        # 2) Собираем заголовок и описание (для OG-мета)
+        # 2) собираем превью-ссылку на наш домен
         data = await state.get_data()
-        title = (data.get("title") or "").strip() or "PrizeMe | Giveaway"
-        desc  = (data.get("desc")  or "").strip() or "Participate and win!"
-        desc_short = (desc[:220] + "…") if len(desc) > 220 else desc
+        title = (data.get("title") or "Giveaway").strip()
+        desc  = (data.get("desc")  or "").strip()
+        preview_url = _make_preview_url(key, title, desc)
 
-        # 3) Собираем ссылку на наш превью-сервис
-        query = urlencode({"t": title, "d": desc_short})
-        preview_url = f"{MEDIA_BASE_URL}/uploads/{key}?{query}"
+        logger_media.info("✅ S3 uploaded: key=%s s3_url=%s preview=%s", key, s3_url, preview_url)
 
-        logger_media.info("🔗 Preview URL: %s", preview_url)
-
-        # 4) Кладём ссылку в state (render_link_preview_message возьмёт её и отправит одно сообщение)
+        # 3) кладем в state ИМЕННО preview_url (а не s3_url!)
         await state.update_data(media_url=preview_url)
 
-        # 5) Рисуем единое сообщение с линк-превью (полоска слева, серый фон)
+        # 4) рисуем один общий блок (без отладочного отдельного сообщения)
         await render_link_preview_message(m, state)
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
 
     except Exception:
-        logger_media.exception("❌ Link-preview path failed; fallback to native media")
+        logger_media.exception("Link-preview path failed; go fallback")
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
