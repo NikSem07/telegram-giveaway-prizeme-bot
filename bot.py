@@ -41,7 +41,7 @@ import mimetypes
 from urllib.parse import urlencode
 
 DESCRIPTION_PROMPT = (
-    "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
+    "<b>Введите текст подробногоогогогогог описания розыгрыша:</b>\n\n"
     "Можно использовать не более 2500 символов.\n\n"
     "<i>Подробно опишите условия розыгрыша для ваших подписчиков.\n"
     "После начала розыгрыша введённый текст будет опубликован\n"
@@ -286,6 +286,13 @@ async def render_link_preview_message(
             return
         except Exception:
             # если редактирование не удалось (например, сообщение слишком старое) — вышлем новое
+            pass
+    
+    prev_id = data.get("media_preview_msg_id")
+    if prev_id and not reedit:
+        try:
+            await m.bot.delete_message(chat_id=m.chat.id, message_id=prev_id)
+        except Exception:
             pass
 
     msg = await m.answer(
