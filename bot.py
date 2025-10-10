@@ -152,16 +152,8 @@ async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: s
     return await upload_bytes_to_s3(buf.getvalue(), filename)  # (key, s3_url)
 
 def _make_preview_url(key: str, title: str, desc: str) -> str:
-    """
-    Собираем ссылку на наш превью-сервис:
-    https://media.prizeme.ru/uploads/yyyy/mm/dd/uuid.ext?t=...&d=...
-    """
-    q = urlencode({
-        "t": (title or "")[:120],
-        "d": (desc or "")[:220],
-    })
     base = MEDIA_BASE_URL.rstrip("/")
-    return f"{base}/uploads/{key}?{q}"
+    return f"{base}/uploads/{key}"
 
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
