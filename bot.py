@@ -36,19 +36,8 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 load_dotenv()
 
-logger_media = logging.getLogger("media")
-logger_media.setLevel(logging.DEBUG)
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
-S3_ENDPOINT = os.getenv("S3_ENDPOINT")
-S3_REGION   = os.getenv("S3_REGION", "ru-1")
-S3_BUCKET   = os.getenv("S3_BUCKET")
-S3_KEY      = os.getenv("S3_ACCESS_KEY")
-S3_SECRET   = os.getenv("S3_SECRET_KEY")
-
-if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
-    logging.warning("S3 env not fully set — uploads will fail.")
+import mimetypes
+from urllib.parse import urlencode
 
 DESCRIPTION_PROMPT = (
     "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
@@ -72,6 +61,21 @@ BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
 
 MSK_TZ = ZoneInfo("Europe/Moscow")
+
+MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru").rstrip("/")
+
+logger_media = logging.getLogger("media")
+logger_media.setLevel(logging.DEBUG)
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+DEFAULT_TZ = os.getenv("TZ", "Europe/Moscow")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT")
+S3_BUCKET   = os.getenv("S3_BUCKET")
+S3_KEY      = os.getenv("S3_ACCESS_KEY")
+S3_SECRET   = os.getenv("S3_SECRET_KEY")
+
+if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
+    logging.warning("S3 env not fully set — uploads will fail.")
 
 def format_endtime_prompt() -> str:
     now_msk = datetime.now(MSK_TZ)
@@ -113,11 +117,13 @@ def _make_s3_key(filename: str) -> str:
     ext = (os.path.splitext(filename)[1] or "").lower() or ".bin"
     return f"{now:%Y/%m/%d}/{uuid.uuid4().hex}{ext}"
 
-async def upload_bytes_to_s3(data: bytes, filename: str) -> str:
+async def upload_bytes_to_s3(data: bytes, filename: str) -> tuple[str, str]:
+    """
+    Кладём байты в S3.
+    Возвращаем (key, public_url), где key = yyyy/mm/dd/uuid.ext
+    """
     key = _make_s3_key(filename)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-
-    logger_media.info("S3 PUT start: bucket=%s key=%s ctype=%s", S3_BUCKET, key, content_type)
 
     def _put():
         _s3_client().put_object(
@@ -126,46 +132,22 @@ async def upload_bytes_to_s3(data: bytes, filename: str) -> str:
             Body=data,
             ContentType=content_type,
         )
+    await asyncio.to_thread(_put)
 
-    try:
-        await asyncio.to_thread(_put)
-        logger_media.info("S3 PUT ok: key=%s size=%d", key, len(data))
-    except Exception:
-        logger_media.exception("S3 PUT failed")
-        raise
-
-    base = S3_ENDPOINT.rstrip("/")
-    # надёжная path-style ссылка
-    public_url = f"{base}/{S3_BUCKET}/{key}"
-    logger_media.info("S3 public url: %s", public_url)
-    return public_url
+    public_url = f"{S3_ENDPOINT.rstrip('/')}/{S3_BUCKET}/{key}"
+    return key, public_url
 
 
-async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: str) -> str:
-    logger_media.info("TG download start: file_id=%s", file_id)
-
-    try:
-        tg_file = await bot.get_file(file_id)
-        logger_media.info("TG get_file ok: file_path=%s file_size=%s",
-                          getattr(tg_file, "file_path", None),
-                          getattr(tg_file, "file_size", None))
-    except Exception:
-        logger_media.exception("TG get_file failed")
-        raise
-
+async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: str) -> tuple[str, str]:
+    tg_file = await bot.get_file(file_id)
     buf = BytesIO()
-    try:
-        await bot.download(tg_file, destination=buf)
-        logger_media.info("TG download ok: %d bytes", buf.getbuffer().nbytes)
-    except Exception:
-        logger_media.exception("TG download failed")
-        raise
+    await bot.download(tg_file, destination=buf)
 
-    filename = os.path.basename(getattr(tg_file, "file_path", "") or "") or suggested_name
+    filename = os.path.basename(tg_file.file_path or "") or suggested_name
     if not os.path.splitext(filename)[1]:
         filename = suggested_name
 
-    return await upload_bytes_to_s3(buf.getvalue(), filename)
+    return await upload_bytes_to_s3(buf.getvalue(), filename)  # (key, s3_url)
 
 # Храним тип вместе с file_id в одном поле БД
 def pack_media(kind: str, file_id: str) -> str:
@@ -206,17 +188,31 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
     logger_media.info("ensure_link_preview_or_fallback: kind=%s fid=%s", kind, fid)
     try:
-        url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
-        logger_media.info("Preview URL ready: %s", url)
+        # 1) Скачиваем из Telegram и кладём в S3 -> получаем key и прямой S3-URL
+        key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
+        logger_media.info("✅ S3 uploaded: key=%s s3=%s", key, s3_url)
 
-        # Отладка: пришлём ссылку отдельной строкой, чтобы сразу увидеть превью
-        await m.answer(url)
+        # 2) Собираем заголовок и описание (для OG-мета)
+        data = await state.get_data()
+        title = (data.get("title") or "").strip() or "PrizeMe | Giveaway"
+        desc  = (data.get("desc")  or "").strip() or "Participate and win!"
+        desc_short = (desc[:220] + "…") if len(desc) > 220 else desc
 
-        await state.update_data(media_url=url)
+        # 3) Собираем ссылку на наш превью-сервис
+        query = urlencode({"t": title, "d": desc_short})
+        preview_url = f"{MEDIA_BASE_URL}/uploads/{key}?{query}"
+
+        logger_media.info("🔗 Preview URL: %s", preview_url)
+
+        # 4) Кладём ссылку в state (render_link_preview_message возьмёт её и отправит одно сообщение)
+        await state.update_data(media_url=preview_url)
+
+        # 5) Рисуем единое сообщение с линк-превью (полоска слева, серый фон)
         await render_link_preview_message(m, state)
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
+
     except Exception:
-        logger_media.exception("Link-preview path failed; go fallback")
+        logger_media.exception("❌ Link-preview path failed; fallback to native media")
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
 def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
