@@ -72,6 +72,7 @@ S3_ENDPOINT = os.getenv("S3_ENDPOINT")
 S3_BUCKET   = os.getenv("S3_BUCKET")
 S3_KEY      = os.getenv("S3_ACCESS_KEY")
 S3_SECRET   = os.getenv("S3_SECRET_KEY")
+S3_REGION   = os.getenv("S3_REGION", "ru-1")
 
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
@@ -121,6 +122,7 @@ async def upload_bytes_to_s3(data: bytes, filename: str) -> tuple[str, str]:
     Кладём байты в S3.
     Возвращаем (key, public_url), где key = yyyy/mm/dd/uuid.ext
     """
+    logging.info(f"📤 UPLOAD_TO_S3 filename={filename}, bytes={len(data)}")
     key = _make_s3_key(filename)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
@@ -132,6 +134,7 @@ async def upload_bytes_to_s3(data: bytes, filename: str) -> tuple[str, str]:
             ContentType=content_type,
         )
     await asyncio.to_thread(_put)
+    logging.info(f"✅ S3_PUT_OK key={key}")
 
     public_url = f"{S3_ENDPOINT.rstrip('/')}/{S3_BUCKET}/{key}"
     return key, public_url
