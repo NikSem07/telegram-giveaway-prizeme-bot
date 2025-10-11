@@ -151,7 +151,7 @@ async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: s
 
     return await upload_bytes_to_s3(buf.getvalue(), filename)  # (key, s3_url)
 
-def _make_preview_url(key: str, title: str, desc: str) -> str:
+def _make_preview_url(key: str) -> str:
     base = MEDIA_BASE_URL.rstrip("/")
     return f"{base}/uploads/{key}"
 
@@ -194,17 +194,18 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
 async def _ensure_link_preview_or_fallback(m: Message, state: FSMContext, kind: str, fid: str, filename: str):
     logger_media.info("ensure_link_preview_or_fallback: kind=%s fid=%s", kind, fid)
     try:
+        # 1) качаем из TG и кладем в S3
         key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, filename)
 
-        data = await state.get_data()
-        title = (data.get("title") or "Giveaway").strip()
-        desc  = (data.get("desc")  or "").strip()
-        preview_url = _make_preview_url(key, title, desc)
+        # 2) собираем ИМЕННО /uploads/<key> БЕЗ query-параметров
+        preview_url = _make_preview_url(key)
 
-        logger_media.info("✅ S3 uploaded: key=%s s3=%s preview=%s", key, s3_url, preview_url)
+        logger_media.info("✅ S3 uploaded: key=%s s3_url=%s preview=%s", key, s3_url, preview_url)
 
-        await state.update_data(media_url=preview_url)   # ← ВАЖНО: кладём именно preview_url!
-        logger_media.info("WILL_RENDER preview_url=%s", preview_url)
+        # 3) кладем в state именно preview_url
+        await state.update_data(media_url=preview_url)
+
+        # 4) рисуем единый блок (без лишних сообщений со ссылкой)
         await render_link_preview_message(m, state)
         await state.set_state(CreateFlow.MEDIA_PREVIEW)
 
