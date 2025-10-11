@@ -153,8 +153,8 @@ async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: s
 
 def _make_preview_url(key: str, title: str, desc: str) -> str:
     """
-    Собираем ссылку-прокладку на наш превью-сервис.
-    Мы НЕ передаём теги t/d в мету — Telegram возьмёт только картинку.
+    Ссылка-прокладка: только /uploads/<key>.
+    Никаких query-параметров — Telegram возьмёт только медиа.
     """
     base = MEDIA_BASE_URL.rstrip("/")
     return f"{base}/uploads/{key}"

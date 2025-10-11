@@ -3,8 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from dotenv import load_dotenv
 
-# --- env ---
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv()
 
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
@@ -12,7 +11,10 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-# ---- helpers ----
+@app.get("/healthz")
+def healthz():
+    return PlainTextResponse("ok")
+
 def build_s3_url(key: str) -> str:
     # ключ приходит как yyyy/mm/dd/uuid.ext
     return f"{S3_ENDPOINT}/{S3_BUCKET}/{key.lstrip('/')}"
@@ -20,57 +22,56 @@ def build_s3_url(key: str) -> str:
 def is_preview_client(req: Request) -> bool:
     """
     Определяем бота предпросмотра по User-Agent.
-    Браузерам ничего "видимого" не отдаём — только 302 на S3.
+    НИКАКИХ body/видимых страниц не отдаём — только <head> с OG-метой.
     """
     ua = (req.headers.get("User-Agent") or "").lower()
     bots = [
-        "telegrambot",        # Telegram
-        "whatsapp",           # WhatsApp
-        "twitterbot",         # Twitter / X
-        "facebookexternalhit",# Facebook
-        "vkshare",            # VK
-        "viber",              # Viber
-        "discordbot",         # Discord
-        "okhttp"              # иногда встречается у мессенджеров
+        "telegrambot",         # Telegram
+        "whatsapp",            # WhatsApp
+        "twitterbot",          # Twitter / X
+        "facebookexternalhit", # Facebook
+        "vkshare",             # VK
+        "viber",               # Viber
+        "discordbot",          # Discord
+        "okhttp"               # встречается у мессенджеров
     ]
     return any(b in ua for b in bots)
 
-def render_meta_head(title: str, img_url: str, ext: str) -> str:
+def render_meta_html(s3_url: str, ext: str) -> str:
     """
-    Возвращаем минимальный HTML с OG-мета. Никакого видимого тела.
+    Возвращаем минимальный документ: без body — только meta.
+    Telegram возьмёт media по og:image / og:video и НИЧЕГО больше.
     """
-    og_type = "video.other" if ext in (".mp4", ".webm", ".mov") else "article"
-    tags = [
+    is_video = ext in (".mp4", ".webm", ".mov")
+    head = [
         '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        f'<meta property="og:type" content="{og_type}">',
-        f'<meta property="og:title" content="{title}">',
-        f'<meta property="og:image" content="{img_url}">',
-        f'<meta property="twitter:card" content="summary_large_image">',
+        '<meta name="robots" content="noindex,nofollow">',
+        '<meta property="og:type" content="article">',
+        '<meta property="twitter:card" content="summary_large_image">',
     ]
-    # Боту достаточно <head>. Тело пустое.
-    return "<!doctype html><html><head>" + "".join(tags) + "</head></html>"
+    if is_video:
+        head.append(f'<meta property="og:video" content="{s3_url}">')
+    else:
+        head.append(f'<meta property="og:image" content="{s3_url}">')
 
-@app.get("/healthz")
-def healthz():
-    return PlainTextResponse("ok")
+    # Никаких title/desc! Никакого <body>!
+    return "<!doctype html><html><head>" + "".join(head) + "</head></html>"
 
 @app.get("/uploads/{path:path}")
 async def preview(path: str, request: Request):
-    """
-    Мы ждём путь вида yyyy/mm/dd/filename.ext
-    - Боты получают head с OG-тегами (без тела)
-    - Браузеры получают 302 на S3 (и уже там — сама картинка/видео)
-    """
-    key = (path or "").lstrip("/")
-    ext = "." + key.split(".")[-1].lower() if "." in key else ""
-    s3_url = build_s3_url(key)
+    # path ожидаем как yyyy/mm/dd/filename.ext
+    s3_url = build_s3_url(path)
+    ext = ""
+    if "." in path:
+        ext = "." + path.rsplit(".", 1)[-1].lower()
 
     if is_preview_client(request):
-        # только мета, без видимого контента
-        title = ""  # пустой title, чтобы Telegram показал только картинку
-        html = render_meta_head(title=title, img_url=s3_url, ext=ext)
-        return HTMLResponse(html, headers={"Cache-Control": f"public, max-age={CACHE_SEC}"})
+        html = render_meta_html(s3_url, ext)
+        # только хэдеры и мета, кэш можно оставить
+        return HTMLResponse(
+            html,
+            headers={"Cache-Control": f"public, max-age={CACHE_SEC}"}
+        )
     else:
-        # обычные браузеры → мгновенный редирект на S3
+        # обычному браузеру — мгновенный 302 на S3 (там откроется чистая картинка/видео)
         return RedirectResponse(url=s3_url, status_code=302)
