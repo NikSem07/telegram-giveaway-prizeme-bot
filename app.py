@@ -1,9 +1,11 @@
+# app.py  — минимальный превью-сервис
 import os
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from dotenv import load_dotenv
 
-load_dotenv()
+# env
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
@@ -11,67 +13,48 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-@app.get("/healthz")
-def healthz():
-    return PlainTextResponse("ok")
-
 def build_s3_url(key: str) -> str:
     # ключ приходит как yyyy/mm/dd/uuid.ext
     return f"{S3_ENDPOINT}/{S3_BUCKET}/{key.lstrip('/')}"
 
+# Определяем, что это бот предпросмотра (Telegram, Twitter, VK, WhatsApp, Discord)
+BOT_UA = ("telegrambot", "twitterbot", "facebookexternalhit", "vkshare", "whatsapp", "discordbot", "okhttp")
+
 def is_preview_client(req: Request) -> bool:
-    """
-    Определяем бота предпросмотра по User-Agent.
-    НИКАКИХ body/видимых страниц не отдаём — только <head> с OG-метой.
-    """
     ua = (req.headers.get("User-Agent") or "").lower()
-    bots = [
-        "telegrambot",         # Telegram
-        "whatsapp",            # WhatsApp
-        "twitterbot",          # Twitter / X
-        "facebookexternalhit", # Facebook
-        "vkshare",             # VK
-        "viber",               # Viber
-        "discordbot",          # Discord
-        "okhttp"               # встречается у мессенджеров
-    ]
-    return any(b in ua for b in bots)
+    return any(b in ua for b in BOT_UA)
 
-def render_meta_html(s3_url: str, ext: str) -> str:
+def head_only_html(s3_url: str, ext: str) -> str:
     """
-    Возвращаем минимальный документ: без body — только meta.
-    Telegram возьмёт media по og:image / og:video и НИЧЕГО больше.
+    Возвращаем ТОЛЬКО <head> с OG-тегами.
+    Никаких заголовков, стилей и видимого контента в <body>.
     """
-    is_video = ext in (".mp4", ".webm", ".mov")
-    head = [
-        '<meta charset="utf-8">',
-        '<meta name="robots" content="noindex,nofollow">',
-        '<meta property="og:type" content="article">',
-        '<meta property="twitter:card" content="summary_large_image">',
-    ]
-    if is_video:
-        head.append(f'<meta property="og:video" content="{s3_url}">')
+    tags = []
+    # Для видео Telegram использует og:video, для изображений — og:image
+    if ext in (".mp4", ".webm", ".mov"):
+        tags.append(f'<meta property="og:video" content="{s3_url}">')
     else:
-        head.append(f'<meta property="og:image" content="{s3_url}">')
+        tags.append(f'<meta property="og:image" content="{s3_url}">')
+    tags.append('<meta name="twitter:card" content="summary_large_image">')
+    return "<!doctype html><html><head>" + "".join(tags) + "</head><body></body></html>"
 
-    # Никаких title/desc! Никакого <body>!
-    return "<!doctype html><html><head>" + "".join(head) + "</head></html>"
+@app.get("/healthz")
+def healthz():
+    return PlainTextResponse("ok")
 
 @app.get("/uploads/{path:path}")
 async def preview(path: str, request: Request):
-    # path ожидаем как yyyy/mm/dd/filename.ext
-    s3_url = build_s3_url(path)
-    ext = ""
-    if "." in path:
-        ext = "." + path.rsplit(".", 1)[-1].lower()
+    """
+    Ботам предпросмотра — пустая страница с OG-тегами.
+    Обычным пользователям — мгновенный 302 на сам файл в S3,
+    чтобы в браузере открывался ТОЛЬКО файл (jpg/png/mp4 и т.п.).
+    """
+    key = path
+    s3_url = build_s3_url(key)
+    ext = ("." + path.rsplit(".", 1)[-1].lower()) if "." in path else ""
 
     if is_preview_client(request):
-        html = render_meta_html(s3_url, ext)
-        # только хэдеры и мета, кэш можно оставить
-        return HTMLResponse(
-            html,
-            headers={"Cache-Control": f"public, max-age={CACHE_SEC}"}
-        )
+        html = head_only_html(s3_url, ext)
+        return HTMLResponse(html, headers={"Cache-Control": f"public, max-age={CACHE_SEC}"})
     else:
-        # обычному браузеру — мгновенный 302 на S3 (там откроется чистая картинка/видео)
         return RedirectResponse(url=s3_url, status_code=302)

@@ -152,10 +152,7 @@ async def file_id_to_public_url_via_s3(bot: Bot, file_id: str, suggested_name: s
     return await upload_bytes_to_s3(buf.getvalue(), filename)  # (key, s3_url)
 
 def _make_preview_url(key: str, title: str, desc: str) -> str:
-    """
-    Ссылка-прокладка: только /uploads/<key>.
-    Никаких query-параметров — Telegram возьмёт только медиа.
-    """
+    # Без каких-либо параметров — только путь к файлу на нашем домене
     base = MEDIA_BASE_URL.rstrip("/")
     return f"{base}/uploads/{key}"
 
