@@ -74,8 +74,60 @@ S3_KEY      = os.getenv("S3_ACCESS_KEY")
 S3_SECRET   = os.getenv("S3_SECRET_KEY")
 S3_REGION   = os.getenv("S3_REGION", "ru-1")
 
+# Тексты экранов
+CONNECT_INVITE_TEXT = (
+    "⭐️ Ваш розыгрыш создан, осталось только запустить!\n\n"
+    "Подключите минимум 1 канал/группу, чтобы можно было запустить розыгрыш.\n\n"
+    "Нажмите на кнопку ниже, чтобы сделать это."
+)
+
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
+
+
+# Тексты экранов_2
+
+def build_connect_invite_kb(event_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    # NB: в callback передаём id розыгрыша, чтобы потом понимать, к какому событию подключаем каналы
+    kb.button(text="Добавить канал/группу", callback_data=f"raffle:connect_channels:{event_id}")
+    return kb.as_markup()
+
+# Экран с уже подключенными каналами и действиями
+def build_connect_channels_text(event_title: str | None = None) -> str:
+    # Заголовок как в референсе
+    title = f"🔗 Подключение канала к розыгрышу \"{event_title}\"" if event_title else "🔗 Подключение канала к розыгрышу"
+    body = (
+        f"{title}\n\n"
+        "Подключить канал к розыгрышу сможет только администратор, который обладает достаточным уровнем прав в прикреплённом канале.\n\n"
+        "Подключённые каналы:\n"
+    )
+    return body
+
+def build_channels_menu_kb(event_id: int, channels: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    """
+    channels: список кортежей (channel_id, title)
+    """
+    kb = InlineKeyboardBuilder()
+
+    # Кнопки каналов/групп, которые уже подключены (если есть)
+    if channels:
+        for ch_id, title in channels:
+            # Кнопка просто-индикатор. Если надо — можете повесить действия по нажатию.
+            kb.button(text=title, callback_data=f"raffle:noop:{event_id}:{ch_id}")
+        kb.adjust(1)
+
+    # Служебные кнопки
+    kb.row(InlineKeyboardButton(text="Добавить канал", callback_data=f"raffle:add_channel:{event_id}"))
+    kb.row(InlineKeyboardButton(text="Запустить розыгрыш", callback_data=f"raffle:start:{event_id}"))
+    # Временно неактивная — ловим и отвечаем всплывашкой
+    kb.row(InlineKeyboardButton(text="Настройки розыгрыша", callback_data=f"raffle:settings_disabled:{event_id}"))
+
+    return kb.as_markup()
+
+# --- [END] CONNECT CHANNELS UI helpers ---
+
+# Следующие функции
 
 def format_endtime_prompt() -> str:
     now_msk = datetime.now(MSK_TZ)
@@ -1120,7 +1172,7 @@ async def preview_change_media(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
-    # Сохраняем черновик с учётом всех полей и медиа
+    """Сохраняем черновик и показываем экран 'Ваш розыгрыш создан...' с кнопкой 'Добавить канал/группу'."""
     data = await state.get_data()
 
     owner_id = data.get("owner")
@@ -1136,6 +1188,7 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
         await cq.answer()
         return
 
+    # создаём черновик и сразу получаем его id
     async with session_scope() as s:
         gw = Giveaway(
             owner_user_id=owner_id,
@@ -1147,11 +1200,118 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
             status=GiveawayStatus.DRAFT
         )
         s.add(gw)
+        await s.flush()   # <-- ВАЖНО: чтобы появился gw.id до коммита
+        new_id = gw.id
 
     await state.clear()
+
+# ===== Экран подключения каналов (по кнопке "Добавить канал/группу") =====
+
+@dp.callback_query(F.data.startswith("raffle:connect_channels:"))
+async def cb_connect_channels(cq: CallbackQuery):
+    # data вида: raffle:connect_channels:<event_id>
+    _, _, sid = cq.data.split(":")
+    event_id = int(sid)
+
+    # узнаём владельца и название розыгрыша
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, event_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True); return
+        # все уже подключенные РАНЕЕ пользователем каналы/группы (организаторские)
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
+            {"u": gw.owner_user_id}
+        )
+        rows = res.all()
+
+    channels = [(r[0], r[1]) for r in rows]  # (id, title)
+    text_block = build_connect_channels_text(gw.internal_title)
+    kb = build_channels_menu_kb(event_id, channels)
+
+    await cq.message.answer(text_block, reply_markup=kb)
+    await cq.answer()
+
+
+@dp.callback_query(F.data.startswith("raffle:add_channel:"))
+async def cb_add_channel(cq: CallbackQuery):
+    # Поднять системное окно выбора чата из INLINE-нужной кнопки нельзя,
+    # поэтому показываем пользователю нижнюю клавиатуру с кнопкой
+    # "Добавить канал" (request_chat) и даём подсказку.
     await cq.message.answer(
-        "Черновик сохранён.\nОткройте /events, чтобы привязать каналы и запустить розыгрыш.",
+        "Нажмите кнопку «Добавить канал» на клавиатуре ниже и выберите канал/группу.",
         reply_markup=reply_main_kb()
+    )
+    await cq.answer()
+
+
+@dp.callback_query(F.data.startswith("raffle:start:"))
+async def cb_start_raffle(cq: CallbackQuery):
+    # Запускаем розыгрыш: перед запуском привязываем ВСЕ доступные каналы пользователя,
+    # как делаете в ev:channels/launch.
+    _, _, sid = cq.data.split(":")
+    gid = int(sid)
+
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True); return
+        if gw.status != GiveawayStatus.DRAFT:
+            await cq.answer("Уже запущен или завершён.", show_alert=True); return
+
+        # есть ли у пользователя вообще соединённые каналы?
+        res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),
+                              {"u": gw.owner_user_id})
+        org_chans = res.all()
+        if not org_chans:
+            await cq.answer("Сначала подключите хотя бы 1 канал/группу (кнопка снизу).", show_alert=True); return
+
+        # Привязываем каналы к текущему розыгрышу (обнулив старые привязки, если были)
+        await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"), {"gid": gid})
+        for oc_id, title, chat_id in org_chans:
+            await s.execute(
+                stext("INSERT INTO giveaway_channels(giveaway_id,channel_id,chat_id,title) "
+                      "VALUES(:g,:c,:chat,:t)"),
+                {"g": gid, "c": oc_id, "chat": chat_id, "t": title}
+            )
+
+        # Теперь проверяем, что привязки есть
+        res = await s.execute(stext("SELECT COUNT(*) FROM giveaway_channels WHERE giveaway_id=:gid"),
+                              {"gid": gid})
+        cnt = res.scalar_one()
+        if cnt == 0:
+            await cq.answer("Не удалось привязать каналы. Попробуйте ещё раз.", show_alert=True); return
+
+        # готовим секрет и запускаем
+        secret = gen_ticket_code()+gen_ticket_code()
+        gw.secret = secret
+        gw.commit_hash = commit_hash(secret, gid)
+        gw.status = GiveawayStatus.ACTIVE
+
+    when = await get_end_at(gid)
+    scheduler.add_job(finalize_and_draw_job, DateTrigger(run_date=when),
+                      args=[gid], id=f"final_{gid}", replace_existing=True)
+
+    await cq.message.answer("Розыгрыш запущен.")
+    await show_event_card(cq.message.chat.id, gid)
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("raffle:settings_disabled:"))
+async def cb_settings_disabled(cq: CallbackQuery):
+    await cq.answer("Раздел «Настройки розыгрыша» скоро появится ✅", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("raffle:noop:"))
+async def cb_noop(cq: CallbackQuery):
+    # Просто заглушка для кнопок-«индикаторов» каналов
+    await cq.answer("Это информационная кнопка.")
+
+    # Показываем экран-приглашение, как в референсе
+    await cq.message.answer(
+        CONNECT_INVITE_TEXT,
+        reply_markup=build_connect_invite_kb(new_id)
     )
     await cq.answer()
 
