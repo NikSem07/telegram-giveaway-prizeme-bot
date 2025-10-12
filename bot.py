@@ -231,22 +231,42 @@ async def _ensure_link_preview_or_fallback(
         logger_media.exception("Link-preview failed after retry; go fallback")
         await _fallback_preview_with_native_media(m, state, kind, fid)
 
-def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_at_msk: str | None = None) -> str:
+def _compose_preview_text(
+    title: str,
+    prizes: int,
+    *,
+    desc_html: str | None = None,
+    end_at_msk: str | None = None,
+    days_left: int | None = None
+) -> str:
     """
-    Текст карточки. Ссылку на media мы добавим отдельно (в начале или в конце — не важно),
-    а этот текст — сам «серый блок».
+    Текст «серого блока» предпросмотра.
+    - title показываем обычным текстом (без <b>), чтобы не навязывать жирный.
+    - desc_html вставляем как есть (пользовательское оформление сохраняется).
+    - дата берётся из введённой пользователем + "(N дней)" по-русски.
     """
-    base = [
-        f"<b>{escape(title)}</b>",
-        "",
-        "Число участников: 0",
-        f"Количество призов: {max(0, prizes)}",
-    ]
-    if show_date and end_at_msk:
-        base.append(f"Дата розыгрыша: {end_at_msk}")
+    lines = []
+    if title:
+        # без <b> — не навязываем жирный
+        lines.append(escape(title))
+        lines.append("")
+
+    if desc_html:
+        # ВАЖНО: это уже «HTML», не оборачиваем в <b>, не экранируем повторно.
+        # Если хочешь жёстко ограничить теги — сделай лёгкую валидацию выше.
+        lines.append(desc_html)
+        lines.append("")
+
+    lines.append("Число участников: 0")
+    lines.append(f"Количество призов: {max(0, prizes)}")
+
+    if end_at_msk:
+        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
+        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
     else:
-        base.append("Дата розыгрыша: 00:00, 00.00.0000 (0 days)")
-    return "\n".join(base)
+        lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
+
+    return "\n".join(lines)
 
 async def render_link_preview_message(
     m: Message,
@@ -255,32 +275,41 @@ async def render_link_preview_message(
     reedit: bool = False
 ) -> None:
     """
-    Рендерит ЕДИНОЕ сообщение с link preview без видимой ссылки.
-    - медиа-предпросмотр триггерится «невидимой» ссылкой <a href="...">&#8203;</a>
-    - show_above_text управляет, будет ли медиа сверху/снизу
+    Рендерит одно сообщение с link preview:
+    - «невидимая» ссылка <a href="...">&#8203;</a> запускает рамку от Telegram;
+    - сверху текст: название (обычным), описание (как ввёл пользователь),
+      участники/призы/дата (с русским "N дней").
     """
     data = await state.get_data()
-    logger_media.info("RENDER media_url from state = %s", data.get("media_url"))
-
-    title    = (data.get("title") or "").strip() or "Без названия"
-    prizes   = int(data.get("winners_count") or 0)
-    media    = data.get("media_url")              # тут УЖЕ публичный URL /uploads/...
+    media     = data.get("media_url")
     media_top = bool(data.get("media_top") or False)
 
-    txt = _compose_preview_text(title, prizes)
+    title   = (data.get("title") or "").strip()
+    prizes  = int(data.get("winners_count") or 0)
+
+    # описание: храним исходный текст и его HTML-версию
+    # text — это «как прислал пользователь»; мы экранировали только в предпросмотре описания.
+    desc_raw  = (data.get("desc") or "").strip()
+    # Разрешаем базовую разметку, поэтому НЕ экранируем здесь (смотри пункт в докстринге выше).
+    desc_html = desc_raw
+
+    # дата (строка для человека) и дни
+    end_at_msk = data.get("end_at_msk_str")  # "HH:MM DD.MM.YYYY"
+    days_left  = data.get("days_left")       # int
+
+    txt = _compose_preview_text(
+        title, prizes,
+        desc_html=desc_html if desc_html else None,
+        end_at_msk=end_at_msk,
+        days_left=days_left
+    )
+
     if not media:
         await m.answer(txt)
         return
 
-    # НЕ показываем ссылку пользователю: используем «невидимую» ссылку
     hidden_link = f'<a href="{media}">&#8203;</a>'
-
-    # если media_top=True — ссылка (а значит и превью) идёт над текстом,
-    # иначе — под текстом
-    if media_top:
-        full = f"{hidden_link}\n\n{txt}"
-    else:
-        full = f"{txt}\n\n{hidden_link}"
+    full = f"{hidden_link}\n\n{txt}" if media_top else f"{txt}\n\n{hidden_link}"
 
     lp = LinkPreviewOptions(
         is_disabled=False,
@@ -302,7 +331,7 @@ async def render_link_preview_message(
             )
             return
         except Exception:
-            pass  # если не отредактировалось — пошлём новое
+            pass
 
     prev_id = data.get("media_preview_msg_id")
     if prev_id and not reedit:
@@ -803,9 +832,9 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
         await cq.message.edit_reply_markup()
     except Exception:
         pass
-    # идём дальше — к шагу с фото
-    await state.set_state(CreateFlow.MEDIA_DECIDE)
-    await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no())
+    # Сразу просим время окончания (перенос шага раньше медиа)
+    await state.set_state(CreateFlow.ENDAT)
+    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
@@ -825,8 +854,38 @@ async def media_no(cq: CallbackQuery, state: FSMContext):
         await cq.message.edit_reply_markup()
     except Exception:
         pass
-    await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+
+    # Сохраняем черновик без медиа
+    data = await state.get_data()
+    owner_id = data.get("owner")
+    title    = (data.get("title") or "").strip()
+    desc     = (data.get("desc")  or "").strip()
+    winners  = int(data.get("winners_count") or 1)
+    end_at   = data.get("end_at_utc")
+
+    if not (owner_id and title and end_at):
+        await cq.message.answer("Похоже, шаги заполнены не полностью. Наберите /create и начните заново.")
+        await state.clear()
+        await cq.answer()
+        return
+
+    async with session_scope() as s:
+        gw = Giveaway(
+            owner_user_id=owner_id,
+            internal_title=title,
+            public_description=desc,
+            photo_file_id=None,
+            end_at_utc=end_at,
+            winners_count=winners,
+            status=GiveawayStatus.DRAFT
+        )
+        s.add(gw)
+
+    await state.clear()
+    await cq.message.answer(
+        "Черновик сохранён.\nОткройте /events, чтобы привязать каналы и запустить розыгрыш.",
+        reply_markup=reply_main_kb()
+    )
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_UPLOAD, F.data == "media:skip")
@@ -881,53 +940,36 @@ async def got_video(m: Message, state: FSMContext):
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
     """
-    Финальный шаг мастера: получаем дату окончания,
-    достаём из state все ранее введённые поля и создаём черновик розыгрыша.
+    Пользователь ввёл время. Валидируем, запоминаем,
+    считаем "N дней" и переходим к вопросу про медиа.
     """
     txt = (m.text or "").strip()
     try:
         # формат HH:MM DD.MM.YYYY по МСК
         dt_msk = datetime.strptime(txt, "%H:%M %d.%m.%Y")
-        dt_utc = dt_msk - timedelta(hours=3)  # сохраняем в UTC
+        dt_utc = dt_msk - timedelta(hours=3)  # хранить будем в UTC
 
-        # дедлайн должен быть хотя бы через 5 минут
         if dt_utc <= datetime.now(timezone.utc) + timedelta(minutes=5):
             await m.answer("Дедлайн должен быть минимум через 5 минут. Введите ещё раз:")
             return
 
-        # достаём всё, что мы сохраняли на предыдущих шагах
-        data = await state.get_data()
-        owner_id = data.get("owner")
-        title     = (data.get("title") or "").strip()          # наше ЕДИНОЕ название
-        desc      = (data.get("desc")  or "").strip()          # описание (может быть пустым)
-        photo_id  = data.get("photo")
-        winners   = int(data.get("winners_count") or 1)
+        # сколько дней осталось (по датам МСК, без дробных часов)
+        now_msk = datetime.now(MSK_TZ)
+        days_left = (dt_msk.date() - now_msk.date()).days
+        if days_left < 0:
+            days_left = 0
 
-        # минимальные проверки (чтоб не получить KeyError)
-        if not owner_id or not title:
-            await m.answer("Похоже, шаги заполнены не полностью. Наберите /create и начните заново.")
-            await state.clear()
-            return
-
-        # сохраняем черновик в БД
-        async with session_scope() as s:
-            gw = Giveaway(
-                owner_user_id=owner_id,
-                internal_title=title,           # <-- кладём наше единое название
-                public_description=desc,        # <-- текст описания
-                photo_file_id=photo_id,
-                end_at_utc=dt_utc,
-                winners_count=winners,
-                status=GiveawayStatus.DRAFT
-            )
-            s.add(gw)
-
-        await state.clear()
-        await m.answer(
-            "Черновик сохранён.\n"
-            "Откройте /events, чтобы привязать каналы и запустить розыгрыш.",
-            reply_markup=reply_main_kb()
+        # сохраняем в состояние
+        await state.update_data(
+            end_at_utc=dt_utc,
+            end_at_msk_str=dt_msk.strftime("%H:%M %d.%m.%Y"),
+            days_left=days_left
         )
+
+        # теперь спрашиваем про медиа
+        await state.set_state(CreateFlow.MEDIA_DECIDE)
+        await m.answer(MEDIA_QUESTION, reply_markup=kb_yes_no())
+
     except ValueError:
         await m.answer("Неверный формат. Пример: 13:58 06.10.2025")
 
@@ -1064,8 +1106,39 @@ async def preview_change_media(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
-    await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+    # Сохраняем черновик с учётом всех полей и медиа
+    data = await state.get_data()
+
+    owner_id = data.get("owner")
+    title    = (data.get("title") or "").strip()
+    desc     = (data.get("desc")  or "").strip()
+    winners  = int(data.get("winners_count") or 1)
+    end_at   = data.get("end_at_utc")
+    photo_id = data.get("photo")  # pack_media(..) | None
+
+    if not (owner_id and title and end_at):
+        await cq.message.answer("Похоже, шаги заполнены не полностью. Наберите /create и начните заново.")
+        await state.clear()
+        await cq.answer()
+        return
+
+    async with session_scope() as s:
+        gw = Giveaway(
+            owner_user_id=owner_id,
+            internal_title=title,
+            public_description=desc,
+            photo_file_id=photo_id,
+            end_at_utc=end_at,
+            winners_count=winners,
+            status=GiveawayStatus.DRAFT
+        )
+        s.add(gw)
+
+    await state.clear()
+    await cq.message.answer(
+        "Черновик сохранён.\nОткройте /events, чтобы привязать каналы и запустить розыгрыш.",
+        reply_markup=reply_main_kb()
+    )
     await cq.answer()
 
 async def get_end_at(gid:int)->datetime:
