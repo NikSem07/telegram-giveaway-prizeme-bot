@@ -239,13 +239,13 @@ def _compose_preview_text(title: str, prizes: int, show_date: bool = False, end_
     base = [
         f"<b>{escape(title)}</b>",
         "",
-        "Participants: 0",
-        f"Prizes: {max(0, prizes)}",
+        "Число участников: 0",
+        f"Количество призов: {max(0, prizes)}",
     ]
     if show_date and end_at_msk:
-        base.append(f"Giveaway date: {end_at_msk}")
+        base.append(f"Дата розыгрыша: {end_at_msk}")
     else:
-        base.append("Giveaway date: 00:00, 00.00.0000 (0 days)")
+        base.append("Дата розыгрыша: 00:00, 00.00.0000 (0 days)")
     return "\n".join(base)
 
 async def render_link_preview_message(
@@ -453,21 +453,21 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
 
 def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Change the picture/gif/video", callback_data="preview:change")
+    kb.button(text="Изменить изображение/gif/видео", callback_data="preview:change")
     if media_on_top:
-        kb.button(text="Move media down", callback_data="preview:move:down")
+        kb.button(text="Показывать медиа снизу", callback_data="preview:move:down")
     else:
-        kb.button(text="Move media up", callback_data="preview:move:up")
-    kb.button(text="Continue", callback_data="preview:continue")
+        kb.button(text="Показывать медиа сверху", callback_data="preview:move:up")
+    kb.button(text="Продолжить", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
 
 def _preview_text(title: str, winners: int) -> str:
     return (
         f"{escape(title)}\n\n"
-        f"Participants: 0\n"
-        f"Prizes: {max(1, int(winners))}\n"
-        f"Giveaway date: 00:00, 00.00.0000 (0 days)"
+        f"Число участников: 0\n"
+        f"Количество призов: {max(1, int(winners))}\n"
+        f"Дата розыгрыша: 00:00, 00.00.0000 (0 days)"
     )
 
 async def _send_media(chat_id: int, kind: str|None, fid: str|None):
