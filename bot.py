@@ -255,36 +255,38 @@ async def render_link_preview_message(
     reedit: bool = False
 ) -> None:
     """
-    Рендерит ЕДИНОЕ сообщение с link preview:
-    - сам текст (название/участники/призы/дата-заглушка)
-    - ссылка на media (для предпросмотра с полоской)
-    Порядок (сверху/снизу) задаётся media_top=True/False.
+    Рендерит ЕДИНОЕ сообщение с link preview без видимой ссылки.
+    - медиа-предпросмотр триггерится «невидимой» ссылкой <a href="...">&#8203;</a>
+    - show_above_text управляет, будет ли медиа сверху/снизу
     """
     data = await state.get_data()
     logger_media.info("RENDER media_url from state = %s", data.get("media_url"))
-    title   = (data.get("title") or "").strip() or "Без названия"
-    prizes  = int(data.get("winners_count") or 0)
-    media   = data.get("media_url")            # ← здесь уже ДОЛЖЕН лежать публичный URL
+
+    title    = (data.get("title") or "").strip() or "Без названия"
+    prizes   = int(data.get("winners_count") or 0)
+    media    = data.get("media_url")              # тут УЖЕ публичный URL /uploads/...
     media_top = bool(data.get("media_top") or False)
 
     txt = _compose_preview_text(title, prizes)
     if not media:
-        # fallback (вряд ли понадобится)
         await m.answer(txt)
         return
 
-    # Текст и ссылка — в одном сообщении. Если хотим «медиа снизу» — сначала текст, затем ссылка.
-    # Если «сверху» — сначала ссылка, затем текст.
+    # НЕ показываем ссылку пользователю: используем «невидимую» ссылку
+    hidden_link = f'<a href="{media}">&#8203;</a>'
+
+    # если media_top=True — ссылка (а значит и превью) идёт над текстом,
+    # иначе — под текстом
     if media_top:
-        full = f"{media}\n\n{txt}"
+        full = f"{hidden_link}\n\n{txt}"
     else:
-        full = f"{txt}\n\n{media}"
+        full = f"{txt}\n\n{hidden_link}"
 
     lp = LinkPreviewOptions(
         is_disabled=False,
-        prefer_large_media=True,      # хотим большой предпросмотр
+        prefer_large_media=True,
         prefer_small_media=False,
-        show_above_text=media_top     # главное: управляет тем, где Telegram покажет превью
+        show_above_text=media_top,
     )
 
     old_id = data.get("media_preview_msg_id")
@@ -295,13 +297,13 @@ async def render_link_preview_message(
                 message_id=old_id,
                 text=full,
                 link_preview_options=lp,
-                reply_markup=kb_media_preview(media_top)
+                reply_markup=kb_media_preview(media_top),
+                parse_mode="HTML",
             )
             return
         except Exception:
-            # если редактирование не удалось (например, сообщение слишком старое) — вышлем новое
-            pass
-    
+            pass  # если не отредактировалось — пошлём новое
+
     prev_id = data.get("media_preview_msg_id")
     if prev_id and not reedit:
         try:
@@ -312,7 +314,8 @@ async def render_link_preview_message(
     msg = await m.answer(
         full,
         link_preview_options=lp,
-        reply_markup=kb_media_preview(media_top)
+        reply_markup=kb_media_preview(media_top),
+        parse_mode="HTML",
     )
     await state.update_data(media_preview_msg_id=msg.message_id)
 
