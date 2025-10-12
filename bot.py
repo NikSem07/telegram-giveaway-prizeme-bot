@@ -284,7 +284,7 @@ async def render_link_preview_message(
     media     = data.get("media_url")
     media_top = bool(data.get("media_top") or False)
 
-    title   = (data.get("title") or "").strip()
+    # title   = (data.get("title") or "").strip()
     prizes  = int(data.get("winners_count") or 0)
 
     # описание: храним исходный текст и его HTML-версию
@@ -298,7 +298,7 @@ async def render_link_preview_message(
     days_left  = data.get("days_left")       # int
 
     txt = _compose_preview_text(
-        title, prizes,
+        "", prizes,
         desc_html=desc_html if desc_html else None,
         end_at_msk=end_at_msk,
         days_left=days_left
