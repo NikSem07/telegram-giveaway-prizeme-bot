@@ -940,38 +940,52 @@ async def got_video(m: Message, state: FSMContext):
 @dp.message(CreateFlow.ENDAT, F.text)
 async def step_endat(m: Message, state: FSMContext):
     """
-    Пользователь ввёл время. Валидируем, запоминаем,
+    Пользователь ввёл время. Валидируем, сохраняем,
     считаем "N дней" и переходим к вопросу про медиа.
     """
     txt = (m.text or "").strip()
+    logging.info("[ENDAT] got=%r", txt)
     try:
-        # формат HH:MM DD.MM.YYYY по МСК
+        # ожидаем "HH:MM DD.MM.YYYY" по МСК (как просили)
         dt_msk = datetime.strptime(txt, "%H:%M %d.%m.%Y")
-        dt_utc = dt_msk - timedelta(hours=3)  # хранить будем в UTC
+        # в БД храним UTC
+        dt_utc = dt_msk.replace(tzinfo=MSK_TZ).astimezone(timezone.utc)
 
+        # дедлайн не раньше чем через 5 минут
         if dt_utc <= datetime.now(timezone.utc) + timedelta(minutes=5):
             await m.answer("Дедлайн должен быть минимум через 5 минут. Введите ещё раз:")
             return
 
-        # сколько дней осталось (по датам МСК, без дробных часов)
-        now_msk = datetime.now(MSK_TZ)
-        days_left = (dt_msk.date() - now_msk.date()).days
+        # сколько дней осталось (по календарным датам МСК)
+        now_msk = datetime.now(MSK_TZ).date()
+        days_left = (dt_msk.date() - now_msk).days
         if days_left < 0:
             days_left = 0
 
-        # сохраняем в состояние
+        # сохраняем
         await state.update_data(
             end_at_utc=dt_utc,
             end_at_msk_str=dt_msk.strftime("%H:%M %d.%m.%Y"),
             days_left=days_left
         )
 
-        # теперь спрашиваем про медиа
+        # явное текстовое подтверждение для пользователя
+        confirm_text = (
+            f"🗓 Время окончания установлено: <b>{dt_msk.strftime('%H:%M %d.%m.%Y')}</b>\n"
+            f"Осталось: <b>{days_left}</b> дн."
+        )
+        await m.answer(confirm_text, parse_mode="HTML")
+
+        # задаём вопрос про медиа (кнопки Да/Нет)
         await state.set_state(CreateFlow.MEDIA_DECIDE)
-        await m.answer(MEDIA_QUESTION, reply_markup=kb_yes_no())
+        await m.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
+        logging.info("[ENDAT] saved and asked MEDIA_DECIDE (days_left=%s)", days_left)
 
     except ValueError:
         await m.answer("Неверный формат. Пример: 13:58 06.10.2025")
+    except Exception as e:
+        logging.exception("[ENDAT] unexpected error: %s", e)
+        await m.answer("Что-то пошло не так при сохранении времени. Попробуйте ещё раз.")
 
 @dp.message(Command("events"))
 async def cmd_events(m: Message):
