@@ -61,6 +61,14 @@ BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
 
+# === callbacks for draft flow ===
+CB_PREVIEW_CONTINUE = "preview:continue"
+CB_TO_CHANNELS_MENU = "draft:to_channels"
+CB_OPEN_CHANNELS    = "channels:open"
+CB_CHANNEL_ADD      = "channels:add"          # уже используется у тебя? оставь свой
+CB_CHANNEL_START    = "raffle:start"          # заглушка на будущее
+CB_CHANNEL_SETTINGS = "raffle:settings"       # пока неактивна
+
 MSK_TZ = ZoneInfo("Europe/Moscow")
 
 logger_media = logging.getLogger("media")
@@ -1172,7 +1180,17 @@ async def preview_change_media(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
-    """Сохраняем черновик и показываем экран 'Ваш розыгрыш создан...' с кнопкой 'Добавить канал/группу'."""
+    """
+    Сохраняем черновик и сразу показываем экран-приглашение
+    с кнопкой «Добавить канал/группу», как в референсе.
+    Также обязательно вызываем cq.answer(), чтобы погасить «вертушку».
+    """
+    # на всякий случай спрячем старые кнопки под предпросмотром
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+
     data = await state.get_data()
 
     owner_id = data.get("owner")
@@ -1188,7 +1206,7 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
         await cq.answer()
         return
 
-    # создаём черновик и сразу получаем его id
+    # 1) создаём черновик и получаем его id
     async with session_scope() as s:
         gw = Giveaway(
             owner_user_id=owner_id,
@@ -1200,10 +1218,20 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
             status=GiveawayStatus.DRAFT
         )
         s.add(gw)
-        await s.flush()   # <-- ВАЖНО: чтобы появился gw.id до коммита
+        await s.flush()          # чтобы сразу появился gw.id
         new_id = gw.id
 
+    # 2) чистим FSM
     await state.clear()
+
+    # 3) отправляем экран-приглашение + кнопку «Добавить канал/группу»
+    await cq.message.answer(
+        CONNECT_INVITE_TEXT,
+        reply_markup=build_connect_invite_kb(new_id)
+    )
+
+    # 4) обязательно гасим «вертушку» на кнопке
+    await cq.answer()
 
 # ===== Экран подключения каналов (по кнопке "Добавить канал/группу") =====
 
@@ -1305,21 +1333,8 @@ async def cb_settings_disabled(cq: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("raffle:noop:"))
 async def cb_noop(cq: CallbackQuery):
-    # Просто заглушка для кнопок-«индикаторов» каналов
+    # Просто заглушка для кнопок-«индикаторов» подключённых каналов
     await cq.answer("Это информационная кнопка.")
-
-    # Показываем экран-приглашение, как в референсе
-    await cq.message.answer(
-        CONNECT_INVITE_TEXT,
-        reply_markup=build_connect_invite_kb(new_id)
-    )
-    await cq.answer()
-
-async def get_end_at(gid:int)->datetime:
-    from sqlalchemy import text as stext
-    async with session_scope() as s:
-        res = await s.execute(stext("SELECT end_at_utc FROM giveaways WHERE id=:gid"),{"gid":gid})
-        return res.scalar_one()
 
 async def show_stats(chat_id:int, gid:int):
     from sqlalchemy import text as stext
