@@ -112,24 +112,37 @@ def build_connect_channels_text(event_title: str | None = None) -> str:
     )
     return body
 
-def build_channels_menu_kb(event_id: int, channels: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+def build_channels_menu_kb(
+    event_id: int,
+    channels: list[tuple[int, str]],
+    attached_ids: set[int] | None = None
+) -> InlineKeyboardMarkup:
     """
-    channels: список кортежей (channel_id, title)
+    channels: список (organizer_channel_id, title)
+    attached_ids: ids organizer_channels, уже прикреплённых к текущему розыгрышу
     """
+    attached_ids = attached_ids or set()
     kb = InlineKeyboardBuilder()
 
-    # Кнопки каналов/групп, которые уже подключены (если есть)
+    # Кнопки всех ранее подключённых к боту каналов/групп (вертикальным списком)
+    for ch_id, title in channels:
+        mark = "✅ " if ch_id in attached_ids else ""
+        kb.button(
+            text=f"{mark}{title}",
+            callback_data=f"raffle:attach:{event_id}:{ch_id}"
+        )
     if channels:
-        for ch_id, title in channels:
-            # Кнопка просто-индикатор. Если надо — можете повесить действия по нажатию.
-            kb.button(text=title, callback_data=f"raffle:noop:{event_id}:{ch_id}")
         kb.adjust(1)
 
-    # Служебные кнопки
-    kb.row(InlineKeyboardButton(text="Добавить канал", callback_data=f"raffle:add_channel:{event_id}"))
-    kb.row(InlineKeyboardButton(text="Запустить розыгрыш", callback_data=f"raffle:start:{event_id}"))
-    # Временно неактивная — ловим и отвечаем всплывашкой
+    # Первая строка — две кнопки рядом: "Добавить канал" и "Добавить группу"
+    kb.row(
+        InlineKeyboardButton(text="Добавить канал", callback_data=f"raffle:add_channel:{event_id}"),
+        InlineKeyboardButton(text="Добавить группу", callback_data=f"raffle:add_group:{event_id}")
+    )
+
+    # Отдельными строками, в заданном порядке
     kb.row(InlineKeyboardButton(text="Настройки розыгрыша", callback_data=f"raffle:settings_disabled:{event_id}"))
+    kb.row(InlineKeyboardButton(text="Запустить розыгрыш", callback_data=f"raffle:start:{event_id}"))
 
     return kb.as_markup()
 
@@ -1241,38 +1254,104 @@ async def cb_connect_channels(cq: CallbackQuery):
     _, _, sid = cq.data.split(":")
     event_id = int(sid)
 
-    # узнаём владельца и название розыгрыша
     from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, event_id)
         if not gw:
             await cq.answer("Розыгрыш не найден.", show_alert=True); return
-        # все уже подключенные РАНЕЕ пользователем каналы/группы (организаторские)
+
+        # Все каналы/группы, уже подключенные пользователем к боту (организаторские)
         res = await s.execute(
             stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
             {"u": gw.owner_user_id}
         )
         rows = res.all()
+        channels = [(r[0], r[1]) for r in rows]  # (organizer_channel_id, title)
 
-    channels = [(r[0], r[1]) for r in rows]  # (id, title)
+        # Какие из них уже прикреплены к ТЕКУЩЕМУ розыгрышу?
+        res = await s.execute(
+            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": event_id}
+        )
+        attached_ids = {r[0] for r in res.fetchall()}
+
     text_block = build_connect_channels_text(gw.internal_title)
-    kb = build_channels_menu_kb(event_id, channels)
-
+    kb = build_channels_menu_kb(event_id, channels, attached_ids)
     await cq.message.answer(text_block, reply_markup=kb)
     await cq.answer()
 
+@dp.callback_query(F.data.startswith("raffle:attach:"))
+async def cb_attach_channel(cq: CallbackQuery):
+    # data: raffle:attach:<event_id>:<organizer_channel_id>
+    try:
+        _, _, sid, scid = cq.data.split(":")
+        event_id = int(sid)
+        org_id = int(scid)
+    except Exception:
+        await cq.answer("Некорректные данные.", show_alert=True); return
+
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, event_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True); return
+
+        # Проверим, что такой организаторский канал принадлежит пользователю
+        res = await s.execute(
+            stext("SELECT id, chat_id, title FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
+            {"id": org_id, "u": gw.owner_user_id}
+        )
+        row = res.first()
+        if not row:
+            await cq.answer("Канал/группа не найдены у вас.", show_alert=True); return
+
+        oc_id, chat_id, title = row
+        # Привяжем к розыгрышу (idempotent)
+        await s.execute(
+            stext("INSERT OR IGNORE INTO giveaway_channels(giveaway_id, channel_id, chat_id, title) "
+                  "VALUES(:g, :c, :chat, :t)"),
+            {"g": event_id, "c": oc_id, "chat": chat_id, "t": title}
+        )
+
+        # Снова соберём список для перерисовки клавиатуры с «галочками»
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
+            {"u": gw.owner_user_id}
+        )
+        all_rows = res.all()
+        channels = [(r[0], r[1]) for r in all_rows]
+        res = await s.execute(
+            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": event_id}
+        )
+        attached_ids = {r[0] for r in res.fetchall()}
+
+    # Обновим клавиатуру под этим же сообщением
+    try:
+        await cq.message.edit_reply_markup(
+            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
+        )
+    except Exception:
+        # Если не получилось — просто пришлём новый блок ещё раз
+        await cq.message.answer(
+            build_connect_channels_text(gw.internal_title),
+            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
+        )
+
+    await cq.answer("✅ Канал/группа добавлены")
 
 @dp.callback_query(F.data.startswith("raffle:add_channel:"))
 async def cb_add_channel(cq: CallbackQuery):
-    # Поднять системное окно выбора чата из INLINE-нужной кнопки нельзя,
-    # поэтому показываем пользователю нижнюю клавиатуру с кнопкой
-    # "Добавить канал" (request_chat) и даём подсказку.
-    await cq.message.answer(
-        "Нажмите кнопку «Добавить канал» на клавиатуре ниже и выберите канал/группу.",
-        reply_markup=reply_main_kb()
-    )
-    await cq.answer()
+    # Показать системную клавиатуру снизу без лишнего текста: «невидимое» сообщение
+    INVISIBLE = "\u2060"  # невидимый символ
+    await cq.message.answer(INVISIBLE, reply_markup=reply_main_kb())
+    await cq.answer("Выберите канал в окне ниже.")
 
+@dp.callback_query(F.data.startswith("raffle:add_group:"))
+async def cb_add_group(cq: CallbackQuery):
+    INVISIBLE = "\u2060"
+    await cq.message.answer(INVISIBLE, reply_markup=reply_main_kb())
+    await cq.answer("Выберите группу в окне ниже.")
 
 @dp.callback_query(F.data.startswith("raffle:start:"))
 async def cb_start_raffle(cq: CallbackQuery):
