@@ -691,12 +691,36 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         input_field_placeholder="Сообщение",
     )
 
+def chooser_reply_kb() -> ReplyKeyboardMarkup:
+    btn_add_channel = KeyboardButton(
+        text=BTN_ADD_CHANNEL,
+        request_chat=KeyboardButtonRequestChat(
+            request_id=101,  # любое число
+            chat_is_channel=True,
+            bot_administrator_rights=CHAN_ADMIN_RIGHTS,
+            user_administrator_rights=CHAN_ADMIN_RIGHTS,
+        )
+    )
+    btn_add_group = KeyboardButton(
+        text=BTN_ADD_GROUP,
+        request_chat=KeyboardButtonRequestChat(
+            request_id=102,
+            chat_is_channel=False,
+            bot_administrator_rights=GROUP_ADMIN_RIGHTS,
+            user_administrator_rights=GROUP_ADMIN_RIGHTS,
+        )
+    )
+    # Минимальная «одноразовая» клавиатура только с этими двумя кнопками
+    return ReplyKeyboardMarkup(
+        keyboard=[[btn_add_channel, btn_add_group]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+        input_field_placeholder="Выберите канал/группу ниже"
+    )
+
 # === СИСТЕМНОЕ окно выбора канала/группы (chat_shared) ===
 @dp.message(F.chat_shared)
-async def on_chat_shared(m: Message):
-    """
-    Вызывается, когда пользователь выбрал канал/группу в нативном окне Telegram.
-    """
+async def on_chat_shared(m: Message, state: FSMContext):
     shared = m.chat_shared
     chat_id = shared.chat_id
 
@@ -704,14 +728,12 @@ async def on_chat_shared(m: Message):
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
         cm = await bot.get_chat_member(chat_id, me.id)
-        role = "administrator" if cm.status == "administrator" else (
-            "member" if cm.status == "member" else "none"
-        )
+        role = "administrator" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
     except Exception as e:
         await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
         return
 
-    # сохраняем как раньше
+    # 1) Сохраняем канал/группу в organizer_channels
     from sqlalchemy import text as stext
     async with session_scope() as s:
         await s.execute(
@@ -724,18 +746,45 @@ async def on_chat_shared(m: Message):
                 "o": m.from_user.id,
                 "cid": chat.id,
                 "u": getattr(chat, "username", None),
-                "t": chat.title or (getattr(chat, "first_name", None) or "Без названия"),
+                "t": chat.title or (getattr(chat, 'first_name', None) or 'Без названия'),
                 "p": 0 if getattr(chat, "username", None) else 1,
                 "r": "admin" if role == "administrator" else "member",
             }
         )
 
+    # 2) Убираем временную клавиатуру
     kind = "канал" if chat.type == "channel" else "группа"
-    await m.answer(
-        f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.",
-        parse_mode="HTML",
-        reply_markup=reply_main_kb()
-    )
+    await m.answer(f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.", parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
+
+    # 3) Если это происходило в контексте привязки к конкретному розыгрышу — перерисуем меню
+    data = await state.get_data()
+    event_id = data.get("chooser_event_id")
+    if event_id:
+        from sqlalchemy import text as stext
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, event_id)
+            # Список всех твоих каналов/групп
+            res = await s.execute(
+                stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
+                {"u": gw.owner_user_id}
+            )
+            rows = res.all()
+            channels = [(r[0], r[1]) for r in rows]
+
+            # Уже прикреплённые к текущему розыгрышу
+            res = await s.execute(
+                stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+                {"g": event_id}
+            )
+            attached_ids = {r[0] for r in res.fetchall()}
+
+        # Сообщение с блоком «Подключение канала к розыгрышу ...» + список кнопок
+        text_block = build_connect_channels_text(gw.internal_title)
+        kb = build_channels_menu_kb(event_id, channels, attached_ids)
+        await m.answer(text_block, reply_markup=kb)
+
+        # очищаем контекст выбора (чтобы не мешал в следующий раз)
+        await state.update_data(chooser_event_id=None)
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
@@ -1341,16 +1390,23 @@ async def cb_attach_channel(cq: CallbackQuery):
     await cq.answer("✅ Канал/группа добавлены")
 
 @dp.callback_query(F.data.startswith("raffle:add_channel:"))
-async def cb_add_channel(cq: CallbackQuery):
-    # Показать системную клавиатуру снизу без лишнего текста: «невидимое» сообщение
-    INVISIBLE = "\u2060"  # невидимый символ
-    await cq.message.answer(INVISIBLE, reply_markup=reply_main_kb())
+async def cb_add_channel(cq: CallbackQuery, state: FSMContext):
+    # data: raffle:add_channel:<event_id>
+    _, _, sid = cq.data.split(":")
+    await state.update_data(chooser_event_id=int(sid))
+
+    # Отправляем «невидимое» сообщение, но с минимальной системной клавиатурой
+    INVISIBLE = "\u2060"
+    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
     await cq.answer("Выберите канал в окне ниже.")
 
 @dp.callback_query(F.data.startswith("raffle:add_group:"))
-async def cb_add_group(cq: CallbackQuery):
+async def cb_add_group(cq: CallbackQuery, state: FSMContext):
+    _, _, sid = cq.data.split(":")
+    await state.update_data(chooser_event_id=int(sid))
+
     INVISIBLE = "\u2060"
-    await cq.message.answer(INVISIBLE, reply_markup=reply_main_kb())
+    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
     await cq.answer("Выберите группу в окне ниже.")
 
 @dp.callback_query(F.data.startswith("raffle:start:"))
