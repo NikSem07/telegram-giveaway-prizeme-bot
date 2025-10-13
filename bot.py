@@ -832,6 +832,51 @@ async def cmd_start(m: Message, state: FSMContext):
     )
     await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
 
+# ===== Меню "Мои розыгрыши" =====
+def kb_my_events_menu(count_involved:int, count_finished:int, my_draft:int, my_finished:int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text=f"В которых участвую ({count_involved})", callback_data="mev:involved")
+    kb.button(text=f"Завершённые розыгрыши ({count_finished})", callback_data="mev:finished")
+    kb.button(text=f"Мои незапущенные ({my_draft})", callback_data="mev:my_drafts")
+    kb.button(text=f"Мои завершённые ({my_finished})", callback_data="mev:my_finished")
+    kb.button(text="Создать розыгрыш", callback_data="create")
+    kb.button(text="Мои каналы", callback_data="my_channels")
+    kb.adjust(1)
+    return kb.as_markup()
+
+async def show_my_events_menu(m: Message):
+    """Собираем счётчики и показываем 6 кнопок-меню."""
+    from sqlalchemy import text as stext
+    uid = m.from_user.id
+    async with session_scope() as s:
+        # в которых участвую — уникальные активные/завершённые, где у пользователя есть entries
+        res = await s.execute(stext(
+            "SELECT COUNT(DISTINCT g.id) "
+            "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
+            "WHERE e.user_id=:u"
+        ), {"u": uid})
+        count_involved = res.scalar_one() or 0
+
+        # завершённые вообще (по системе)
+        res = await s.execute(stext(
+            "SELECT COUNT(*) FROM giveaways WHERE status='finished'"
+        ))
+        count_finished = res.scalar_one() or 0
+
+        # мои незапущенные (черновики) и мои завершённые
+        res = await s.execute(stext(
+            "SELECT "
+            "SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) "
+            "FROM giveaways WHERE owner_user_id=:u"
+        ), {"u": uid})
+        row = res.first()
+        my_draft = int(row[0] or 0)
+        my_finished = int(row[1] or 0)
+
+    text = "Розыгрыши:"
+    await m.answer(text, reply_markup=kb_my_events_menu(count_involved, count_finished, my_draft, my_finished))
+
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
 async def cmd_menu(m: Message):
@@ -864,7 +909,7 @@ async def create_giveaway_start(message: Message, state: FSMContext):
 # "Мои розыгрыши" -> используем ваш cmd_events
 @dp.message(F.text == BTN_EVENTS)
 async def on_btn_events(m: Message, state: FSMContext):
-    await cmd_events(m)   # вызываем ваш уже написанный обработчик
+    await show_my_events_menu(m)
 
 # "Новый розыгрыш" -> ваш create_giveaway_start
 @dp.message(F.text == BTN_CREATE)
@@ -1022,6 +1067,7 @@ async def media_skip_btn(cq: CallbackQuery, state: FSMContext):
 
 MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 
+
 # Пользователь всё равно может прислать текст «пропустить»
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.text.casefold() == "пропустить")
 async def media_skip_by_text(m: Message, state: FSMContext):
@@ -1108,6 +1154,127 @@ async def step_endat(m: Message, state: FSMContext):
     except Exception as e:
         logging.exception("[ENDAT] unexpected error: %s", e)
         await m.answer("Что-то пошло не так при сохранении времени. Попробуйте ещё раз.")
+
+# ===== Раздел "Мои каналы" =====
+
+def kb_my_channels_menu(rows: list[tuple[int,str]], with_add_buttons: bool=True):
+    kb = InlineKeyboardBuilder()
+    # список каналов/групп
+    for oc_id, title in rows:
+        kb.button(text=title, callback_data=f"mych:info:{oc_id}")
+
+    if rows:
+        kb.adjust(1)
+
+    if with_add_buttons:
+        # две кнопки в один ряд: Добавить канал / Добавить группу
+        kb.row(
+            InlineKeyboardButton(text="Добавить канал", callback_data="mych:add_channel"),
+            InlineKeyboardButton(text="Добавить группу", callback_data="mych:add_group"),
+        )
+    return kb.as_markup()
+
+@dp.callback_query(F.data == "my_channels")
+async def cb_my_channels(cq: CallbackQuery):
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
+            {"u": cq.from_user.id}
+        )
+        rows = [(r[0], r[1]) for r in res.all()]
+
+    text = "Ваши каналы:"
+    await cq.message.answer(text, reply_markup=kb_my_channels_menu(rows))
+    await cq.answer()
+
+# Показать карточку канала
+@dp.callback_query(F.data.startswith("mych:info:"))
+async def cb_my_channel_info(cq: CallbackQuery):
+    from sqlalchemy import text as stext
+    _, _, sid = cq.data.split(":")
+    oc_id = int(sid)
+    async with session_scope() as s:
+        res = await s.execute(
+            stext("SELECT title, chat_id, added_at FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
+            {"id": oc_id, "u": cq.from_user.id}
+        )
+        row = res.first()
+    if not row:
+        await cq.answer("Канал/группа не найдены.", show_alert=True); return
+
+    title, chat_id, added_at = row
+    kind = "Канал" if str(chat_id).startswith("-100") else "Группа"
+    dt = added_at.astimezone(MSK_TZ).strftime("%H:%M, %d.%m.%Y")
+
+    text = (f"<b>Название:</b> {title}\n"
+            f"<b>Тип:</b> {kind}\n"
+            f"<b>ID:</b> {chat_id}\n"
+            f"<b>Дата добавления:</b> {dt}\n\n"
+            "Удалить канал — канал будет удалён только из списка ваших каналов в боте, "
+            "однако во всех активных розыгрышах, к которым канал был прикреплён, он останется.")
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Удалить канал", callback_data=f"mych:del_confirm:{oc_id}")
+    kb.button(text="Отмена", callback_data="mych:cancel")
+    kb.adjust(2)
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+# Подтверждение удаления
+@dp.callback_query(F.data.startswith("mych:del_confirm:"))
+async def cb_my_channel_del_confirm(cq: CallbackQuery):
+    _, _, sid = cq.data.split(":")
+    oc_id = int(sid)
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Да, удалить", callback_data=f"mych:del:{oc_id}")
+    kb.button(text="Отмена", callback_data="mych:cancel")
+    kb.adjust(2)
+    await cq.message.answer("Удалить канал из списка ваших каналов?", reply_markup=kb.as_markup())
+    await cq.answer()
+
+# Удаление
+@dp.callback_query(F.data.startswith("mych:del:"))
+async def cb_my_channel_delete(cq: CallbackQuery):
+    from sqlalchemy import text as stext
+    _, _, sid = cq.data.split(":")
+    oc_id = int(sid)
+    async with session_scope() as s:
+        # удаляем только из organizer_channels
+        await s.execute(
+            stext("DELETE FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
+            {"id": oc_id, "u": cq.from_user.id}
+        )
+    await cq.message.answer("Канал/группа удалены из списка.")
+    await cq.answer()
+
+# Отмена — просто ничего не делаем, чтобы «карточка» схлопнулась диалогом
+@dp.callback_query(F.data == "mych:cancel")
+async def cb_my_channel_cancel(cq: CallbackQuery):
+    await cq.answer("Отменено")
+
+# Подключение новых "Добавить канал/группу" в разделе "Мои каналы"
+
+@dp.callback_query(F.data == "mych:add_channel")
+async def cb_mych_add_channel(cq: CallbackQuery, state: FSMContext):
+    # просто показываем одноразовую mini-клавиатуру с системными кнопками
+    INVISIBLE = "\u2060"
+    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+    await cq.answer("Выберите канал в окне ниже.")
+
+@dp.callback_query(F.data == "mych:add_group")
+async def cb_mych_add_group(cq: CallbackQuery, state: FSMContext):
+    INVISIBLE = "\u2060"
+    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+    await cq.answer("Выберите группу в окне ниже.")
+
+# Клик по inline "Создать розыгрыш" в новом меню
+
+@dp.callback_query(F.data == "create")
+async def cb_create_inline(cq: CallbackQuery, state: FSMContext):
+    await create_giveaway_start(cq.message, state)
+    await cq.answer()
+
+# -----------------
 
 @dp.message(Command("events"))
 async def cmd_events(m: Message):
