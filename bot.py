@@ -728,13 +728,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
         cm = await bot.get_chat_member(chat_id, me.id)
-
-        # Проверка логов (ВАЖНО: это не f-строка и находится ВНУТРИ функции)
-        logging.info(
-            "chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
-            m.from_user.id, chat.id, chat.title, chat.type
-        )
-
         role = "administrator" if cm.status == "administrator" else (
             "member" if cm.status == "member" else "none"
         )
