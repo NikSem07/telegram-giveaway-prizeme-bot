@@ -728,6 +728,9 @@ async def on_chat_shared(m: Message, state: FSMContext):
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
         cm = await bot.get_chat_member(chat_id, me.id)
+        # Проверка логов
+        logging.info("chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
+             m.from_user.id, chat.id, chat.title, chat.type)
         role = "administrator" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
     except Exception as e:
         await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
@@ -794,10 +797,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
         # сразу показываем обновлённый список «Ваши каналы»
         rows = await get_user_org_channels(m.from_user.id)
         await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
-
-# Проверка логов
-logging.info("chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
-             m.from_user.id, chat.id, chat.title, chat.type)
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
@@ -1196,13 +1195,13 @@ async def cb_my_channels(cq: CallbackQuery):
             {"u": cq.from_user.id}
         )
         rows = [(r[0], r[1]) for r in res.all()]
+        
+        #Проверка логов
+        logging.info("my_channels: user=%s, rows=%s", cq.from_user.id, rows)
 
     text = "Ваши каналы:"
     await cq.message.answer(text, reply_markup=kb_my_channels_menu(rows))
     await cq.answer()
-
-#Проверка логов
-logging.info("my_channels: user=%s, rows=%s", cq.from_user.id, rows)
 
 # Хелпер для списка каналов
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
