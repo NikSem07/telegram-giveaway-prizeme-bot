@@ -728,15 +728,21 @@ async def on_chat_shared(m: Message, state: FSMContext):
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
         cm = await bot.get_chat_member(chat_id, me.id)
-        # Проверка логов
-        logging.info("chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
-             m.from_user.id, chat.id, chat.title, chat.type)
-        role = "administrator" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
+
+        # Проверка логов (ВАЖНО: это не f-строка и находится ВНУТРИ функции)
+        logging.info(
+            "chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
+            m.from_user.id, chat.id, chat.title, chat.type
+        )
+
+        role = "administrator" if cm.status == "administrator" else (
+            "member" if cm.status == "member" else "none"
+        )
     except Exception as e:
         await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
         return
 
-    # 1) Сохраняем канал/группу в organizer_channels
+    # 1) Сохраняем канал/группу у владельца
     from sqlalchemy import text as stext
     async with session_scope() as s:
         await s.execute(
@@ -757,19 +763,18 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
     kind = "канал" if chat.type == "channel" else "группа"
 
-    # 2) Убираем временную клавиатуру и говорим, что всё ок
+    # 2) Сообщаем об успехе и убираем разовую клавиатуру
     await m.answer(
         f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.",
         parse_mode="HTML",
         reply_markup=ReplyKeyboardRemove()
     )
 
-    # 3) Понимаем контекст
+    # 3) Если выбирали из экрана привязки к розыгрышу — перерисуем этот экран
     data = await state.get_data()
     event_id = data.get("chooser_event_id")
 
     if event_id:
-        # 3а) Если мы были внутри экрана привязки каналов к розыгрышу — перерисуем этот экран
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
             res = await s.execute(
@@ -791,10 +796,8 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
         # очистим маркер выбора, чтобы не мешал в следующий раз
         await state.update_data(chooser_event_id=None)
-
     else:
-        # 3б) Обычное подключение (через «Мои каналы» или нижние кнопки):
-        # сразу показываем обновлённый список «Ваши каналы»
+        # Обычный кейс: показать актуальный список «Ваши каналы»
         rows = await get_user_org_channels(m.from_user.id)
         await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
 
