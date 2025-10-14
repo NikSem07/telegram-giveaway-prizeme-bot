@@ -1191,9 +1191,6 @@ async def cb_my_channels(cq: CallbackQuery):
             {"u": cq.from_user.id}
         )
         rows = [(r[0], r[1]) for r in res.all()]
-        
-        #Проверка логов
-        logging.info("my_channels: user=%s, rows=%s", cq.from_user.id, rows)
 
     text = "Ваши каналы:"
     await cq.message.answer(text, reply_markup=kb_my_channels_menu(rows))
