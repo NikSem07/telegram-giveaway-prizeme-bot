@@ -752,18 +752,23 @@ async def on_chat_shared(m: Message, state: FSMContext):
             }
         )
 
-    # 2) Убираем временную клавиатуру
     kind = "канал" if chat.type == "channel" else "группа"
-    await m.answer(f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.", parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
 
-    # 3) Если это происходило в контексте привязки к конкретному розыгрышу — перерисуем меню
+    # 2) Убираем временную клавиатуру и говорим, что всё ок
+    await m.answer(
+        f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    # 3) Понимаем контекст
     data = await state.get_data()
     event_id = data.get("chooser_event_id")
+
     if event_id:
-        from sqlalchemy import text as stext
+        # 3а) Если мы были внутри экрана привязки каналов к розыгрышу — перерисуем этот экран
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
-            # Список всех твоих каналов/групп
             res = await s.execute(
                 stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
                 {"u": gw.owner_user_id}
@@ -771,20 +776,28 @@ async def on_chat_shared(m: Message, state: FSMContext):
             rows = res.all()
             channels = [(r[0], r[1]) for r in rows]
 
-            # Уже прикреплённые к текущему розыгрышу
             res = await s.execute(
                 stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
                 {"g": event_id}
             )
             attached_ids = {r[0] for r in res.fetchall()}
 
-        # Сообщение с блоком «Подключение канала к розыгрышу ...» + список кнопок
         text_block = build_connect_channels_text(gw.internal_title)
         kb = build_channels_menu_kb(event_id, channels, attached_ids)
         await m.answer(text_block, reply_markup=kb)
 
-        # очищаем контекст выбора (чтобы не мешал в следующий раз)
+        # очистим маркер выбора, чтобы не мешал в следующий раз
         await state.update_data(chooser_event_id=None)
+
+    else:
+        # 3б) Обычное подключение (через «Мои каналы» или нижние кнопки):
+        # сразу показываем обновлённый список «Ваши каналы»
+        rows = await get_user_org_channels(m.from_user.id)
+        await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
+
+# Проверка логов
+logging.info("chat_shared: user=%s, chat_id=%s, title=%s, type=%s",
+             m.from_user.id, chat.id, chat.title, chat.type)
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
@@ -1187,6 +1200,20 @@ async def cb_my_channels(cq: CallbackQuery):
     text = "Ваши каналы:"
     await cq.message.answer(text, reply_markup=kb_my_channels_menu(rows))
     await cq.answer()
+
+#Проверка логов
+logging.info("my_channels: user=%s, rows=%s", cq.from_user.id, rows)
+
+# Хелпер для списка каналов
+# Вернуть список организаторских каналов/групп пользователя [(id, title)]
+async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
+    from sqlalchemy import text as stext
+    async with session_scope() as s:
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
+            {"u": user_id}
+        )
+        return [(r[0], r[1]) for r in res.all()]
 
 # Показать карточку канала
 @dp.callback_query(F.data.startswith("mych:info:"))
