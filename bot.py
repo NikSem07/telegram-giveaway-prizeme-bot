@@ -11,6 +11,7 @@ from pathlib import Path
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy import text as stext
+from aiogram.types import ChatMemberUpdated
 
 from aiogram import Bot, Dispatcher, F
 import aiogram.types as types
@@ -1364,6 +1365,7 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
                 JOIN (
                     SELECT chat_id, MAX(id) AS max_id
                     FROM organizer_channels
+                    WHERE status='ok'
                     GROUP BY chat_id
                 ) last ON last.max_id = oc.id
                 ORDER BY oc.id DESC
@@ -1928,6 +1930,53 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
         scheduler.remove_job(f"final_{gid}")
     except Exception:
         pass
+
+#--- Обработчик членов канала / группы ---
+@dp.my_chat_member()
+async def on_my_chat_member(event: ChatMemberUpdated):
+    """
+    Срабатывает, когда бота добавили или удалили из чата/канала.
+    Обновляем базу, чтобы бот знал, где он админ.
+    """
+    chat = event.chat
+    bot_id = event.new_chat_member.user.id
+    if bot_id != (await bot.get_me()).id:
+        return  # событие не для нас
+
+    # обновлённый статус
+    status = event.new_chat_member.status
+    user = event.from_user
+    title = chat.title or getattr(chat, "full_name", None) or "Без названия"
+    username = getattr(chat, "username", None)
+    is_private = 0 if username else 1
+
+    async with Session() as s:
+        async with s.begin():
+            if status in ("administrator", "member"):
+                # сохраняем или обновляем
+                await s.execute(
+                    stext("""
+                    INSERT OR REPLACE INTO organizer_channels
+                    (owner_user_id, chat_id, username, title, is_private, bot_role, status)
+                    VALUES (:o, :cid, :u, :t, :p, :r, 'ok')
+                    """),
+                    {
+                        "o": user.id if user else 0,
+                        "cid": chat.id,
+                        "u": username,
+                        "t": title,
+                        "p": int(is_private),
+                        "r": status,
+                    }
+                )
+            else:
+                # если бота удалили из чата
+                await s.execute(
+                    stext("UPDATE organizer_channels SET status='gone' WHERE chat_id=:cid"),
+                    {"cid": chat.id},
+                )
+
+    logging.info(f"🔁 my_chat_member: {chat.title} ({chat.id}) -> {status}")
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
