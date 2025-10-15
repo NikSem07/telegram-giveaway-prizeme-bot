@@ -1395,18 +1395,16 @@ async def cb_my_channel_info(cq: CallbackQuery):
     title, chat_id, added_at = row
     kind = "Канал" if str(chat_id).startswith("-100") else "Группа"
 
-    # added_at может быть datetime (с TZ/без TZ) или строкой из SQLite
+    # Приводим дату к МСК (аккуратно обрабатываем разные форматы SQLite)
     dt_msk = None
     if isinstance(added_at, datetime):
         try:
             dt_msk = (added_at.replace(tzinfo=timezone.utc)
-                    if added_at.tzinfo is None else added_at).astimezone(MSK_TZ)
+                      if added_at.tzinfo is None else added_at).astimezone(MSK_TZ)
         except Exception:
-            dt_msk = added_at  # на крайний случай покажем как есть
+            dt_msk = added_at
     else:
-        # пробуем стандартный формат SQLite
         try:
-            # 'YYYY-MM-DD HH:MM:SS'
             parsed = datetime.strptime(str(added_at), "%Y-%m-%d %H:%M:%S")
             dt_msk = parsed.replace(tzinfo=timezone.utc).astimezone(MSK_TZ)
         except Exception:
@@ -1414,16 +1412,21 @@ async def cb_my_channel_info(cq: CallbackQuery):
 
     dt_text = dt_msk.strftime("%H:%M, %d.%m.%Y") if isinstance(dt_msk, datetime) else str(added_at)
 
-    text = (f"<b>Название:</b> {title}\n"
-            f"<b>Тип:</b> {kind}\n"
-            f"<b>ID:</b> {chat_id}\n"
-            f"<b>Дата добавления:</b> {dt_text}\n\n"
-            "Удалить канал — канал будет удалён только из списка ваших каналов в боте, "
-            "однако во всех активных розыгрышах, к которым канал был прикреплён, он останется.")
+    text = (
+        f"<b>Название:</b> {title}\n"
+        f"<b>Тип:</b> {kind}\n"
+        f"<b>ID:</b> {chat_id}\n"
+        f"<b>Дата добавления:</b> {dt_text}\n\n"
+        "Удалить канал — канал будет удалён только из списка ваших каналов в боте, "
+        "однако во всех активных розыгрышах, к которым канал был прикреплён, он останется."
+    )
+
     kb = InlineKeyboardBuilder()
     delete_text = "Удалить канал" if kind == "Канал" else "Удалить группу"
-    kb.button(text=delete_text, callback_data=f"mych:del:{oc_id}")
+    kb.button(text=delete_text, callback_data=f"mych:del_confirm:{oc_id}")
+    kb.button(text="Пропустить", callback_data="mych:dismiss")
     kb.adjust(2)
+
     await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await cq.answer()
 
