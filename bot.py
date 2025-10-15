@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
 from aiogram.enums import ChatType
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy import text as stext
 
 from aiogram import Bot, Dispatcher, F
@@ -564,12 +565,26 @@ async def ensure_user(user_id:int, username:str|None):
 
 async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
     """
-    Возвращает True, если user_id является администратором/создателем в данном чате.
-    Если чат недоступен/ошибка – возвращаем False.
+    Надёжнее проверяем админство через get_chat_administrators().
+    В каналах get_chat_member может давать ошибки/пустые статусы,
+    поэтому пробуем оба варианта.
     """
+    # 1) пробуем списком админов (основной путь)
     try:
-        mem = await bot.get_chat_member(chat_id, user_id)
-        return mem.status in {"administrator", "creator"}
+        admins = await bot.get_chat_administrators(chat_id)
+        for a in admins:
+            if a.user.id == user_id:
+                return True
+    except TelegramBadRequest:
+        # упали на правах/доступе – продолжим запасным путём
+        pass
+    except Exception:
+        pass
+
+    # 2) запасной путь – точечная проверка участника
+    try:
+        m = await bot.get_chat_member(chat_id, user_id)
+        return m.status in {"administrator", "creator"}
     except Exception:
         return False
 
@@ -960,6 +975,38 @@ async def dbg_channels(m: types.Message):
         lines = [f"{i+1}. {rec.title} (chat_id={rec.chat_id})" for i, rec in enumerate(chat_ids)]
         await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
+@dp.message(Command("dbg_scan"))
+async def dbg_scan(m: types.Message):
+    # показываем, что видим в organizer_channels, и по каждому чату — статусы
+    async with Session() as s:
+        res = await s.execute(stext("""
+            SELECT oc.id, oc.chat_id, oc.title
+            FROM organizer_channels oc
+            JOIN (
+                SELECT chat_id, MAX(id) AS max_id
+                FROM organizer_channels
+                GROUP BY chat_id
+            ) last ON last.max_id = oc.id
+            ORDER BY oc.id DESC
+        """))
+        rows = res.all()
+
+    me = await bot.get_me()
+    lines = [f"Всего в БД по chat_id: {len(rows)}"]
+    for row_id, chat_id, title in rows:
+        try:
+            bot_admin = await is_user_admin_of_chat(bot, chat_id, me.id)
+        except Exception:
+            bot_admin = False
+        try:
+            user_admin = await is_user_admin_of_chat(bot, chat_id, m.from_user.id)
+        except Exception:
+            user_admin = False
+        mark = "✅" if (bot_admin and user_admin) else "❌"
+        lines.append(f"{mark} {title} (chat_id={chat_id}) bot_admin={bot_admin} user_admin={user_admin}")
+
+    await m.answer("\n".join(lines))
+
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
     uid = m.from_user.id
@@ -1326,20 +1373,22 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
         rows = res.all()
 
     # 2) Фильтруем: и бот, и пользователь — админы в чате
+    # узнаём id бота один раз
+    me = await bot.get_me()
+
     visible: list[tuple[int, str]] = []
     for row_id, chat_id, title in rows:
-        try:
-            me = await bot.get_me()
-            bot_member = await bot.get_chat_member(chat_id, me.id)
-            bot_is_admin = bot_member.status in {"administrator", "creator"}
-        except Exception:
-            bot_is_admin = False
-
+        # бот должен быть админом
+        bot_is_admin = await is_user_admin_of_chat(bot, chat_id, me.id)
         if not bot_is_admin:
             continue
 
-        if await is_user_admin_of_chat(bot, chat_id, user_id):
-            visible.append((row_id, title))
+        # пользователь тоже должен быть админом/создателем
+        user_is_admin = await is_user_admin_of_chat(bot, chat_id, user_id)
+        if not user_is_admin:
+            continue
+
+        visible.append((row_id, title))
 
     return visible
 
