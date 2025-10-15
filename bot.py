@@ -532,20 +532,34 @@ async def ensure_channels_table():
 
 async def ensure_schema():
     """
-    Добиваемся одинаковой схемы и upsert-ключа:
-    - таблица organizer_channels уже создаётся через ORM,
-      но в SQLite create_all() НЕ добавляет/не меняет индексы в уже существующей таблице.
-    - поэтому руками создаём/обновляем уникальный индекс для пары (owner_user_id, chat_id),
-      чтобы INSERT OR IGNORE работал как ожидается и не плодил дубликаты.
+    Создаём, если вдруг нет:
+      - таблицу organizer_channels с нужными полями,
+      - уникальный индекс на (owner_user_id, chat_id).
     """
     async with engine.begin() as conn:
-        # На всякий случай — таблица (если вдруг кто-то удалил)
-        await conn.run_sync(Base.metadata.create_all)
-        # Уникальный индекс для upsert
-        await conn.execute(stext("""
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_org_channels_owner_chat
-            ON organizer_channels(owner_user_id, chat_id);
-        """))
+        # 1) Таблица (если нет) — полная версия со всеми колонками.
+        await conn.exec_driver_sql("""
+        CREATE TABLE IF NOT EXISTS organizer_channels (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_user_id BIGINT   NOT NULL,
+            chat_id       BIGINT   NOT NULL,
+            username      TEXT,
+            title         TEXT     NOT NULL,
+            is_private    BOOLEAN  NOT NULL DEFAULT 0,
+            bot_role      TEXT     NOT NULL DEFAULT 'member',
+            status        TEXT     NOT NULL DEFAULT 'ok',
+            added_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        # 2) Уникальный индекс для upsert
+        await conn.exec_driver_sql("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_org_channels_owner_chat
+        ON organizer_channels(owner_user_id, chat_id);
+        """)
+        # 3) Индекс на owner_user_id для быстрых выборок
+        await conn.exec_driver_sql("""
+        CREATE INDEX IF NOT EXISTS idx_owner ON organizer_channels(owner_user_id);
+        """)
 
 @asynccontextmanager
 async def session_scope():
@@ -815,29 +829,32 @@ async def on_chat_shared(m: Message, state: FSMContext):
         return
 
     # 1) Сохраняем канал/группу у владельца
-    async with session_scope() as s:
-        await s.execute(
-            stext(
-                "INSERT OR IGNORE INTO organizer_channels("
-                "owner_user_id, chat_id, title, is_private, bot_role"
-                ") VALUES (:o, :cid, :t, :p, :r)"
-            ),
-            {
-                "o": m.from_user.id,
-                "cid": chat.id,
-                "t": chat.title or (getattr(chat, 'first_name', None) or 'Без названия'),
-                "p": 0 if getattr(chat, "username", None) else 1,
-                "r": "admin" if role == "administrator" else "member",
-            }
-        )
-        # Диагностика: проверим, что строка действительно есть
-        check = await s.execute(
-            stext("SELECT id, owner_user_id, chat_id, title FROM organizer_channels "
-                "WHERE owner_user_id=:o AND chat_id=:cid"),
+    async with Session() as s:
+        async with s.begin():
+            await s.execute(
+                stext(
+                    "INSERT OR IGNORE INTO organizer_channels("
+                    "owner_user_id, chat_id, username, title, is_private, bot_role, status"
+                    ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok')"
+                ),
+                {
+                    "o": m.from_user.id,
+                    "cid": chat.id,
+                    "u": getattr(chat, "username", None),
+                    "t": chat.title or (getattr(chat, 'first_name', None) or 'Без названия'),
+                    "p": 0 if getattr(chat, "username", None) else 1,
+                    "r": "admin" if role == "administrator" else "member",
+                }
+            )
+
+        # после commit проверим, что запись действительно есть
+        res = await s.execute(
+            stext("SELECT id, owner_user_id, chat_id, title, bot_role, datetime(added_at,'localtime') "
+                  "FROM organizer_channels WHERE owner_user_id=:o AND chat_id=:cid"),
             {"o": m.from_user.id, "cid": chat.id}
         )
-        row = check.first()
-        logging.info("📦 saved channel? %s", row)
+        row = res.first()
+    logging.info("📦 organizer_channels upsert -> %s", row)
 
     kind = "канал" if chat.type == "channel" else "группа"
 
@@ -1269,27 +1286,25 @@ async def step_endat(m: Message, state: FSMContext):
 # ===== Раздел "Мои каналы" =====
 
 def kb_my_channels(rows: list[tuple[int, str]]) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=title, callback_data=f"mych:info:{row_id}")]
-        for row_id, title in rows
-    ])
-    # нижняя линия с «Добавить канал/группу»
-    kb.inline_keyboard.append([
-        InlineKeyboardButton(text="Добавить канал", callback_data="mych:add_channel"),
+    kb = InlineKeyboardBuilder()
+
+    # список каналов/групп столбиком
+    for row_id, title in rows:
+        kb.button(text=title, callback_data=f"mych:info:{row_id}")
+    if rows:
+        kb.adjust(1)
+
+    # нижняя линия: две кнопки рядом
+    kb.row(
+        InlineKeyboardButton(text="Добавить канал",  callback_data="mych:add_channel"),
         InlineKeyboardButton(text="Добавить группу", callback_data="mych:add_group"),
-    ])
-    return kb
+    )
+    return kb.as_markup()
 
 @dp.callback_query(F.data == "my_channels")
 async def show_my_channels(cq: types.CallbackQuery):
     uid = cq.from_user.id
-    async with Session() as s:
-        res = await s.execute(
-            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:uid ORDER BY added_at DESC"),
-            {"uid": uid}
-        )
-        rows = [(r[0], r[1]) for r in res.all()]
-
+    rows = await get_user_org_channels(uid)
     text = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
     await cq.message.answer(text, reply_markup=kb_my_channels(rows))
     await cq.answer()
