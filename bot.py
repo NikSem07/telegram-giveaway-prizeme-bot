@@ -507,27 +507,6 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-# авто-создание таблицы каналов, если её нет
-async def ensure_channels_table():
-    create_sql = """
-    CREATE TABLE IF NOT EXISTS organizer_channels (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_user_id INTEGER NOT NULL,
-        chat_id       BIGINT   NOT NULL,
-        title         TEXT     NOT NULL,
-        is_private    BOOLEAN  NOT NULL,
-        bot_role      TEXT     NOT NULL,
-        added_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT ux_owner_chat UNIQUE (owner_user_id, chat_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_owner ON organizer_channels(owner_user_id);
-    """
-    async with engine.begin() as conn:
-        for stmt in create_sql.split(";"):
-            s = stmt.strip()
-            if s:
-                await conn.exec_driver_sql(s + ";")
-
 # --- DB bootstrap: гарантируем нужные индексы/уникальности ---
 
 async def ensure_schema():
@@ -830,7 +809,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
     username = getattr(chat, "username", None)
     is_private = 0 if username else 1  # каналы с @username считаем публичными
 
-    # 1) upsert
+    # 1) upsert (вставка без дублей)
     async with Session() as s:
         async with s.begin():
             await s.execute(
@@ -843,9 +822,8 @@ async def on_chat_shared(m: Message, state: FSMContext):
                  "p": int(is_private), "r": role}
             )
 
-    # 2) читаем обратно для проверки — в НОВОЙ сессии
-    async with Session() as s:
-        check = await s.execute(
+        # 2) Жёстко проверяем, что запись есть (той же сессией после коммита begin)
+        res = await s.execute(
             stext(
                 "SELECT id, owner_user_id, chat_id, title "
                 "FROM organizer_channels "
@@ -853,13 +831,23 @@ async def on_chat_shared(m: Message, state: FSMContext):
             ),
             {"o": m.from_user.id, "cid": chat.id}
         )
-        row = check.first()
-        logging.info("📦 saved channel row=%s", row)
+        row = res.first()
+
+    logging.info("📦 saved channel row=%s", row)
 
     kind = "канал" if chat.type == "channel" else "группа"
-    await m.answer(f"{kind.capitalize()} <b>{title}</b> подключён к боту.", parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
+    await m.answer(
+        f"{kind.capitalize()} <b>{title}</b> подключён к боту.",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove()
+    )
 
-    # если сейчас мы в процессе привязки к розыгрышу — обновим экран привязки
+    # Если запись не нашлась — сразу подсветим проблему пользователю и выйдем
+    if not row:
+        await m.answer("⚠️ Канал не найден в базе после сохранения. Напишите /dbg_dbpath и пришлите путь — проверим файл БД.")
+        return
+
+    # Если сейчас идёт привязка к конкретному розыгрышу — перерисуем экран привязки
     data = await state.get_data()
     event_id = data.get("chooser_event_id")
     if event_id:
@@ -877,7 +865,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
         )
         await state.update_data(chooser_event_id=None)
     else:
-        # обычный кейс: показать «Мои каналы»
+        # Обычный кейс: показать «Мои каналы»
         rows = await get_user_org_channels(m.from_user.id)
         label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
         await m.answer(label, reply_markup=kb_my_channels(rows))
@@ -1859,12 +1847,9 @@ async def main():
 
     # 1) инициализация БД
     await init_db()
-    await ensure_schema()            # <— ДОБАВЬ ЭТО
+    await ensure_schema()
     logging.info("✅ База данных инициализирована")
     logging.info(f"DB file in use: {DB_PATH.resolve()}")
-
-    await ensure_channels_table()
-    logging.info("Table organizer_channels ensured")
 
     # 2) запускаем планировщик
     scheduler.start()
