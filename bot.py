@@ -836,27 +836,33 @@ async def on_chat_shared(m: Message, state: FSMContext):
     username = getattr(chat, "username", None)
     is_private = 0 if username else 1  # каналы с @username считаем публичными
 
-    # 1) upsert (вставка без дублей)
+    # 1) upsert (вставка/обновление без дублей по (owner_user_id, chat_id))
     async with Session() as s:
         async with s.begin():
             await s.execute(
                 stext(
-                    "INSERT OR IGNORE INTO organizer_channels("
+                    "INSERT OR REPLACE INTO organizer_channels("
                     "owner_user_id, chat_id, username, title, is_private, bot_role, status"
                     ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok')"
                 ),
-                {"o": m.from_user.id, "cid": chat.id, "u": username, "t": title,
-                 "p": int(is_private), "r": role}
+                {
+                    "o": m.from_user.id,
+                    "cid": chat.id,
+                    "u": username,
+                    "t": title,
+                    "p": int(is_private),
+                    "r": role,
+                },
             )
 
-        # 2) Жёстко проверяем, что запись есть (той же сессией после коммита begin)
+        # 2) сразу читаем ту же запись (той же сессией)
         res = await s.execute(
             stext(
-                "SELECT id, owner_user_id, chat_id, title "
+                "SELECT id, owner_user_id, chat_id, title, status "
                 "FROM organizer_channels "
                 "WHERE owner_user_id=:o AND chat_id=:cid"
             ),
-            {"o": m.from_user.id, "cid": chat.id}
+            {"o": m.from_user.id, "cid": chat.id},
         )
         row = res.first()
 
@@ -866,12 +872,11 @@ async def on_chat_shared(m: Message, state: FSMContext):
     await m.answer(
         f"{kind.capitalize()} <b>{title}</b> подключён к боту.",
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=ReplyKeyboardRemove(),
     )
 
     # Если запись не нашлась — сразу подсветим проблему пользователю и выйдем
     if not row:
-        await m.answer("⚠️ Канал не найден в базе после сохранения. Напишите /dbg_dbpath и пришлите путь — проверим файл БД.")
         return
 
     # Если сейчас идёт привязка к конкретному розыгрышу — перерисуем экран привязки
@@ -1348,19 +1353,16 @@ async def show_my_channels(cq: types.CallbackQuery):
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
     """
-    Возвращает список КАНАЛОВ/ГРУПП, где:
-      1) БОТ сейчас является админом,
-      2) сам user_id является админом/создателем,
-    независимо от того, кто из админов "шарил" чат в бота.
-    Для кнопок возвращаем (row_id, title), где row_id — id любой последней
-    записи по этому chat_id (нам нужен просто стабильный идентификатор для callbacks).
+    ВРЕМЕННЫЙ УПРОЩЁННЫЙ ХЕЛПЕР.
+    Берём по одной последней записи на каждый chat_id со статусом 'ok'
+    и просто возвращаем (row_id, title) — без проверок админств.
+    Задача: убедиться, что список вообще рисуется в боте.
     """
-    # 1) Берём по одному "последнему" ряду на каждый chat_id
     async with Session() as s:
         res = await s.execute(
             stext(
                 """
-                SELECT oc.id, oc.chat_id, oc.title
+                SELECT oc.id, oc.title
                 FROM organizer_channels oc
                 JOIN (
                     SELECT chat_id, MAX(id) AS max_id
@@ -1373,26 +1375,8 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
             )
         )
         rows = res.all()
-
-    # 2) Фильтруем: и бот, и пользователь — админы в чате
-    # узнаём id бота один раз
-    me = await bot.get_me()
-
-    visible: list[tuple[int, str]] = []
-    for row_id, chat_id, title in rows:
-        # бот должен быть админом
-        bot_is_admin = await is_user_admin_of_chat(bot, chat_id, me.id)
-        if not bot_is_admin:
-            continue
-
-        # пользователь тоже должен быть админом/создателем
-        user_is_admin = await is_user_admin_of_chat(bot, chat_id, user_id)
-        if not user_is_admin:
-            continue
-
-        visible.append((row_id, title))
-
-    return visible
+    # rows -> [(id, title)]
+    return [(r[0], r[1]) for r in rows]
 
 # Показать карточку канала
 @dp.callback_query(F.data.startswith("mych:info:"))
