@@ -1401,8 +1401,8 @@ async def cb_my_channel_info(cq: CallbackQuery):
     oc_id = int(sid)
     async with session_scope() as s:
         res = await s.execute(
-            stext("SELECT title, chat_id, added_at FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
-            {"id": oc_id, "u": cq.from_user.id}
+            stext("SELECT title, chat_id, added_at FROM organizer_channels WHERE id=:id"),
+            {"id": oc_id}
         )
         row = res.first()
     if not row:
@@ -1445,8 +1445,8 @@ async def cb_my_channel_delete(cq: CallbackQuery):
     async with session_scope() as s:
         # удаляем только из organizer_channels
         await s.execute(
-            stext("DELETE FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
-            {"id": oc_id, "u": cq.from_user.id}
+            stext("DELETE FROM organizer_channels WHERE id=:id"),
+            {"id": oc_id}
         )
     await cq.message.answer("Канал/группа удалены из списка.")
     await cq.answer()
