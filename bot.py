@@ -8,7 +8,7 @@ import asyncio, os, hashlib, random, string
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
-from aiogram.types import ChatType
+from aiogram.enums import ChatType
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
@@ -494,12 +494,16 @@ class Winner(Base):
 # ---- DB INIT ----
 
 # путь к bot.db строго рядом с bot.py (один файл для всех)
-DB_PATH = Path(file).with_name("bot.db")
+DB_PATH = Path(__file__).with_name("bot.db")
 DB_URL = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
+# создать все таблицы по ORM-моделям (если их ещё нет)
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 # авто-создание таблицы каналов, если её нет
 async def ensure_channels_table():
@@ -815,13 +819,12 @@ async def on_chat_shared(m: Message, state: FSMContext):
         await s.execute(
             stext(
                 "INSERT OR IGNORE INTO organizer_channels("
-                "owner_user_id, chat_id, username, title, is_private, bot_role"
-                ") VALUES (:o, :cid, :u, :t, :p, :r)"
+                "owner_user_id, chat_id, title, is_private, bot_role"
+                ") VALUES (:o, :cid, :t, :p, :r)"
             ),
             {
                 "o": m.from_user.id,
                 "cid": chat.id,
-                "u": getattr(chat, "username", None),
                 "t": chat.title or (getattr(chat, 'first_name', None) or 'Без названия'),
                 "p": 0 if getattr(chat, "username", None) else 1,
                 "r": "admin" if role == "administrator" else "member",
@@ -875,42 +878,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
         # Обычный кейс: показать актуальный список «Ваши каналы»
         rows = await get_user_org_channels(m.from_user.id)
         await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
-
-@dp.message(F.chat_shared)  # если у тебя Router(), адаптируй под него
-async def on_channel_chosen(msg: types.Message):
-    shared = msg.chat_shared
-    # получим инфо по чату
-    chat = await bot.get_chat(shared.chat_id)
-
-    ok = await save_shared_chat(
-        owner_user_id=msg.from_user.id,
-        chat_id=chat.id,
-        title=chat.title or str(chat.id),
-        chat_type=chat.type,          # 'channel'
-        bot_role='admin'              # раз бот уже админ — фиксируем так
-    )
-    if ok:
-        await msg.answer(f"Канал {chat.title} сохранён.")
-    else:
-        await msg.answer(f"Канал {chat.title} уже был в списке.")
-
-@dp.message(F.chat_shared)  # тот же апдейт, но чат.type будет 'supergroup'/'group'
-async def on_group_chosen(msg: types.Message):
-    shared = msg.chat_shared
-    chat = await bot.get_chat(shared.chat_id)
-
-    ok = await save_shared_chat(
-        owner_user_id=msg.from_user.id,
-        chat_id=chat.id,
-        title=chat.title or chat.username or str(chat.id),
-        chat_type=chat.type,          # 'supergroup'/'group'
-        bot_role='admin'
-    )
-    if ok:
-        await msg.answer(f"Группа {chat.title or chat.id} сохранена.")
-    else:
-        await msg.answer(f"Группа {chat.title or chat.id} уже была в списке.")
-
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
