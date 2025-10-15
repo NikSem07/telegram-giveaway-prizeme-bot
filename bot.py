@@ -11,6 +11,7 @@ from pathlib import Path
 from aiogram.enums import ChatType
 
 from aiogram import Bot, Dispatcher, F
+import aiogram.types as types
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup,
                            InlineKeyboardButton, InputMediaPhoto)
@@ -877,7 +878,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
     else:
         # Обычный кейс: показать актуальный список «Ваши каналы»
         rows = await get_user_org_channels(m.from_user.id)
-        await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
+        await m.answer("Ваши каналы:", reply_markup=kb_my_channels(rows))
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
