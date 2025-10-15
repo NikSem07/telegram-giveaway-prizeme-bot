@@ -7,6 +7,8 @@ import boto3
 import asyncio, os, hashlib, random, string
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
+from pathlib import Path
+from aiogram.types import ChatType
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
@@ -489,16 +491,36 @@ class Winner(Base):
     rank: Mapped[int] = mapped_column(Integer)
     hash_used: Mapped[str] = mapped_column(String(128))
 
-# ----------------- DB INIT -----------------
-DB_URL = "sqlite+aiosqlite:///./bot.db"
-create_engine = create_async_engine = None  # placeholder to avoid confusion in this snippet
-from sqlalchemy.ext.asyncio import create_async_engine
+# ---- DB INIT ----
+
+# путь к bot.db строго рядом с bot.py (один файл для всех)
+DB_PATH = Path(file).with_name("bot.db")
+DB_URL = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
 
-async def init_db():
+# авто-создание таблицы каналов, если её нет
+async def ensure_channels_table():
+    create_sql = """
+    CREATE TABLE IF NOT EXISTS organizer_channels (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_user_id INTEGER NOT NULL,
+        chat_id       BIGINT   NOT NULL,
+        title         TEXT     NOT NULL,
+        is_private    BOOLEAN  NOT NULL,
+        bot_role      TEXT     NOT NULL,
+        added_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT ux_owner_chat UNIQUE (owner_user_id, chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_owner ON organizer_channels(owner_user_id);
+    """
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        for stmt in create_sql.split(";"):
+            s = stmt.strip()
+            if s:
+                await conn.exec_driver_sql(s + ";")
 
 # --- DB bootstrap: гарантируем нужные индексы/уникальности ---
 from sqlalchemy import text as stext
@@ -602,6 +624,38 @@ async def _send_media(chat_id: int, kind: str|None, fid: str|None):
     if kind == "video":
         return await bot.send_video(chat_id, fid)
     return None
+
+async def save_shared_chat(
+    *,
+    owner_user_id: int,
+    chat_id: int,
+    title: str,
+    chat_type: str,
+    bot_role: str
+) -> bool:
+    """
+    Возвращает True, если вставка сделана впервые; False, если такой канал уже был.
+    """
+    # is_private = True для групп/супергрупп, False для каналов
+    is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
+
+    async with Session() as s:
+        async with s.begin():
+            # пробуем вставить; если дубликат — просто игнор
+            await s.execute(
+                """
+                INSERT OR IGNORE INTO organizer_channels
+                    (owner_user_id, chat_id, title, is_private, bot_role)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (owner_user_id, chat_id, title, int(is_private), bot_role)
+            )
+        # проверим, появилась ли запись
+        res = await s.execute(
+            "SELECT 1 FROM organizer_channels WHERE owner_user_id=? AND chat_id=?",
+            (owner_user_id, chat_id)
+        )
+        return res.scalar() is not None
 
 # ----------------- FSM -----------------
 from aiogram.fsm.state import StatesGroup, State
@@ -822,6 +876,42 @@ async def on_chat_shared(m: Message, state: FSMContext):
         rows = await get_user_org_channels(m.from_user.id)
         await m.answer("Ваши каналы:", reply_markup=kb_my_channels_menu(rows))
 
+@dp.message(F.chat_shared)  # если у тебя Router(), адаптируй под него
+async def on_channel_chosen(msg: types.Message):
+    shared = msg.chat_shared
+    # получим инфо по чату
+    chat = await bot.get_chat(shared.chat_id)
+
+    ok = await save_shared_chat(
+        owner_user_id=msg.from_user.id,
+        chat_id=chat.id,
+        title=chat.title or str(chat.id),
+        chat_type=chat.type,          # 'channel'
+        bot_role='admin'              # раз бот уже админ — фиксируем так
+    )
+    if ok:
+        await msg.answer(f"Канал {chat.title} сохранён.")
+    else:
+        await msg.answer(f"Канал {chat.title} уже был в списке.")
+
+@dp.message(F.chat_shared)  # тот же апдейт, но чат.type будет 'supergroup'/'group'
+async def on_group_chosen(msg: types.Message):
+    shared = msg.chat_shared
+    chat = await bot.get_chat(shared.chat_id)
+
+    ok = await save_shared_chat(
+        owner_user_id=msg.from_user.id,
+        chat_id=chat.id,
+        title=chat.title or chat.username or str(chat.id),
+        chat_type=chat.type,          # 'supergroup'/'group'
+        bot_role='admin'
+    )
+    if ok:
+        await msg.answer(f"Группа {chat.title or chat.id} сохранена.")
+    else:
+        await msg.answer(f"Группа {chat.title or chat.id} уже была в списке.")
+
+
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
     if status==GiveawayStatus.DRAFT:
@@ -879,6 +969,25 @@ def kb_my_events_menu(count_involved:int, count_finished:int, my_draft:int, my_f
     kb.button(text="Мои каналы", callback_data="my_channels")
     kb.adjust(1)
     return kb.as_markup()
+
+@dp.message(Command("dbg_dbpath"))
+async def dbg_dbpath(m: types.Message):
+    await m.answer(f"DB: <code>{DB_PATH.resolve()}</code>")
+
+@dp.message(Command("dbg_channels"))
+async def dbg_channels(m: types.Message):
+    async with Session() as s:
+        res = await s.execute(
+            "SELECT id, owner_user_id, chat_id, title, bot_role, datetime(added_at,'localtime') "
+            "FROM organizer_channels WHERE owner_user_id=? ORDER BY id DESC LIMIT 10",
+            (m.from_user.id,)
+        )
+        rows = res.all()
+    if not rows:
+        await m.answer("Всего: 0")
+    else:
+        lines = [f"{r.id}: {r.title} ({r.chat_id}) — {r.bot_role} — {r[5]}" for r in rows]
+        await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
@@ -1209,35 +1318,30 @@ async def step_endat(m: Message, state: FSMContext):
 
 # ===== Раздел "Мои каналы" =====
 
-def kb_my_channels_menu(rows: list[tuple[int,str]], with_add_buttons: bool=True):
-    kb = InlineKeyboardBuilder()
-    # список каналов/групп
-    for oc_id, title in rows:
-        kb.button(text=title, callback_data=f"mych:info:{oc_id}")
-
-    if rows:
-        kb.adjust(1)
-
-    if with_add_buttons:
-        # две кнопки в один ряд: Добавить канал / Добавить группу
-        kb.row(
-            InlineKeyboardButton(text="Добавить канал", callback_data="mych:add_channel"),
-            InlineKeyboardButton(text="Добавить группу", callback_data="mych:add_group"),
-        )
-    return kb.as_markup()
+def kb_my_channels(rows: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=title, callback_data=f"mych:info:{row_id}")]
+        for row_id, title in rows
+    ])
+    # нижняя линия с «Добавить канал/группу»
+    kb.inline_keyboard.append([
+        InlineKeyboardButton(text="Добавить канал", callback_data="mych:add_channel"),
+        InlineKeyboardButton(text="Добавить группу", callback_data="mych:add_group"),
+    ])
+    return kb
 
 @dp.callback_query(F.data == "my_channels")
-async def cb_my_channels(cq: CallbackQuery):
-    from sqlalchemy import text as stext
-    async with session_scope() as s:
+async def show_my_channels(cq: types.CallbackQuery):
+    uid = cq.from_user.id
+    async with Session() as s:
         res = await s.execute(
-            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
-            {"u": cq.from_user.id}
+            "SELECT id, title FROM organizer_channels WHERE owner_user_id=? ORDER BY added_at DESC",
+            (uid,)
         )
         rows = [(r[0], r[1]) for r in res.all()]
 
-    text = "Ваши каналы:"
-    await cq.message.answer(text, reply_markup=kb_my_channels_menu(rows))
+    text = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
+    await cq.message.answer(text, reply_markup=kb_my_channels(rows))
     await cq.answer()
 
 # Хелпер для списка каналов
@@ -1810,6 +1914,10 @@ async def main():
     await init_db()
     await ensure_schema()            # <— ДОБАВЬ ЭТО
     logging.info("✅ База данных инициализирована")
+    logging.info(f"DB file in use: {DB_PATH.resolve()}")
+
+    await ensure_channels_table()
+    logging.info("Table organizer_channels ensured")
 
     # 2) запускаем планировщик
     scheduler.start()
