@@ -831,10 +831,10 @@ async def on_chat_shared(m: Message, state: FSMContext):
                 "r": "admin" if role == "administrator" else "member",
             }
         )
-        # диагностический повторный SELECT — увидим, что реально лежит в БД
+        # Диагностика: проверим, что строка действительно есть
         check = await s.execute(
             stext("SELECT id, owner_user_id, chat_id, title FROM organizer_channels "
-                  "WHERE owner_user_id=:o AND chat_id=:cid"),
+                "WHERE owner_user_id=:o AND chat_id=:cid"),
             {"o": m.from_user.id, "cid": chat.id}
         )
         row = check.first()
@@ -995,22 +995,6 @@ async def show_my_events_menu(m: Message):
 async def cmd_menu(m: Message):
     # показать актуальную клавиатуру с системными кнопками
     await m.answer("Главное меню:", reply_markup=reply_main_kb())
-
-@dp.message(Command("dbg_channels"))
-async def dbg_channels(m: Message):
-    from sqlalchemy import text as stext
-    async with session_scope() as s:
-        cnt = (await s.execute(stext("SELECT COUNT(*) FROM organizer_channels WHERE owner_user_id=:u"),
-                               {"u": m.from_user.id})).scalar_one()
-        rows = await s.execute(stext(
-            "SELECT id, chat_id, title, datetime(added_at) "
-            "FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
-            {"u": m.from_user.id})
-        data = rows.all()
-    lines = [f"Всего: {cnt}"]
-    for r in data:
-        lines.append(f"• id={r[0]} chat_id={r[1]} title={r[2]}")
-    await m.answer("\n".join(lines) if lines else "Пусто")
 
 @dp.message(Command("hide"))
 async def hide_menu(m: Message):
