@@ -562,6 +562,17 @@ async def ensure_user(user_id:int, username:str|None):
             u = User(user_id=user_id, username=username)
             s.add(u)
 
+async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
+    """
+    Возвращает True, если user_id является администратором/создателем в данном чате.
+    Если чат недоступен/ошибка – возвращаем False.
+    """
+    try:
+        mem = await bot.get_chat_member(chat_id, user_id)
+        return mem.status in {"administrator", "creator"}
+    except Exception:
+        return False
+
 async def check_membership_on_all(bot, user_id:int, giveaway_id:int):
     async with session_scope() as s:
         res = await s.execute(text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":giveaway_id})
@@ -934,22 +945,19 @@ async def dbg_dbpath(m: types.Message):
 
 @dp.message(Command("dbg_channels"))
 async def dbg_channels(m: types.Message):
-    async with Session() as s:
-        res = await s.execute(
-            stext(
-                "SELECT id, owner_user_id, chat_id, title, bot_role, "
-                "datetime(added_at,'localtime') AS added_at_local "
-                "FROM organizer_channels "
-                "WHERE owner_user_id=:u "
-                "ORDER BY id DESC LIMIT 10"
-            ),
-            {"u": m.from_user.id}
-        )
-        rows = res.all()
+    rows = await get_user_org_channels(m.from_user.id)
     if not rows:
         await m.answer("Всего: 0")
     else:
-        lines = [f"{r.id}: {r.title} ({r.chat_id}) — {r.bot_role} — {r.added_at_local}" for r in rows]
+        # rows = [(row_id, title)]
+        # вытащим ещё chat_id для наглядности
+        async with Session() as s:
+            chat_ids = []
+            for row_id, _title in rows:
+                r = await s.execute(stext("SELECT chat_id, title FROM organizer_channels WHERE id=:id"), {"id": row_id})
+                rec = r.first()
+                chat_ids.append(rec)
+        lines = [f"{i+1}. {rec.title} (chat_id={rec.chat_id})" for i, rec in enumerate(chat_ids)]
         await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
 async def show_my_events_menu(m: Message):
@@ -1291,17 +1299,49 @@ async def show_my_channels(cq: types.CallbackQuery):
 # Хелпер для списка каналов
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
+    """
+    Возвращает список КАНАЛОВ/ГРУПП, где:
+      1) БОТ сейчас является админом,
+      2) сам user_id является админом/создателем,
+    независимо от того, кто из админов "шарил" чат в бота.
+    Для кнопок возвращаем (row_id, title), где row_id — id любой последней
+    записи по этому chat_id (нам нужен просто стабильный идентификатор для callbacks).
+    """
+    # 1) Берём по одному "последнему" ряду на каждый chat_id
     async with Session() as s:
         res = await s.execute(
             stext(
-                "SELECT id, title "
-                "FROM organizer_channels "
-                "WHERE owner_user_id=:u "
-                "ORDER BY id DESC"
-            ),
-            {"u": user_id}
+                """
+                SELECT oc.id, oc.chat_id, oc.title
+                FROM organizer_channels oc
+                JOIN (
+                    SELECT chat_id, MAX(id) AS max_id
+                    FROM organizer_channels
+                    GROUP BY chat_id
+                ) last ON last.max_id = oc.id
+                ORDER BY oc.id DESC
+                """
+            )
         )
-        return [(row.id, row.title) for row in res.all()]
+        rows = res.all()
+
+    # 2) Фильтруем: и бот, и пользователь — админы в чате
+    visible: list[tuple[int, str]] = []
+    for row_id, chat_id, title in rows:
+        try:
+            me = await bot.get_me()
+            bot_member = await bot.get_chat_member(chat_id, me.id)
+            bot_is_admin = bot_member.status in {"administrator", "creator"}
+        except Exception:
+            bot_is_admin = False
+
+        if not bot_is_admin:
+            continue
+
+        if await is_user_admin_of_chat(bot, chat_id, user_id):
+            visible.append((row_id, title))
+
+    return visible
 
 # Показать карточку канала
 @dp.callback_query(F.data.startswith("mych:info:"))
