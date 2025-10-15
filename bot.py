@@ -1394,19 +1394,54 @@ async def cb_my_channel_info(cq: CallbackQuery):
 
     title, chat_id, added_at = row
     kind = "Канал" if str(chat_id).startswith("-100") else "Группа"
-    dt = added_at.astimezone(MSK_TZ).strftime("%H:%M, %d.%m.%Y")
+
+    # added_at может быть datetime (с TZ/без TZ) или строкой из SQLite
+    dt_msk = None
+    if isinstance(added_at, datetime):
+        try:
+            dt_msk = (added_at.replace(tzinfo=timezone.utc)
+                    if added_at.tzinfo is None else added_at).astimezone(MSK_TZ)
+        except Exception:
+            dt_msk = added_at  # на крайний случай покажем как есть
+    else:
+        # пробуем стандартный формат SQLite
+        try:
+            # 'YYYY-MM-DD HH:MM:SS'
+            parsed = datetime.strptime(str(added_at), "%Y-%m-%d %H:%M:%S")
+            dt_msk = parsed.replace(tzinfo=timezone.utc).astimezone(MSK_TZ)
+        except Exception:
+            dt_msk = None
+
+    dt_text = dt_msk.strftime("%H:%M, %d.%m.%Y") if isinstance(dt_msk, datetime) else str(added_at)
 
     text = (f"<b>Название:</b> {title}\n"
             f"<b>Тип:</b> {kind}\n"
             f"<b>ID:</b> {chat_id}\n"
-            f"<b>Дата добавления:</b> {dt}\n\n"
+            f"<b>Дата добавления:</b> {dt_text}\n\n"
             "Удалить канал — канал будет удалён только из списка ваших каналов в боте, "
             "однако во всех активных розыгрышах, к которым канал был прикреплён, он останется.")
     kb = InlineKeyboardBuilder()
     kb.button(text="Удалить канал", callback_data=f"mych:del_confirm:{oc_id}")
-    kb.button(text="Отмена", callback_data="mych:cancel")
+    kb.button(text="Пропустить", callback_data="mych:dismiss")
     kb.adjust(2)
     await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+# ---- Обработчик "Пропустить" ----
+@dp.callback_query(F.data == "mych:dismiss")
+async def cb_my_channel_dismiss(cq: CallbackQuery):
+    # аккуратно удаляем карточку; если не выйдет — хотя бы спрячем кнопки
+    try:
+        await cq.message.delete()
+    except Exception:
+        try:
+            await cq.message.edit_reply_markup()
+        except Exception:
+            pass
+    # перерисуем список «Ваши каналы», чтобы пользователь вернулся в контекст
+    rows = await get_user_org_channels(cq.from_user.id)
+    text = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
+    await cq.message.answer(text, reply_markup=kb_my_channels(rows))
     await cq.answer()
 
 # Подтверждение удаления
@@ -1433,6 +1468,9 @@ async def cb_my_channel_delete(cq: CallbackQuery):
             {"id": oc_id}
         )
     await cq.message.answer("Канал/группа удалены из списка.")
+    rows = await get_user_org_channels(cq.from_user.id)
+    text = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
+    await cq.message.answer(text, reply_markup=kb_my_channels(rows))
     await cq.answer()
 
 # Отмена — просто ничего не делаем, чтобы «карточка» схлопнулась диалогом
