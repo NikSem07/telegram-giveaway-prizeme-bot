@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
 from aiogram.enums import ChatType
+from sqlalchemy import text as stext
 
 from aiogram import Bot, Dispatcher, F
 import aiogram.types as types
@@ -528,7 +529,6 @@ async def ensure_channels_table():
                 await conn.exec_driver_sql(s + ";")
 
 # --- DB bootstrap: гарантируем нужные индексы/уникальности ---
-from sqlalchemy import text as stext
 
 async def ensure_schema():
     """
@@ -815,7 +815,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
         return
 
     # 1) Сохраняем канал/группу у владельца
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         await s.execute(
             stext(
@@ -959,7 +958,6 @@ async def dbg_channels(m: types.Message):
 
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
-    from sqlalchemy import text as stext
     uid = m.from_user.id
     async with session_scope() as s:
         # в которых участвую — уникальные активные/завершённые, где у пользователя есть entries
@@ -1287,8 +1285,8 @@ async def show_my_channels(cq: types.CallbackQuery):
     uid = cq.from_user.id
     async with Session() as s:
         res = await s.execute(
-            "SELECT id, title FROM organizer_channels WHERE owner_user_id=? ORDER BY added_at DESC",
-            (uid,)
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:uid ORDER BY added_at DESC"),
+            {"uid": uid}
         )
         rows = [(r[0], r[1]) for r in res.all()]
 
@@ -1299,7 +1297,6 @@ async def show_my_channels(cq: types.CallbackQuery):
 # Хелпер для списка каналов
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         res = await s.execute(
             stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
@@ -1310,7 +1307,6 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
 # Показать карточку канала
 @dp.callback_query(F.data.startswith("mych:info:"))
 async def cb_my_channel_info(cq: CallbackQuery):
-    from sqlalchemy import text as stext
     _, _, sid = cq.data.split(":")
     oc_id = int(sid)
     async with session_scope() as s:
@@ -1354,7 +1350,6 @@ async def cb_my_channel_del_confirm(cq: CallbackQuery):
 # Удаление
 @dp.callback_query(F.data.startswith("mych:del:"))
 async def cb_my_channel_delete(cq: CallbackQuery):
-    from sqlalchemy import text as stext
     _, _, sid = cq.data.split(":")
     oc_id = int(sid)
     async with session_scope() as s:
@@ -1447,7 +1442,6 @@ async def event_cb(cq:CallbackQuery):
     _, action, sid = cq.data.split(":")
     gid = int(sid)
     if action=="channels":
-        from sqlalchemy import text as stext
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),{"u":gw.owner_user_id})
@@ -1462,7 +1456,6 @@ async def event_cb(cq:CallbackQuery):
         await show_event_card(cq.message.chat.id, gid)
 
     elif action=="launch":
-        from sqlalchemy import text as stext
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if gw.status != GiveawayStatus.DRAFT:
@@ -1481,7 +1474,6 @@ async def event_cb(cq:CallbackQuery):
         await show_event_card(cq.message.chat.id, gid)
 
     elif action=="delete":
-        from sqlalchemy import text as stext
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if gw.status != GiveawayStatus.DRAFT:
@@ -1589,7 +1581,6 @@ async def cb_connect_channels(cq: CallbackQuery):
     _, _, sid = cq.data.split(":")
     event_id = int(sid)
 
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, event_id)
         if not gw:
@@ -1625,7 +1616,6 @@ async def cb_attach_channel(cq: CallbackQuery):
     except Exception:
         await cq.answer("Некорректные данные.", show_alert=True); return
 
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, event_id)
         if not gw:
@@ -1702,7 +1692,6 @@ async def cb_start_raffle(cq: CallbackQuery):
     _, _, sid = cq.data.split(":")
     gid = int(sid)
 
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
@@ -1758,7 +1747,6 @@ async def cb_noop(cq: CallbackQuery):
     await cq.answer("Это информационная кнопка.")
 
 async def show_stats(chat_id:int, gid:int):
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         res = await s.execute(stext("SELECT COUNT(*) FROM entries WHERE giveaway_id=:gid"),{"gid":gid})
         total = res.scalar_one()
@@ -1782,7 +1770,6 @@ async def user_check(cq:CallbackQuery):
 @dp.callback_query(F.data.startswith("u:join:"))
 async def user_join(cq:CallbackQuery):
     gid = int(cq.data.split(":")[2])
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if gw.status != GiveawayStatus.ACTIVE:
@@ -1809,7 +1796,6 @@ async def user_join(cq:CallbackQuery):
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
 async def finalize_and_draw_job(gid:int):
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw or gw.status!=GiveawayStatus.ACTIVE: return
@@ -1818,7 +1804,6 @@ async def finalize_and_draw_job(gid:int):
     eligible=[]
     for uid, entry_id in entries:
         ok,_ = await check_membership_on_all(bot, uid, gid)
-        from sqlalchemy import text as stext
         async with session_scope() as s:
             await s.execute(stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
                             {"ok":1 if ok else 0, "ts":datetime.now(timezone.utc), "eid":entry_id})
@@ -1845,7 +1830,6 @@ async def finalize_and_draw_job(gid:int):
                            f"commit: <code>{gw.commit_hash}</code>\n\n{textw}")
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
-    from sqlalchemy import text as stext
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw or gw.status!=GiveawayStatus.ACTIVE: return
