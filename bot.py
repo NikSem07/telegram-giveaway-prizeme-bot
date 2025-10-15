@@ -493,7 +493,7 @@ class Winner(Base):
 DB_URL = "sqlite+aiosqlite:///./bot.db"
 create_engine = create_async_engine = None  # placeholder to avoid confusion in this snippet
 from sqlalchemy.ext.asyncio import create_async_engine
-engine = create_async_engine(DB_URL, echo=False, future=True)
+engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
 
 async def init_db():
