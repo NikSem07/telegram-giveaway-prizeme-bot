@@ -821,14 +821,16 @@ async def on_chat_shared(m: Message, state: FSMContext):
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
         cm = await bot.get_chat_member(chat_id, me.id)
-        role = "administrator" if cm.status == "administrator" else (
-            "member" if cm.status == "member" else "none"
-        )
+        role = "admin" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
     except Exception as e:
         await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
         return
 
-    # 1) Сохраняем канал/группу у владельца
+    title = chat.title or getattr(chat, "first_name", None) or "Без названия"
+    username = getattr(chat, "username", None)
+    is_private = 0 if username else 1  # каналы с @username считаем публичными
+
+    # 1) upsert
     async with Session() as s:
         async with s.begin():
             await s.execute(
@@ -837,64 +839,44 @@ async def on_chat_shared(m: Message, state: FSMContext):
                     "owner_user_id, chat_id, username, title, is_private, bot_role, status"
                     ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok')"
                 ),
-                {
-                    "o": m.from_user.id,
-                    "cid": chat.id,
-                    "u": getattr(chat, "username", None),
-                    "t": chat.title or (getattr(chat, 'first_name', None) or 'Без названия'),
-                    "p": 0 if getattr(chat, "username", None) else 1,
-                    "r": "admin" if role == "administrator" else "member",
-                }
+                {"o": m.from_user.id, "cid": chat.id, "u": username, "t": title,
+                 "p": int(is_private), "r": role}
             )
 
-        # после commit проверим, что запись действительно есть
-        res = await s.execute(
-            stext("SELECT id, owner_user_id, chat_id, title, bot_role, datetime(added_at,'localtime') "
-                  "FROM organizer_channels WHERE owner_user_id=:o AND chat_id=:cid"),
+        # 2) читаем обратно для проверки
+        check = await s.execute(
+            stext("SELECT id, owner_user_id, chat_id, title FROM organizer_channels "
+                  "WHERE owner_user_id=:o AND chat_id=:cid"),
             {"o": m.from_user.id, "cid": chat.id}
         )
-        row = res.first()
-    logging.info("📦 organizer_channels upsert -> %s", row)
+        row = check.first()
+        logging.info("📦 saved channel row=%s", row)
 
     kind = "канал" if chat.type == "channel" else "группа"
+    await m.answer(f"{kind.capitalize()} <b>{title}</b> подключён к боту.", parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
 
-    # 2) Сообщаем об успехе и убираем разовую клавиатуру
-    await m.answer(
-        f"{kind.capitalize()} <b>{chat.title}</b> подключён к боту.",
-        parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-    # 3) Если выбирали из экрана привязки к розыгрышу — перерисуем этот экран
+    # если сейчас мы в процессе привязки к розыгрышу — обновим экран привязки
     data = await state.get_data()
     event_id = data.get("chooser_event_id")
-
     if event_id:
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
-            res = await s.execute(
-                stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
-                {"u": gw.owner_user_id}
-            )
-            rows = res.all()
-            channels = [(r[0], r[1]) for r in rows]
-
-            res = await s.execute(
-                stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
-                {"g": event_id}
-            )
+            res = await s.execute(stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
+                                  {"u": gw.owner_user_id})
+            channels = [(r[0], r[1]) for r in res.all()]
+            res = await s.execute(stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+                                  {"g": event_id})
             attached_ids = {r[0] for r in res.fetchall()}
-
-        text_block = build_connect_channels_text(gw.internal_title)
-        kb = build_channels_menu_kb(event_id, channels, attached_ids)
-        await m.answer(text_block, reply_markup=kb)
-
-        # очистим маркер выбора, чтобы не мешал в следующий раз
+        await m.answer(
+            build_connect_channels_text(gw.internal_title),
+            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
+        )
         await state.update_data(chooser_event_id=None)
     else:
-        # Обычный кейс: показать актуальный список «Ваши каналы»
+        # обычный кейс: показать «Мои каналы»
         rows = await get_user_org_channels(m.from_user.id)
-        await m.answer("Ваши каналы:", reply_markup=kb_my_channels(rows))
+        label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
+        await m.answer(label, reply_markup=kb_my_channels(rows))
 
 def kb_event_actions(gid:int, status:str):
     kb = InlineKeyboardBuilder()
