@@ -843,10 +843,14 @@ async def on_chat_shared(m: Message, state: FSMContext):
                  "p": int(is_private), "r": role}
             )
 
-        # 2) читаем обратно для проверки
+    # 2) читаем обратно для проверки — в НОВОЙ сессии
+    async with Session() as s:
         check = await s.execute(
-            stext("SELECT id, owner_user_id, chat_id, title FROM organizer_channels "
-                  "WHERE owner_user_id=:o AND chat_id=:cid"),
+            stext(
+                "SELECT id, owner_user_id, chat_id, title "
+                "FROM organizer_channels "
+                "WHERE owner_user_id=:o AND chat_id=:cid"
+            ),
             {"o": m.from_user.id, "cid": chat.id}
         )
         row = check.first()
@@ -944,15 +948,20 @@ async def dbg_dbpath(m: types.Message):
 async def dbg_channels(m: types.Message):
     async with Session() as s:
         res = await s.execute(
-            "SELECT id, owner_user_id, chat_id, title, bot_role, datetime(added_at,'localtime') "
-            "FROM organizer_channels WHERE owner_user_id=? ORDER BY id DESC LIMIT 10",
-            (m.from_user.id,)
+            stext(
+                "SELECT id, owner_user_id, chat_id, title, bot_role, "
+                "datetime(added_at,'localtime') AS added_at_local "
+                "FROM organizer_channels "
+                "WHERE owner_user_id=:u "
+                "ORDER BY id DESC LIMIT 10"
+            ),
+            {"u": m.from_user.id}
         )
         rows = res.all()
     if not rows:
         await m.answer("Всего: 0")
     else:
-        lines = [f"{r.id}: {r.title} ({r.chat_id}) — {r.bot_role} — {r[5]}" for r in rows]
+        lines = [f"{r.id}: {r.title} ({r.chat_id}) — {r.bot_role} — {r.added_at_local}" for r in rows]
         await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
 async def show_my_events_menu(m: Message):
@@ -1294,12 +1303,17 @@ async def show_my_channels(cq: types.CallbackQuery):
 # Хелпер для списка каналов
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
-    async with session_scope() as s:
+    async with Session() as s:
         res = await s.execute(
-            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u ORDER BY added_at DESC"),
+            stext(
+                "SELECT id, title "
+                "FROM organizer_channels "
+                "WHERE owner_user_id=:u "
+                "ORDER BY id DESC"
+            ),
             {"u": user_id}
         )
-        return [(r[0], r[1]) for r in res.all()]
+        return [(row.id, row.title) for row in res.all()]
 
 # Показать карточку канала
 @dp.callback_query(F.data.startswith("mych:info:"))
