@@ -1845,7 +1845,11 @@ async def cb_connect_channels(cq: CallbackQuery):
 
     text_block = build_connect_channels_text(gw.internal_title, attached_list)
     kb = build_channels_menu_kb(event_id, channels, attached_ids)
-    await cq.message.answer(text_block, reply_markup=kb, parse_mode="HTML")
+    
+    try:
+        await cq.message.edit_text(text_block, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        await cq.message.answer(text_block, reply_markup=kb, parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:attach:"))
@@ -1935,37 +1939,6 @@ async def cb_attach_channel(cq: CallbackQuery):
         await cq.message.answer(new_text, reply_markup=new_kb, parse_mode="HTML")
 
     await cq.answer("Готово")
-
-# --- перечень подключённых для текстового блока
-    async with session_scope() as s2:
-        res = await s2.execute(
-            stext(
-                """
-                SELECT gc.title,
-                       oc.username,
-                       gc.chat_id
-                FROM giveaway_channels gc
-                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
-                WHERE gc.giveaway_id = :g
-                ORDER BY gc.id
-                """
-            ),
-            {"g": event_id}
-        )
-        attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
-
-    # сформируем свежий текст и клавиатуру
-    new_text = build_connect_channels_text(gw.internal_title, attached_list)
-    new_kb = build_channels_menu_kb(event_id, channels, attached_ids)
-
-    # пробуем аккуратно отредактировать текущее сообщение
-    try:
-        await cq.message.edit_text(new_text, reply_markup=new_kb, parse_mode="HTML")
-    except Exception:
-        # если редактировать нельзя (например, слишком старое), шлём новое сообщение
-        await cq.message.answer(new_text, reply_markup=new_kb, parse_mode="HTML")
-
-    await cq.answer("✅ Канал/группа добавлены")
 
 @dp.callback_query(F.data.startswith("raffle:add_channel:"))
 async def cb_add_channel(cq: CallbackQuery, state: FSMContext):
