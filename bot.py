@@ -129,15 +129,41 @@ def build_connect_invite_kb(event_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # Экран с уже подключенными каналами и действиями
-def build_connect_channels_text(event_title: str | None = None) -> str:
-    # Заголовок как в референсе
-    title = f"🔗 Подключение канала к розыгрышу \"{event_title}\"" if event_title else "🔗 Подключение канала к розыгрышу"
-    body = (
-        f"{title}\n\n"
-        "Подключить канал к розыгрышу сможет только администратор, который обладает достаточным уровнем прав в прикреплённом канале.\n\n"
-        "Подключённые каналы:\n"
+def build_connect_channels_text(
+    event_title: str | None = None,
+    attached: list[tuple[str, str | None, int]] | None = None,  # (title, username, chat_id)
+) -> str:
+    """
+    Собирает "серый" текстовый блок.
+    attached — список уже прикреплённых к текущему розыгрышу каналов/групп:
+               (title, username_or_None, chat_id)
+    Если есть username — делаем кликабельную ссылку, иначе просто название.
+    """
+    title = (
+        f"🔗 Подключение канала к розыгрышу \"{event_title}\""
+        if event_title else
+        "🔗 Подключение канала к розыгрышу"
     )
-    return body
+
+    lines = [
+        title,
+        "",
+        "Подключить канал к розыгрышу сможет только администратор, "
+        "который обладает достаточным уровнем прав в прикреплённом канале.",
+        "",
+        "Подключённые каналы:",
+    ]
+
+    if attached:
+        for i, (t, uname, _cid) in enumerate(attached, start=1):
+            if uname:
+                lines.append(f"{i}. <a href=\"https://t.me/{uname}\">{t}</a>")
+            else:
+                lines.append(f"{i}. {t}")
+    else:
+        lines.append("— пока нет")
+
+    return "\n".join(lines)
 
 def build_channels_menu_kb(
     event_id: int,
@@ -1783,29 +1809,26 @@ async def cb_connect_channels(cq: CallbackQuery):
     _, _, sid = cq.data.split(":")
     event_id = int(sid)
 
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, event_id)
-        if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True); return
-
-        # Все каналы/группы, уже подключенные пользователем к боту (организаторские)
-        res = await s.execute(
-            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
-            {"u": gw.owner_user_id}
-        )
-        rows = res.all()
-        channels = [(r[0], r[1]) for r in rows]  # (organizer_channel_id, title)
-
-        # Какие из них уже прикреплены к ТЕКУЩЕМУ розыгрышу?
-        res = await s.execute(
-            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+    async with session_scope() as s2:
+        res = await s2.execute(
+            stext(
+                """
+                SELECT gc.title,
+                       oc.username,
+                       gc.chat_id
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id = :g
+                ORDER BY gc.id
+                """
+            ),
             {"g": event_id}
         )
-        attached_ids = {r[0] for r in res.fetchall()}
+        attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
 
-    text_block = build_connect_channels_text(gw.internal_title)
+    text_block = build_connect_channels_text(gw.internal_title, attached_list)
     kb = build_channels_menu_kb(event_id, channels, attached_ids)
-    await cq.message.answer(text_block, reply_markup=kb)
+    await cq.message.answer(text_block, reply_markup=kb, parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:attach:"))
@@ -1818,52 +1841,34 @@ async def cb_attach_channel(cq: CallbackQuery):
     except Exception:
         await cq.answer("Некорректные данные.", show_alert=True); return
 
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, event_id)
-        if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True); return
-
-        # Проверим, что такой организаторский канал принадлежит пользователю
-        res = await s.execute(
-            stext("SELECT id, chat_id, title FROM organizer_channels WHERE id=:id AND owner_user_id=:u"),
-            {"id": org_id, "u": gw.owner_user_id}
-        )
-        row = res.first()
-        if not row:
-            await cq.answer("Канал/группа не найдены у вас.", show_alert=True); return
-
-        oc_id, chat_id, title = row
-        # Привяжем к розыгрышу (idempotent)
-        await s.execute(
-            stext("INSERT OR IGNORE INTO giveaway_channels(giveaway_id, channel_id, chat_id, title) "
-                  "VALUES(:g, :c, :chat, :t)"),
-            {"g": event_id, "c": oc_id, "chat": chat_id, "t": title}
-        )
-
-        # Снова соберём список для перерисовки клавиатуры с «галочками»
-        res = await s.execute(
-            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
-            {"u": gw.owner_user_id}
-        )
-        all_rows = res.all()
-        channels = [(r[0], r[1]) for r in all_rows]
-        res = await s.execute(
-            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+# --- перечень подключённых для текстового блока
+    async with session_scope() as s2:
+        res = await s2.execute(
+            stext(
+                """
+                SELECT gc.title,
+                       oc.username,
+                       gc.chat_id
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id = :g
+                ORDER BY gc.id
+                """
+            ),
             {"g": event_id}
         )
-        attached_ids = {r[0] for r in res.fetchall()}
+        attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
 
-    # Обновим клавиатуру под этим же сообщением
+    # сформируем свежий текст и клавиатуру
+    new_text = build_connect_channels_text(gw.internal_title, attached_list)
+    new_kb = build_channels_menu_kb(event_id, channels, attached_ids)
+
+    # пробуем аккуратно отредактировать текущее сообщение
     try:
-        await cq.message.edit_reply_markup(
-            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
-        )
+        await cq.message.edit_text(new_text, reply_markup=new_kb, parse_mode="HTML")
     except Exception:
-        # Если не получилось — просто пришлём новый блок ещё раз
-        await cq.message.answer(
-            build_connect_channels_text(gw.internal_title),
-            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
-        )
+        # если редактировать нельзя (например, слишком старое), шлём новое сообщение
+        await cq.message.answer(new_text, reply_markup=new_kb, parse_mode="HTML")
 
     await cq.answer("✅ Канал/группа добавлены")
 
