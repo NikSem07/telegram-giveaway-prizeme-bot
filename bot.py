@@ -1805,23 +1805,40 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("raffle:connect_channels:"))
 async def cb_connect_channels(cq: CallbackQuery):
-    # data вида: raffle:connect_channels:<event_id>
+    # data: raffle:connect_channels:<event_id>
     _, _, sid = cq.data.split(":")
     event_id = int(sid)
 
-    async with session_scope() as s2:
-        res = await s2.execute(
-            stext(
-                """
-                SELECT gc.title,
-                       oc.username,
-                       gc.chat_id
+    # достаём информацию о розыгрыше, все каналы владельца и уже прикреплённые к этому розыгрышу
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, event_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        # все каналы/группы, подключённые к боту у владельца
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
+            {"u": gw.owner_user_id}
+        )
+        channels = [(r[0], r[1]) for r in res.fetchall()]
+
+        # набор id каналов, уже прикреплённых к этому розыгрышу
+        res = await s.execute(
+            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": event_id}
+        )
+        attached_ids = {r[0] for r in res.fetchall()}
+
+        # список для текстового блока (с username → делаем ссылку)
+        res = await s.execute(
+            stext("""
+                SELECT gc.title, oc.username, gc.chat_id
                 FROM giveaway_channels gc
                 LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
                 WHERE gc.giveaway_id = :g
                 ORDER BY gc.id
-                """
-            ),
+            """),
             {"g": event_id}
         )
         attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
@@ -1839,7 +1856,85 @@ async def cb_attach_channel(cq: CallbackQuery):
         event_id = int(sid)
         org_id = int(scid)
     except Exception:
-        await cq.answer("Некорректные данные.", show_alert=True); return
+        await cq.answer("Некорректные данные.", show_alert=True)
+        return
+
+    # переключаем состояние: если уже прикреплён — снимаем; иначе прикрепляем
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, event_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        # берём данные выбранного канала из organizer_channels
+        rec = await s.execute(
+            stext("SELECT id, chat_id, title FROM organizer_channels WHERE id=:id AND status='ok'"),
+            {"id": org_id}
+        )
+        row = rec.first()
+        if not row:
+            await cq.answer("Канал/группа не найдены.", show_alert=True)
+            return
+
+        oc_id, chat_id, title = row
+
+        # проверим — уже прикреплён?
+        exists = await s.execute(
+            stext("SELECT id FROM giveaway_channels WHERE giveaway_id=:g AND channel_id=:c"),
+            {"g": event_id, "c": oc_id}
+        )
+        link = exists.first()
+
+        if link:
+            # убрать прикрепление
+            await s.execute(
+                stext("DELETE FROM giveaway_channels WHERE giveaway_id=:g AND channel_id=:c"),
+                {"g": event_id, "c": oc_id}
+            )
+        else:
+            # добавить прикрепление
+            await s.execute(
+                stext("INSERT INTO giveaway_channels(giveaway_id, channel_id, chat_id, title) "
+                      "VALUES(:g, :c, :chat, :t)"),
+                {"g": event_id, "c": oc_id, "chat": chat_id, "t": title}
+            )
+
+        # пересобираем данные для перерисовки
+        res = await s.execute(
+            stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
+            {"u": gw.owner_user_id}
+        )
+        channels = [(r[0], r[1]) for r in res.fetchall()]
+
+        res = await s.execute(
+            stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": event_id}
+        )
+        attached_ids = {r[0] for r in res.fetchall()}
+
+        res = await s.execute(
+            stext("""
+                SELECT gc.title, oc.username, gc.chat_id
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id = :g
+                ORDER BY gc.id
+            """),
+            {"g": event_id}
+        )
+        attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
+
+    # текстовый блок + клавиатура с «галочками»
+    new_text = build_connect_channels_text(gw.internal_title, attached_list)
+    new_kb = build_channels_menu_kb(event_id, channels, attached_ids)
+
+    # пробуем отредактировать текущее сообщение (если можно), иначе шлём новое
+    try:
+        await cq.message.edit_text(new_text, reply_markup=new_kb, parse_mode="HTML")
+    except Exception:
+        await cq.message.answer(new_text, reply_markup=new_kb, parse_mode="HTML")
+
+    await cq.answer("Готово")
 
 # --- перечень подключённых для текстового блока
     async with session_scope() as s2:
