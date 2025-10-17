@@ -1423,7 +1423,7 @@ async def cb_my_channel_info(cq: CallbackQuery):
 
     kb = InlineKeyboardBuilder()
     delete_text = "Удалить канал" if kind == "Канал" else "Удалить группу"
-    kb.button(text=delete_text, callback_data=f"mych:del_confirm:{oc_id}")
+    kb.button(text=delete_text, callback_data=f"mych:del:{oc_id}")
     kb.button(text="Пропустить", callback_data="mych:dismiss")
     kb.adjust(2)
 
@@ -1433,7 +1433,6 @@ async def cb_my_channel_info(cq: CallbackQuery):
 # ---- Обработчик "Пропустить" ----
 @dp.callback_query(F.data == "mych:dismiss")
 async def cb_my_channel_dismiss(cq: CallbackQuery):
-    # аккуратно удаляем карточку; если не выйдет — хотя бы спрячем кнопки
     try:
         await cq.message.delete()
     except Exception:
@@ -1441,10 +1440,6 @@ async def cb_my_channel_dismiss(cq: CallbackQuery):
             await cq.message.edit_reply_markup()
         except Exception:
             pass
-    # перерисуем список «Ваши каналы», чтобы пользователь вернулся в контекст
-    rows = await get_user_org_channels(cq.from_user.id)
-    text = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
-    await cq.message.answer(text, reply_markup=kb_my_channels(rows))
     await cq.answer()
 
 # Удаление
@@ -1453,7 +1448,6 @@ async def cb_my_channel_delete(cq: CallbackQuery):
     _, _, sid = cq.data.split(":")
     oc_id = int(sid)
 
-    # Получаем данные перед удалением
     async with session_scope() as s:
         res = await s.execute(
             stext("SELECT title, chat_id FROM organizer_channels WHERE id=:id"),
@@ -1463,10 +1457,13 @@ async def cb_my_channel_delete(cq: CallbackQuery):
         if not row:
             await cq.answer("Канал/группа не найдены.", show_alert=True)
             return
-        title, chat_id = row
 
-        # Удаляем запись
-        await s.execute(stext("DELETE FROM organizer_channels WHERE id=:id"), {"id": oc_id})
+        title, chat_id = row
+        # Мягкое удаление
+        await s.execute(
+            stext("UPDATE organizer_channels SET status='deleted' WHERE id=:id"),
+            {"id": oc_id}
+        )
 
     # Определяем тип (канал или группа)
     kind = "канал" if str(chat_id).startswith("-100") else "группа"
@@ -1491,13 +1488,17 @@ async def cb_my_channel_restore(cq: CallbackQuery):
         await cq.answer("Некорректные данные.", show_alert=True)
         return
 
-    # Восстанавливаем по id (в реальной логике — логичнее вставлять заново с archived_status, но оставим простое восстановление)
-    # Так как строка уже удалена, для демо мы просто показываем сообщение
-    # Можно было бы реализовать полное восстановление, если бы мы использовали "архивацию" (status='deleted')
+    async with session_scope() as s:
+        await s.execute(
+            stext("UPDATE organizer_channels SET status='ok' WHERE id=:id"),
+            {"id": oc_id}
+        )
 
     text = f"{kind.capitalize()} был восстановлен."
     kb = InlineKeyboardBuilder()
-    kb.button(text="Удалить канал", callback_data=f"mych:del:{oc_id}")
+    # подберём правильную надпись для повтора удаления
+    delete_text = "Удалить канал" if kind == "канал" else "Удалить группу"
+    kb.button(text=delete_text, callback_data=f"mych:del:{oc_id}")
     kb.button(text="Отмена", callback_data="mych:cancel_after_del")
     kb.adjust(2)
 
