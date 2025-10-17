@@ -95,6 +95,27 @@ CONNECT_INVITE_TEXT = (
     "Нажмите на кнопку ниже, чтобы сделать это."
 )
 
+# Инфо-блок про подключение канала/группы (HTML)
+ADD_CHAT_HELP_HTML = (
+    "Подключение канала / группы необходимо для проведения розыгрыша, без этого действия розыгрыш провести не удастся, "
+    "будьте внимательны и подключайте те каналы / группы, в которых действительно хотите проводить розыгрыш.\n\n"
+    "При добавлении бота @prizeme_official_bot в канал / группу Вы даёте право на следующие действия "
+    "(не переживайте, это минимальный набор прав без возможности реального управления каналом / группой):\n\n"
+    "• Публикация сообщений\n"
+    "• Редактирование сообщений\n"
+    "• Добавление подписчиков\n"
+    "• Создание пригласительных ссылок\n\n"
+    "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту.</b>"
+)
+
+def kb_add_cancel() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Отмена", callback_data="add:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+# ---- Другое ----
+
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
 
@@ -1528,16 +1549,39 @@ async def cb_my_channel_cancel(cq: CallbackQuery):
 
 @dp.callback_query(F.data == "mych:add_channel")
 async def cb_mych_add_channel(cq: CallbackQuery, state: FSMContext):
-    # просто показываем одноразовую mini-клавиатуру с системными кнопками
+    # 1) Показать инфо-блок + кнопку «Отмена»
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    # 2) Выставить системное окно выбора (кнопки под строкой поиска)
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
-    await cq.answer("Выберите канал в окне ниже.")
+    await cq.answer()
 
 @dp.callback_query(F.data == "mych:add_group")
 async def cb_mych_add_group(cq: CallbackQuery, state: FSMContext):
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
-    await cq.answer("Выберите группу в окне ниже.")
+    await cq.answer()
+
+# Обработчик "Отмена" для инфо-блока
+
+@dp.callback_query(F.data == "add:cancel")
+async def cb_add_cancel(cq: CallbackQuery):
+    # 1) Удаляем ТОЛЬКО инфо-сообщение с текстом
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
+    # 2) Возвращаем обычную reply-клавиатуру «внизу» (без нового текста в чате)
+    INVISIBLE = "\u2060"
+    try:
+        await cq.message.answer(INVISIBLE, reply_markup=reply_main_kb())
+    except Exception:
+        pass
+
+    # Ничего не присылаем заново со «Списком каналов» — он уже выше в чате.
+    await cq.answer()
 
 # Клик по inline "Создать розыгрыш" в новом меню
 
@@ -1825,23 +1869,23 @@ async def cb_attach_channel(cq: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("raffle:add_channel:"))
 async def cb_add_channel(cq: CallbackQuery, state: FSMContext):
-    # data: raffle:add_channel:<event_id>
     _, _, sid = cq.data.split(":")
     await state.update_data(chooser_event_id=int(sid))
 
-    # Отправляем «невидимое» сообщение, но с минимальной системной клавиатурой
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
-    await cq.answer("Выберите канал в окне ниже.")
+    await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:add_group:"))
 async def cb_add_group(cq: CallbackQuery, state: FSMContext):
     _, _, sid = cq.data.split(":")
     await state.update_data(chooser_event_id=int(sid))
 
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
-    await cq.answer("Выберите группу в окне ниже.")
+    await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:start:"))
 async def cb_start_raffle(cq: CallbackQuery):
