@@ -474,6 +474,49 @@ async def render_link_preview_message(
     )
     await state.update_data(media_preview_msg_id=msg.message_id)
 
+#--- Рендер текста предпросмотра БЕЗ медиа ---
+async def render_text_preview_message(
+    m: Message,
+    state: FSMContext,
+    *,
+    reedit: bool = False
+) -> None:
+    """
+    Предпросмотр без медиа: одно сообщение с описанием/счётчиками/датой
+    и клавиатурой kb_preview_no_media().
+    """
+    data = await state.get_data()
+
+    # описание берём как есть (разрешаем базовую HTML-разметку пользователя)
+    desc_raw  = (data.get("desc") or "").strip()
+    desc_html = desc_raw or None
+
+    prizes     = int(data.get("winners_count") or 0)
+    end_at_msk = data.get("end_at_msk_str")
+    days_left  = data.get("days_left")
+
+    txt = _compose_preview_text(
+        "", prizes,
+        desc_html=desc_html,
+        end_at_msk=end_at_msk,
+        days_left=days_left
+    )
+
+    # если до этого уже рисовали предпросмотр — аккуратно удалим
+    prev_id = data.get("media_preview_msg_id")
+    if prev_id and not reedit:
+        try:
+            await m.bot.delete_message(chat_id=m.chat.id, message_id=prev_id)
+        except Exception:
+            pass
+
+    msg = await m.answer(txt, reply_markup=kb_preview_no_media(), parse_mode="HTML")
+    await state.update_data(
+        media_preview_msg_id=msg.message_id,
+        media_url=None,      # критично: помечаем, что медиа нет
+        media_top=False,
+    )
+
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
 
@@ -667,6 +710,7 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
         rank+=1
     return winners
 
+#--- Клавиатура для предпросмотра С медиа ---
 def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Изменить изображение/gif/видео", callback_data="preview:change")
@@ -674,6 +718,14 @@ def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
         kb.button(text="Показывать медиа снизу", callback_data="preview:move:down")
     else:
         kb.button(text="Показывать медиа сверху", callback_data="preview:move:up")
+    kb.button(text="Продолжить", callback_data="preview:continue")
+    kb.adjust(1)
+    return kb.as_markup()
+
+#--- Клавиатура для предпросмотра БЕЗ медиа ---
+def kb_preview_no_media() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Добавить изображение/gif/видео", callback_data="preview:add_media")
     kb.button(text="Продолжить", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
@@ -1232,52 +1284,17 @@ async def media_yes(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:no")
 async def media_no(cq: CallbackQuery, state: FSMContext):
+    # прячем кнопки «Да/Нет»
     try:
         await cq.message.edit_reply_markup()
     except Exception:
         pass
 
-    # Сохраняем черновик без медиа
-    data = await state.get_data()
-    owner_id = data.get("owner")
-    title    = (data.get("title") or "").strip()
-    desc     = (data.get("desc")  or "").strip()
-    winners  = int(data.get("winners_count") or 1)
-    end_at   = data.get("end_at_utc")
+    # Переходим к предпросмотру БЕЗ медиа (ничего пока не сохраняем в БД)
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await state.update_data(media_url=None, media_top=False)
 
-    if not (owner_id and title and end_at):
-        await cq.message.answer("Похоже, шаги заполнены не полностью. Наберите /create и начните заново.")
-        await state.clear()
-        await cq.answer()
-        return
-
-    async with session_scope() as s:
-        gw = Giveaway(
-            owner_user_id=owner_id,
-            internal_title=title,
-            public_description=desc,
-            photo_file_id=None,
-            end_at_utc=end_at,
-            winners_count=winners,
-            status=GiveawayStatus.DRAFT
-        )
-        s.add(gw)
-
-    await state.clear()
-    await cq.message.answer(
-        "Черновик сохранён.\nОткройте /events, чтобы привязать каналы и запустить розыгрыш.",
-        reply_markup=reply_main_kb()
-    )
-    await cq.answer()
-
-@dp.callback_query(CreateFlow.MEDIA_UPLOAD, F.data == "media:skip")
-async def media_skip_btn(cq: CallbackQuery, state: FSMContext):
-    try:
-        await cq.message.edit_reply_markup()  # убираем кнопку "Пропустить" под инструкцией
-    except Exception:
-        pass
-    await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+    await render_text_preview_message(cq.message, state)
     await cq.answer()
 
 MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
@@ -1746,6 +1763,27 @@ async def preview_change_media(cq: CallbackQuery, state: FSMContext):
     await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
     await cq.answer()
 
+#--- Обработчик БЕЗ медиа ---
+@dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:add_media")
+async def preview_add_media(cq: CallbackQuery, state: FSMContext):
+    """
+    Обработчик кнопки «Добавить изображение/gif/видео»
+    из предпросмотра без медиа.
+    Возвращает пользователя на шаг загрузки медиафайла.
+    """
+    # Переводим состояние обратно на шаг загрузки медиа
+    await state.set_state(CreateFlow.MEDIA_UPLOAD)
+
+    # Отправляем пользователю инструкцию по загрузке
+    await cq.message.answer(
+        MEDIA_INSTRUCTION,
+        parse_mode="HTML",
+        reply_markup=kb_skip_media()  # клавиатура с кнопками «Пропустить» / «Отмена»
+    )
+
+    await cq.answer()
+
+#--- Обработчик С мелиа ---
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
     """
