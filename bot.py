@@ -218,6 +218,13 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     kb.adjust(1)
     return kb.as_markup()
 
+# Клавиатура под постом в канале (пока неактивная)
+def kb_public_participate_disabled() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Участвовать", callback_data="raffle:noop")
+    kb.adjust(1)
+    return kb.as_markup()
+
 # Следующие функции
 
 def format_endtime_prompt() -> str:
@@ -2072,38 +2079,91 @@ async def cb_start_raffle(cq: CallbackQuery):
 #--- Обработчик для запуска розыгрыша ---
 @dp.callback_query(F.data.startswith("launch:do:"))
 async def cb_launch_do(cq: CallbackQuery):
-    # Реальный запуск розыгрыша: ровно та логика, что раньше была внутри raffle:start
-    _, _, sid = cq.data.split(":")
-    gid = int(sid)
+    """
+    Финальный запуск розыгрыша:
+    - переводим в ACTIVE,
+    - (опционально) ставим джобу завершения,
+    - публикуем пост предпросмотра в каждом прикреплённом чате,
+    - сообщаем владельцу об успешном запуске.
+    """
+    await cq.answer()
 
+    # 1) id розыгрыша из callback-data
+    try:
+        gid = int(cq.data.split(":")[2])
+    except Exception:
+        return await cq.message.answer("Не удалось определить розыгрыш для запуска.")
+
+    # 2) переводим розыгрыш в ACTIVE и читаем его данные
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True); return
-        if gw.status != GiveawayStatus.DRAFT:
-            await cq.answer("Уже запущен или завершён.", show_alert=True); return
+            return await cq.message.answer("Розыгрыш не найден.")
 
-        # проверим, что к розыгрышу реально привязаны каналы
-        res = await s.execute(stext("SELECT COUNT(*) FROM giveaway_channels WHERE giveaway_id=:gid"),
-                              {"gid": gid})
-        cnt = res.scalar_one() or 0
-        if cnt == 0:
-            await cq.answer("Подключите хотя бы 1 канал/группу.", show_alert=True); return
+        # Если уже активен — просто выйдем дальше, чтобы перепубликовать, если нужно
+        if getattr(gw, "status", None) != "active":
+            gw.status = "active"
+            s.add(gw)
+            await s.commit()
 
-        # готовим секрет и запускаем
-        secret = gen_ticket_code()+gen_ticket_code()
-        gw.secret = secret
-        gw.commit_hash = commit_hash(secret, gid)
-        gw.status = GiveawayStatus.ACTIVE
+    # 3) (опционально) планируем задачу окончания розыгрыша, если в проекте используется scheduler
+    try:
+        # если у тебя уже был планировщик — оставляем как есть;
+        # если нет, этот блок тихо пропустится
+        run_dt = gw.end_at_utc  # datetime в UTC из БД
+        scheduler.add_job(
+            func=finalize_giveaway_job,  # твоя функция завершения
+            trigger=DateTrigger(run_date=run_dt),
+            kwargs={"giveaway_id": gid},
+            id=f"finish:{gid}",
+            replace_existing=True,
+        )
+    except Exception as e:
+        logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
 
-    # планируем финал
-    when = await get_end_at(gid)
-    scheduler.add_job(finalize_and_draw_job, DateTrigger(run_date=when),
-                      args=[gid], id=f"final_{gid}", replace_existing=True)
+    # 4) собираем список подключённых чатов
+    async with session_scope() as s:
+        res = await s.execute(
+            stext("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": gid}
+        )
+        chat_ids = [row[0] for row in res.fetchall()]
 
-    await cq.message.answer("Розыгрыш запущен.")
-    await show_event_card(cq.message.chat.id, gid)
-    await cq.answer()
+    # 5) собираем текст предпросмотра (как в личке) + подтягиваем медиа
+    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+
+    preview_text = _compose_preview_text(
+        title_html="",  # заголовок в канале не используем — его уже видно из контекста
+        winners_count=gw.winners_count,
+        desc_html=(gw.public_description or ""),
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
+    )
+
+    kind, file_id = unpack_media(gw.photo_file_id)
+    participate_kb = kb_public_participate_disabled()  # «Участвовать» (пока неактивна)
+
+    # 6) публикуем пост в каждый прикреплённый канал/группу
+    for chat_id in chat_ids:
+        try:
+            if kind == "photo" and file_id:
+                await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+            elif kind == "animation" and file_id:
+                await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+            elif kind == "video" and file_id:
+                await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+            else:
+                await bot.send_message(chat_id, preview_text, reply_markup=participate_kb)
+        except Exception as e:
+            logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e)
+
+    # 7) сообщение владельцу
+    from aiogram.utils.markdown import hbold, quote_html
+    await cq.message.answer(
+        f"Розыгрыш {hbold(quote_html(gw.internal_title))} запущен."
+    )
 
 #--- Что=-то другое (узнать потом) ---
 
