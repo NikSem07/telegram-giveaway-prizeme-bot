@@ -541,6 +541,76 @@ async def render_text_preview_message(
         media_top=False,
     )
 
+# --- Предпросмотр для шага "Запустить розыгрыш" (тот же вид, что и при обычном предпросмотре) ---
+async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
+    """
+    Рисуем предпросмотр перед финальным подтверждением:
+    - если медиа есть: пробуем сделать link-preview через наш /uploads (фиолетовая рамка),
+      при сбое — нативная отправка медиа (fallback);
+    - если медиа нет: просто текстовый предпросмотр.
+    """
+    # 1) считаем дату и "N дней", собираем текст предпросмотра
+    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+
+    preview_text = _compose_preview_text(
+        "",                               # заголовок в предпросмотре не используем
+        gw.winners_count,
+        desc_html=(gw.public_description or ""),
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
+    )
+
+    # 2) если медиа нет — просто текст
+    kind, fid = unpack_media(gw.photo_file_id)
+    if not fid:
+        await m.answer(preview_text)
+        return
+
+    # 3) пробуем сделать link-preview как в обычном предпросмотре
+    #    (повторная выгрузка в S3 допустима; если не получится — fallback)
+    try:
+        # подбираем имя файла под тип
+        if kind == "photo":
+            suggested = "image.jpg"
+        elif kind == "animation":
+            suggested = "animation.mp4"
+        elif kind == "video":
+            suggested = "video.mp4"
+        else:
+            suggested = "file.bin"
+
+        key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, suggested)
+        preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+
+        # скрытая ссылка + опции link preview (медиа показываем СНИЗУ — как в дефолте предпросмотра)
+        hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+        full_text = f"{preview_text}\n\n{hidden_link}"
+
+        lp = LinkPreviewOptions(
+            is_disabled=False,
+            prefer_large_media=True,
+            prefer_small_media=False,
+            show_above_text=False,  # как в нашем обычном предпросмотре "медиа снизу" по умолчанию
+        )
+
+        await m.answer(full_text, link_preview_options=lp, parse_mode="HTML")
+
+    except Exception:
+        # 4) fallback — отдать нативно (фото/гиф/видео) с той же подписью
+        try:
+            if kind == "photo":
+                await m.answer_photo(fid, caption=preview_text)
+            elif kind == "animation":
+                await m.answer_animation(fid, caption=preview_text)
+            elif kind == "video":
+                await m.answer_video(fid, caption=preview_text)
+            else:
+                await m.answer(preview_text)
+        except Exception:
+            await m.answer(preview_text)
+
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
 
@@ -2025,55 +2095,30 @@ async def cb_add_group(cq: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data.startswith("raffle:start:"))
 async def cb_start_raffle(cq: CallbackQuery):
     """
-    Теперь этот хендлер НИЧЕГО не запускает.
-    Он показывает 2 блока:
-      1) предпросмотр розыгрыша (с медиа, если было загружено);
+    Ничего пока не запускаем — показываем два блока:
+      1) предпросмотр (точь-в-точь как при обычном предпросмотре, с link-preview или без медиа);
       2) финальный текст с кнопками «Запустить розыгрыш» / «Настройки розыгрыша».
-    А реальный запуск делает launch:do:<gid>.
     """
     _, _, sid = cq.data.split(":")
     gid = int(sid)
 
-    # 1) достаём розыгрыш
+    # достаём розыгрыш
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True); return
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
 
-    # 2) считаем дату/«N дней» для предпросмотра
-    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
-    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
-    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+    # 1) предпросмотр тем же способом, что и ранее
+    await _send_launch_preview_message(cq.message, gw)
 
-    # 3) текст предпросмотра (без заголовка, как в твоём превью)
-    preview_text = _compose_preview_text(
-        "",
-        gw.winners_count,
-        desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,
-        days_left=days_left,
+    # 2) финальный блок
+    await cq.message.answer(
+        build_final_check_text(),
+        reply_markup=kb_launch_confirm(gid),
+        parse_mode="HTML"
     )
 
-    # 4) отправляем предпросмотр. Если есть медиа — отправляем нативно с подписью,
-    #    если нет — обычным сообщением.
-    kind, fid = unpack_media(gw.photo_file_id)
-    try:
-        if kind == "photo" and fid:
-            await cq.message.answer_photo(fid, caption=preview_text)
-        elif kind == "animation" and fid:
-            await cq.message.answer_animation(fid, caption=preview_text)
-        elif kind == "video" and fid:
-            await cq.message.answer_video(fid, caption=preview_text)
-        else:
-            await cq.message.answer(preview_text)
-    except Exception:
-        # в крайнем случае просто текст
-        await cq.message.answer(preview_text)
-
-    # 5) следом — финальный блок с кнопками
-    await cq.message.answer(build_final_check_text(), reply_markup=kb_launch_confirm(gid), parse_mode="HTML")
-
-    # погасим «вертушку»
     await cq.answer()
 
 #--- Обработчик для запуска розыгрыша ---
