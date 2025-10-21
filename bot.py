@@ -2157,10 +2157,10 @@ async def cb_launch_do(cq: CallbackQuery):
         # если нет, этот блок тихо пропустится
         run_dt = gw.end_at_utc  # datetime в UTC из БД
         scheduler.add_job(
-            func=finalize_giveaway_job,  # твоя функция завершения
+            func=finalize_and_draw_job,       # имя как в твоей функции ниже
             trigger=DateTrigger(run_date=run_dt),
-            kwargs={"giveaway_id": gid},
-            id=f"finish:{gid}",
+            args=[gid],                       # твоя функция принимает (gid)
+            id=f"final_{gid}",                # стиль id совпадает с remove_job в cancel_giveaway
             replace_existing=True,
         )
     except Exception as e:
@@ -2180,8 +2180,8 @@ async def cb_launch_do(cq: CallbackQuery):
     days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
 
     preview_text = _compose_preview_text(
-        title_html="",  # заголовок в канале не используем — его уже видно из контекста
-        winners_count=gw.winners_count,
+        "",                             # заголовок в канале не используем
+        gw.winners_count,
         desc_html=(gw.public_description or ""),
         end_at_msk=end_at_msk_str,
         days_left=days_left,
