@@ -199,7 +199,24 @@ def build_channels_menu_kb(
 
     return kb.as_markup()
 
-# --- [END] CONNECT CHANNELS UI helpers ---
+# === Launch confirm helpers ===
+
+def build_final_check_text() -> str:
+    # формат как на твоём скриншоте
+    return (
+        "🚀 <b>Остался последний шаг и можно запускать розыгрыш</b>\n\n"
+        "Выше показан блок с розыгрышем, убедитесь, что всё указано верно. "
+        "Как только это сделаете, можете запускать розыгрыш, нажав на кнопку снизу.\n\n"
+        "<b><i>Внимание!</i></b> После запуска пост с розыгрышем будет автоматически опубликован "
+        "в подключённых каналах / группах к текущему розыгрышу."
+    )
+
+def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Запустить розыгрыш", callback_data=f"launch:do:{gid}")
+    kb.button(text="Настройки розыгрыша", callback_data=f"raffle:settings_disabled:{gid}")
+    kb.adjust(1)
+    return kb.as_markup()
 
 # Следующие функции
 
@@ -2000,8 +2017,62 @@ async def cb_add_group(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("raffle:start:"))
 async def cb_start_raffle(cq: CallbackQuery):
-    # Запускаем розыгрыш: перед запуском привязываем ВСЕ доступные каналы пользователя,
-    # как делаете в ev:channels/launch.
+    """
+    Теперь этот хендлер НИЧЕГО не запускает.
+    Он показывает 2 блока:
+      1) предпросмотр розыгрыша (с медиа, если было загружено);
+      2) финальный текст с кнопками «Запустить розыгрыш» / «Настройки розыгрыша».
+    А реальный запуск делает launch:do:<gid>.
+    """
+    _, _, sid = cq.data.split(":")
+    gid = int(sid)
+
+    # 1) достаём розыгрыш
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True); return
+
+    # 2) считаем дату/«N дней» для предпросмотра
+    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+
+    # 3) текст предпросмотра (без заголовка, как в твоём превью)
+    preview_text = _compose_preview_text(
+        "",
+        gw.winners_count,
+        desc_html=(gw.public_description or ""),
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
+    )
+
+    # 4) отправляем предпросмотр. Если есть медиа — отправляем нативно с подписью,
+    #    если нет — обычным сообщением.
+    kind, fid = unpack_media(gw.photo_file_id)
+    try:
+        if kind == "photo" and fid:
+            await cq.message.answer_photo(fid, caption=preview_text)
+        elif kind == "animation" and fid:
+            await cq.message.answer_animation(fid, caption=preview_text)
+        elif kind == "video" and fid:
+            await cq.message.answer_video(fid, caption=preview_text)
+        else:
+            await cq.message.answer(preview_text)
+    except Exception:
+        # в крайнем случае просто текст
+        await cq.message.answer(preview_text)
+
+    # 5) следом — финальный блок с кнопками
+    await cq.message.answer(build_final_check_text(), reply_markup=kb_launch_confirm(gid), parse_mode="HTML")
+
+    # погасим «вертушку»
+    await cq.answer()
+
+#--- Обработчик для запуска розыгрыша ---
+@dp.callback_query(F.data.startswith("launch:do:"))
+async def cb_launch_do(cq: CallbackQuery):
+    # Реальный запуск розыгрыша: ровно та логика, что раньше была внутри raffle:start
     _, _, sid = cq.data.split(":")
     gid = int(sid)
 
@@ -2012,28 +2083,12 @@ async def cb_start_raffle(cq: CallbackQuery):
         if gw.status != GiveawayStatus.DRAFT:
             await cq.answer("Уже запущен или завершён.", show_alert=True); return
 
-        # есть ли у пользователя вообще соединённые каналы?
-        res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),
-                              {"u": gw.owner_user_id})
-        org_chans = res.all()
-        if not org_chans:
-            await cq.answer("Сначала подключите хотя бы 1 канал/группу (кнопка снизу).", show_alert=True); return
-
-        # Привязываем каналы к текущему розыгрышу (обнулив старые привязки, если были)
-        await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"), {"gid": gid})
-        for oc_id, title, chat_id in org_chans:
-            await s.execute(
-                stext("INSERT INTO giveaway_channels(giveaway_id,channel_id,chat_id,title) "
-                      "VALUES(:g,:c,:chat,:t)"),
-                {"g": gid, "c": oc_id, "chat": chat_id, "t": title}
-            )
-
-        # Теперь проверяем, что привязки есть
+        # проверим, что к розыгрышу реально привязаны каналы
         res = await s.execute(stext("SELECT COUNT(*) FROM giveaway_channels WHERE giveaway_id=:gid"),
                               {"gid": gid})
-        cnt = res.scalar_one()
+        cnt = res.scalar_one() or 0
         if cnt == 0:
-            await cq.answer("Не удалось привязать каналы. Попробуйте ещё раз.", show_alert=True); return
+            await cq.answer("Подключите хотя бы 1 канал/группу.", show_alert=True); return
 
         # готовим секрет и запускаем
         secret = gen_ticket_code()+gen_ticket_code()
@@ -2041,6 +2096,7 @@ async def cb_start_raffle(cq: CallbackQuery):
         gw.commit_hash = commit_hash(secret, gid)
         gw.status = GiveawayStatus.ACTIVE
 
+    # планируем финал
     when = await get_end_at(gid)
     scheduler.add_job(finalize_and_draw_job, DateTrigger(run_date=when),
                       args=[gid], id=f"final_{gid}", replace_existing=True)
@@ -2048,6 +2104,8 @@ async def cb_start_raffle(cq: CallbackQuery):
     await cq.message.answer("Розыгрыш запущен.")
     await show_event_card(cq.message.chat.id, gid)
     await cq.answer()
+
+#--- Что=-то другое (узнать потом) ---
 
 @dp.callback_query(F.data.startswith("raffle:settings_disabled:"))
 async def cb_settings_disabled(cq: CallbackQuery):
