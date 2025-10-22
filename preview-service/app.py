@@ -13,7 +13,7 @@ import sqlite3
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
-DB_PATH = Path(file).with_name("bot.db")
+DB_PATH = Path(__file__).with_name("bot.db")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC = int(os.getenv("CACHE_SEC", "300"))
@@ -127,7 +127,7 @@ async def miniapp(request: Request):
         let html = '<h3>Вы не выполнили условия розыгрыша!</h3><div class="small">Подпишитесь на все каналы указанные ниже.</div>';
         html += '<div class="list">';
         for (const ch of data.need) {{
-          const url = ch.url  ('https://t.me/' + (ch.username  ''));
+          const url = ch.url ?? ('https://t.me/' + (ch.username ?? ''));
           html += '<div class="item"><div><div><b>' + (ch.title  'Канал') + '</b></div><div class="small">' + (ch.username ? '@'+ch.username : '') + '</div></div>' +
                   '<a class="btn btn-ghost" href="'+url+'" target="_blank">Подписаться</a></div>';
         }}
@@ -137,8 +137,7 @@ async def miniapp(request: Request):
       }} else {{
         // Успех — есть билет
         let html = '<div class="center"><h3>Вы получили билет «' + data.ticket + '»</h3>' +
-                   '<div class="small">Теперь вы участвуете в розыгрыше: <b>' + (data.title  '') + '</b></div></div>';
-        box.innerHTML = html;
+                    '<div class="small">Теперь вы участвуете в розыгрыше: <b>' + (data.title ?? '') + '</b></div></div>';
       }}
     }}
 
