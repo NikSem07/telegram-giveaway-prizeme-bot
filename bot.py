@@ -1806,20 +1806,10 @@ async def event_cb(cq:CallbackQuery):
         await show_event_card(cq.message.chat.id, gid)
 
     elif action=="launch":
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            if gw.status != GiveawayStatus.DRAFT:
-                await cq.answer("Уже запущен или завершён.", show_alert=True); return
-            res = await s.execute(stext("SELECT COUNT(*) FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
-            cnt = res.scalar_one()
-            if cnt==0:
-                await cq.answer("Сначала привяжите хотя бы 1 канал.", show_alert=True); return
-            secret = gen_ticket_code()+gen_ticket_code()
-            gw.secret = secret
-            gw.commit_hash = commit_hash(secret, gid)
-            gw.status = GiveawayStatus.ACTIVE
-        when = await get_end_at(gid)
-        scheduler.add_job(finalize_and_draw_job, DateTrigger(run_date=when), args=[gid], id=f"final_{gid}", replace_existing=True)
+        gw = await _launch_and_publish(gid, cq.message)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
         await cq.message.answer("Розыгрыш запущен.")
         await show_event_card(cq.message.chat.id, gid)
 
@@ -2132,46 +2122,28 @@ async def cb_start_raffle(cq: CallbackQuery):
 
     await cq.answer()
 
-#--- Обработчик для запуска розыгрыша ---
-@dp.callback_query(F.data.startswith("launch:do:"))
-async def cb_launch_do(cq: CallbackQuery):
+#--- Хелпер ---
+async def _launch_and_publish(gid: int, message: types.Message):
     """
-    Финальный запуск розыгрыша:
-    - переводим розыгрыш в ACTIVE,
-    - планируем задачу завершения,
-    - публикуем пост предпросмотра в прикреплённых чатах,
-    - убираем кнопки из блока подтверждения,
-    - отправляем подтверждение запуска и блок про новости.
+    Единый запуск розыгрыша:
+      - ставит статус ACTIVE (если ещё нет),
+      - планирует завершение,
+      - публикует пост в прикреплённых каналах/группах.
+    Возвращает объект Giveaway (или None).
     """
-    # 0) гасим «вертушку» на кнопке
-    await cq.answer()
-
-    # 1) id розыгрыша из callback-data
-    try:
-        gid = int(cq.data.split(":")[2])
-    except Exception:
-        return await cq.message.answer("Не удалось определить розыгрыш для запуска.")
-
-    # 2) убираем клавиатуру у сообщения c подтверждением (чтобы кнопки исчезли)
-    try:
-        await cq.message.edit_reply_markup()
-    except Exception:
-        pass
-
-    # 3) переводим розыгрыш в ACTIVE и читаем его данные
+    # 1) читаем розыгрыш и при необходимости активируем
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
-            return await cq.message.answer("Розыгрыш не найден.")
-
+            await message.answer("Розыгрыш не найден.")
+            return None
         if getattr(gw, "status", None) != "active":
             gw.status = "active"
             s.add(gw)
-            await s.commit()
 
-    # 4) планируем время завершения (если планировщик задействован)
+    # 2) планируем завершение
     try:
-        run_dt = gw.end_at_utc  # datetime (UTC) из БД
+        run_dt = gw.end_at_utc  # UTC
         scheduler.add_job(
             func=finalize_and_draw_job,
             trigger=DateTrigger(run_date=run_dt),
@@ -2182,7 +2154,7 @@ async def cb_launch_do(cq: CallbackQuery):
     except Exception as e:
         logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
 
-    # 5) соберём список подключённых чатов
+    # 3) берём прикреплённые чаты
     async with session_scope() as s:
         res = await s.execute(
             stext("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:g"),
@@ -2190,13 +2162,13 @@ async def cb_launch_do(cq: CallbackQuery):
         )
         chat_ids = [row[0] for row in res.fetchall()]
 
-    # 6) подготовим текст предпросмотра (такой же, как в личке)
+    # 4) текст и клавиатура «Участвовать»
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
 
     preview_text = _compose_preview_text(
-        "",  # заголовок в канале не используем
+        "",
         gw.winners_count,
         desc_html=(gw.public_description or ""),
         end_at_msk=end_at_msk_str,
@@ -2204,9 +2176,9 @@ async def cb_launch_do(cq: CallbackQuery):
     )
 
     kind, file_id = unpack_media(gw.photo_file_id)
-    participate_kb = kb_public_participate(gid)  # активная WebApp-кнопка
+    participate_kb = kb_public_participate(gid)
 
-    # 7) публикация в подключённых каналах/группах
+    # 5) публикация в каждом чате
     for chat_id in chat_ids:
         try:
             if kind == "photo" and file_id:
@@ -2220,15 +2192,31 @@ async def cb_launch_do(cq: CallbackQuery):
         except Exception as e:
             logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e)
 
-    # 8) сообщаем владельцу: «запущен» + пост про новости
+    return gw
+
+#--- Обработчик для запуска розыгрыша ---
+@dp.callback_query(F.data.startswith("launch:do:"))
+async def cb_launch_do(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+
+    try:
+        gid = int(cq.data.split(":")[2])
+    except Exception:
+        await cq.message.answer("Не удалось определить розыгрыш для запуска.")
+        return
+
+    gw = await _launch_and_publish(gid, cq.message)
+    if not gw:
+        return
+
     from html import escape as _escape
     title_html = _escape(gw.internal_title or "")
     await cq.message.answer(f"✅ Розыгрыш <b>{title_html}</b> запущен!")
-
-    await cq.message.answer(
-        "Подпишитесь на канал, где команда публикует важные новости о боте и анонсы нового функционала: "
-        "https://t.me/prizeme_official_news"
-    )
+    await cq.message.answer("Подпишитесь на канал, где команда публикует важные новости о боте: https://t.me/prizeme_official_news")
 
 #--- Что=-то другое (узнать потом) ---
 
