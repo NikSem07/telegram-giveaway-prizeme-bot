@@ -2161,8 +2161,8 @@ async def _launch_and_publish(gid: int, message: types.Message):
         if not gw:
             await message.answer("Розыгрыш не найден.")
             return None
-        if getattr(gw, "status", None) != "active":
-            gw.status = "active"
+        if getattr(gw, "status", None) != GiveawayStatus.ACTIVE:
+            gw.status = GiveawayStatus.ACTIVE
             s.add(gw)
 
     # 2) планируем завершение
@@ -2178,14 +2178,6 @@ async def _launch_and_publish(gid: int, message: types.Message):
     except Exception as e:
         logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
 
-    # если ничего не прикреплено — сообщаем автору и выходим
-    if not chat_ids:
-        await message.answer(
-            "К этому розыгрышу пока не прикреплено ни одного канала/группы.\n"
-            "Нажми «Добавить канал/группу», отметь хотя бы один канал, чтобы рядом загорелась «✅», и повтори запуск."
-        )
-        return None
-    
     # 3) берём прикреплённые чаты
     async with session_scope() as s:
         res = await s.execute(
@@ -2194,7 +2186,15 @@ async def _launch_and_publish(gid: int, message: types.Message):
         )
         chat_ids = [row[0] for row in res.fetchall()]
 
-    # 4) текст и клавиатура «Участвовать»
+    # 4) если пусто — сообщаем автору и выходим
+    if not chat_ids:
+        await message.answer(
+            "К этому розыгрышу пока не прикреплено ни одного канала/группы.\n"
+            "Нажми «Добавить канал/группу», отметь хотя бы один канал (должна появиться «✅»), и повтори запуск."
+        )
+        return None
+
+    # 5) собираем текст и клавиатуру «Участвовать»
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
@@ -2210,7 +2210,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
     kind, file_id = unpack_media(gw.photo_file_id)
     participate_kb = kb_public_participate(gid)
 
-    # 5) публикация в каждом чате
+    # 6) публикация в каждом чате
     for chat_id in chat_ids:
         try:
             if kind == "photo" and file_id:
