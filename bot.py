@@ -2126,11 +2126,13 @@ async def cb_start_raffle(cq: CallbackQuery):
 async def cb_launch_do(cq: CallbackQuery):
     """
     Финальный запуск розыгрыша:
-    - переводим в ACTIVE,
-    - (опционально) ставим джобу завершения,
-    - публикуем пост предпросмотра в каждом прикреплённом чате,
-    - сообщаем владельцу об успешном запуске.
+    - переводим розыгрыш в ACTIVE,
+    - планируем задачу завершения,
+    - публикуем пост предпросмотра в прикреплённых чатах,
+    - убираем кнопки из блока подтверждения,
+    - отправляем подтверждение запуска и блок про новости.
     """
+    # 0) гасим «вертушку» на кнопке
     await cq.answer()
 
     # 1) id розыгрыша из callback-data
@@ -2139,34 +2141,37 @@ async def cb_launch_do(cq: CallbackQuery):
     except Exception:
         return await cq.message.answer("Не удалось определить розыгрыш для запуска.")
 
-    # 2) переводим розыгрыш в ACTIVE и читаем его данные
+    # 2) убираем клавиатуру у сообщения c подтверждением (чтобы кнопки исчезли)
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+
+    # 3) переводим розыгрыш в ACTIVE и читаем его данные
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
             return await cq.message.answer("Розыгрыш не найден.")
 
-        # Если уже активен — просто выйдем дальше, чтобы перепубликовать, если нужно
         if getattr(gw, "status", None) != "active":
             gw.status = "active"
             s.add(gw)
             await s.commit()
 
-    # 3) (опционально) планируем задачу окончания розыгрыша, если в проекте используется scheduler
+    # 4) планируем время завершения (если планировщик задействован)
     try:
-        # если у тебя уже был планировщик — оставляем как есть;
-        # если нет, этот блок тихо пропустится
-        run_dt = gw.end_at_utc  # datetime в UTC из БД
+        run_dt = gw.end_at_utc  # datetime (UTC) из БД
         scheduler.add_job(
-            func=finalize_and_draw_job,       # имя как в твоей функции ниже
+            func=finalize_and_draw_job,
             trigger=DateTrigger(run_date=run_dt),
-            args=[gid],                       # твоя функция принимает (gid)
-            id=f"final_{gid}",                # стиль id совпадает с remove_job в cancel_giveaway
+            args=[gid],
+            id=f"final_{gid}",
             replace_existing=True,
         )
     except Exception as e:
         logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
 
-    # 4) собираем список подключённых чатов
+    # 5) соберём список подключённых чатов
     async with session_scope() as s:
         res = await s.execute(
             stext("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:g"),
@@ -2174,13 +2179,13 @@ async def cb_launch_do(cq: CallbackQuery):
         )
         chat_ids = [row[0] for row in res.fetchall()]
 
-    # 5) собираем текст предпросмотра (как в личке) + подтягиваем медиа
+    # 6) подготовим текст предпросмотра (такой же, как в личке)
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
 
     preview_text = _compose_preview_text(
-        "",                             # заголовок в канале не используем
+        "",  # заголовок в канале не используем
         gw.winners_count,
         desc_html=(gw.public_description or ""),
         end_at_msk=end_at_msk_str,
@@ -2190,7 +2195,7 @@ async def cb_launch_do(cq: CallbackQuery):
     kind, file_id = unpack_media(gw.photo_file_id)
     participate_kb = kb_public_participate_disabled()  # «Участвовать» (пока неактивна)
 
-    # 6) публикуем пост в каждый прикреплённый канал/группу
+    # 7) публикация в подключённых каналах/группах
     for chat_id in chat_ids:
         try:
             if kind == "photo" and file_id:
@@ -2204,10 +2209,14 @@ async def cb_launch_do(cq: CallbackQuery):
         except Exception as e:
             logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e)
 
-    # 7) сообщение владельцу
-    from aiogram.utils.markdown import hbold, quote_html
+    # 8) сообщаем владельцу: «запущен» + пост про новости
+    from html import escape as _escape
+    title_html = _escape(gw.internal_title or "")
+    await cq.message.answer(f"✅ Розыгрыш <b>{title_html}</b> запущен!")
+
     await cq.message.answer(
-        f"Розыгрыш {hbold(quote_html(gw.internal_title))} запущен."
+        "Подпишитесь на канал, где команда публикует важные новости о боте и анонсы нового функционала: "
+        "https://t.me/prizeme_official_news"
     )
 
 #--- Что=-то другое (узнать потом) ---
