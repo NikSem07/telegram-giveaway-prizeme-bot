@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse, Response, HTMLResponse
+from fastapi.responses import PlainTextResponse, Response, HTMLResponse, RedirectResponse
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Инициализация
@@ -77,97 +77,112 @@ def is_bot_request(request: Request) -> bool:
 # Служебные эндпоинты
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.api_route("/health", methods=["GET", "HEAD"])
-def health():
-    return PlainTextResponse("ok")
+@app.get("/health", response_class=PlainTextResponse)
+async def health_get():
+    return "ok"
+
+@app.head("/health")
+async def health_head():
+    # Пустой 200 OK для HEAD-запросов (nginx/health-check)
+    return Response(status_code=200)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (фронт) — одна HTML-страница (GET) + отдельный HEAD
 # ──────────────────────────────────────────────────────────────────────────────
 
-_HTML_MINIAPP = """<!DOCTYPE html>
-<html>
+# ================== PRIZEME MINI-APP BLOCK (BEGIN) ==================
+# HTML контент мини-приложения (встроенный)
+MINIAPP_HTML = """
+<!DOCTYPE html>
+<html lang="ru">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>PrizeMe — участие</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Участие</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0f1218; color:#fff; }
-    .wrap { padding:16px; }
-    .card { background:#1c1f26; color:#fff; border-radius:12px; padding:16px; }
-    .btn { display:block; width:100%; padding:12px 16px; margin-top:12px; border:0; border-radius:10px; font-size:16px; text-align:center; text-decoration:none; }
-    .btn-primary { background:#8257e6; color:#fff; }
-    .btn-ghost { background:#2a2f3a; color:#fff; }
-    .list { margin-top:8px; }
-    .item { background:#2a2f3a; padding:12px; border-radius:10px; margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    .small { opacity:.85; font-size:13px; }
-    .center { text-align:center; }
+    html,body{margin:0;padding:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f1115;color:#fff}
+    .wrap{max-width:640px;margin:0 auto;padding:24px}
+    .card{background:#161a20;border:1px solid #22262e;border-radius:16px;padding:20px}
+    .btn{display:inline-block;margin-top:16px;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
+    .btn-primary{background:#4f46e5;color:#fff}
+    .muted{color:#cbd5e1;font-size:14px}
+    a{color:#93c5fd;text-decoration:none}
+    a:hover{text-decoration:underline}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card" id="box">Загружаем данные...</div>
+    <div class="card">
+      <h1>PrizeMe — участие в розыгрыше</h1>
+      <p class="muted">Проверим подписку на каналы и выдадим «билет участника».</p>
+      <button id="check" class="btn btn-primary">Проверить подписку</button>
+      <div id="result" class="muted" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+    const tg = window.Telegram?.WebApp;
+    try { tg?.expand?.(); } catch(e) {}
 
-    function qs(name) {
-      const url = new URL(window.location.href);
-      return url.searchParams.get(name);
-    }
-
-    async function checkJoin() {
-      const gid = qs('gid');
-      const initData = tg.initData;
-      const r = await fetch('/api/check-join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gid, init_data: initData })
+    async function postJSON(url, data){
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(data)
       });
-      const data = await r.json();
-      render(data);
+      const ct = r.headers.get("content-type") || "";
+      return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
     }
 
-    function render(data) {
-      const box = document.getElementById('box');
-      if (!data.ok) {
-        let html = '<h3>Вы не выполнили условия розыгрыша!</h3><div class="small">Подпишитесь на все каналы, указанные ниже.</div>';
-        html += '<div class="list">';
-        for (const ch of data.need) {
-          const url = ch.url ?? ('https://t.me/' + (ch.username ?? ''));
-          html += '<div class="item"><div><div><b>' + (ch.title || 'Канал') + '</b></div><div class="small">' + (ch.username ? '@'+ch.username : '') + '</div></div>' +
-                  '<a class="btn btn-ghost" href="'+url+'" target="_blank">Подписаться</a></div>';
+    document.getElementById('check').onclick = async () => {
+      const result = document.getElementById('result');
+      result.textContent = "Проверяем...";
+      // Берём базовые данные из Telegram WebApp
+      const initData = tg?.initDataUnsafe || {};
+      const user = initData?.user || {};
+      // TODO: сюда добавим реальные параметры (giveaway_id и т.п.)
+      const payload = { tg_user_id: user.id || null };
+
+      try {
+        const resp = await postJSON('/api/check-join', payload);
+        if (resp?.ok) {
+          result.textContent = "Подписка подтверждена — билет выдан ✅";
+        } else {
+          if (resp?.channels_to_join?.length){
+            result.innerHTML = "Нужно подписаться на каналы:<br>" +
+              resp.channels_to_join.map(c => `<a href="${c.url}" target="_blank" rel="noopener">${c.title}</a>`).join("<br>");
+          } else {
+            result.textContent = "Не удалось подтвердить подписку. Попробуйте ещё раз.";
+          }
         }
-        html += '</div>';
-        html += '<button class="btn btn-primary" onclick="checkJoin()">Проверить подписку</button>';
-        box.innerHTML = html;
-      } else {
-        let html = '<div class="center"><h3>Вы получили билет «' + (data.ticket || '') + '»</h3>' +
-                   '<div class="small">Теперь вы участвуете в розыгрыше: <b>' + (data.title ?? '') + '</b></div>' +
-                   '</div>';
-        box.innerHTML = html;
+      } catch (e) {
+        result.textContent = "Ошибка сети. Попробуйте позже.";
       }
-    }
-
-    checkJoin();
+    };
   </script>
 </body>
-</html>"""
+</html>
+"""
 
-@app.get("/miniapp")
-@app.get("/miniapp/")
-def miniapp_get(_: Request):
-    # GET → отдаем HTML
-    return HTMLResponse(_HTML_MINIAPP)
+# /miniapp -> /miniapp/ (удобнее для относительных путей в HTML)
+@app.get("/miniapp", response_class=HTMLResponse)
+async def miniapp_get_no_slash():
+    return RedirectResponse(url="/miniapp/", status_code=307)
 
+# Основной рендер мини-аппа
+@app.get("/miniapp/", response_class=HTMLResponse)
+async def miniapp_get():
+    return HTMLResponse(content=MINIAPP_HTML, status_code=200)
+
+# Явные HEAD-обработчики (убирают 405 у проверок апстрима)
 @app.head("/miniapp")
+async def miniapp_head_no_slash():
+    return Response(status_code=200)
+
 @app.head("/miniapp/")
-def miniapp_head(_: Request):
-    # HEAD → пустой 200, чтобы nginx/проверки не упирались в 405
+async def miniapp_head():
     return Response(status_code=200)
 
 
