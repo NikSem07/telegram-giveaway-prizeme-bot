@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, Response, HTMLResponse, RedirectResponse
 from starlette.requests import Request
 
@@ -89,15 +89,12 @@ def is_bot_request(request: Request) -> bool:
 # Служебные эндпоинты
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.get("/health", response_class=PlainTextResponse)
-async def health_get():
-    return "ok"
-
-@app.head("/health")
-async def health_head():
-    # пустой 200 OK
-    return Response(status_code=200)
-
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health_any(request: Request):
+    # Для GET вернём тело "ok", для HEAD — пустое тело с теми же заголовками/статусом
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="text/plain")
+    return PlainTextResponse("ok")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (фронт) — одна HTML-страница (GET) + отдельный HEAD
@@ -178,25 +175,20 @@ MINIAPP_HTML = """
 </html>
 """
 
-# /miniapp -> /miniapp/ (удобнее для относительных путей в HTML)
-@app.get("/miniapp", response_class=HTMLResponse)
-async def miniapp_get_no_slash():
+# /miniapp -> /miniapp/ (редирект только на GET; для HEAD дадим 200 без тела)
+@app.api_route("/miniapp", methods=["GET", "HEAD"])
+async def miniapp_entry(request: Request):
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="text/html")
     return RedirectResponse(url="/miniapp/", status_code=307)
 
-# Основной рендер мини-аппа
-@app.get("/miniapp/", response_class=HTMLResponse)
-async def miniapp_get():
+# Основной рендер мини-аппа: GET и HEAD
+@app.api_route("/miniapp/", methods=["GET", "HEAD"])
+async def miniapp_both(request: Request):
+    if request.method == "HEAD":
+        # важен правильный media_type, чтобы Nginx не «ругается»
+        return Response(status_code=200, media_type="text/html")
     return HTMLResponse(content=MINIAPP_HTML, status_code=200)
-
-# Явные HEAD-обработчики (убирают 405 у проверок апстрима)
-@app.head("/miniapp")
-async def miniapp_head_no_slash():
-    return Response(status_code=200)
-
-@app.head("/miniapp/")
-async def miniapp_head():
-    return Response(status_code=200)
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
