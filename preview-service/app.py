@@ -83,14 +83,10 @@ def health():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Mini-App (фронт) — одна HTML-страница
+# Mini-App (фронт) — одна HTML-страница (GET) + отдельный HEAD
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.api_route("/miniapp", methods=["GET", "HEAD"])
-@app.api_route("/miniapp/", methods=["GET", "HEAD"])
-def miniapp(_: Request):
-    # Простая статическая страница, которая дергает /api/check-join
-    html = """<!DOCTYPE html>
+_HTML_MINIAPP = """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -161,7 +157,18 @@ def miniapp(_: Request):
   </script>
 </body>
 </html>"""
-    return HTMLResponse(html)
+
+@app.get("/miniapp")
+@app.get("/miniapp/")
+def miniapp_get(_: Request):
+    # GET → отдаем HTML
+    return HTMLResponse(_HTML_MINIAPP)
+
+@app.head("/miniapp")
+@app.head("/miniapp/")
+def miniapp_head(_: Request):
+    # HEAD → пустой 200, чтобы nginx/проверки не упирались в 405
+    return Response(status_code=200)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
