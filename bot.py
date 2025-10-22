@@ -68,6 +68,7 @@ BTN_CREATE = "Создать розыгрыш"
 BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
+BOT_USERNAME: str | None = None
 
 # === callbacks for draft flow ===
 CB_PREVIEW_CONTINUE = "preview:continue"
@@ -221,19 +222,25 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # Клавиатура под постом в канале (пока неактивная)
-def kb_public_participate(gid: int) -> InlineKeyboardMarkup:
+def kb_public_participate(gid: int, *, for_channel: bool = True) -> InlineKeyboardMarkup:
     """
-    Активная кнопка «Участвовать» — открывает Mini-App.
-    В URL передаём gid для проверки на сервере.
+    Кнопка «Участвовать» для публикации в каналах/группах.
+    В каналах web_app запрещён, поэтому используем deeplink:
+      https://t.me/<bot_username>/app?startapp=<gid>
+    Если понадобится версия для личного чата — можно сделать for_channel=False.
     """
     kb = InlineKeyboardBuilder()
-    url = f"{WEBAPP_BASE_URL.rstrip('/')}/miniapp?gid={gid}"
-    kb.row(
-        InlineKeyboardButton(
-            text="Участвовать",
-            web_app=WebAppInfo(url=url)
-        )
-    )
+
+    if for_channel:
+        # используем deeplink на Mini-App
+        # username берём из глобальной переменной, которую выставляем в main()
+        url = f"https://t.me/{BOT_USERNAME}/app?startapp={gid}"
+        kb.row(InlineKeyboardButton(text="Участвовать", url=url))
+    else:
+        # вариант для личных чатов с ботом (разрешён web_app)
+        url = f"{WEBAPP_BASE_URL.rstrip('/')}/miniapp?gid={gid}"
+        kb.row(InlineKeyboardButton(text="Участвовать", web_app=WebAppInfo(url=url)))
+
     return kb.as_markup()
 
 # Следующие функции
@@ -2208,7 +2215,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
     )
 
     kind, file_id = unpack_media(gw.photo_file_id)
-    participate_kb = kb_public_participate(gid)
+    participate_kb = kb_public_participate(gid, for_channel=True)
 
     # 6) публикация в каждом чате
     for chat_id in chat_ids:
@@ -2421,6 +2428,9 @@ async def main():
 
     # 3) Проверяем токен и подключение к Telegram
     me = await bot.get_me()
+    # запомним username для deeplink-кнопок в каналах
+    global BOT_USERNAME
+    BOT_USERNAME = me.username
     logging.info(f"🤖 Бот запущен как @{me.username} (ID: {me.id})")
 
     # 4) Устанавливаем команды бота
