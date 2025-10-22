@@ -1217,6 +1217,30 @@ async def dbg_scan(m: types.Message):
 
     await m.answer("\n".join(lines))
 
+@dp.message(Command("dbg_gw"))
+async def dbg_gw(m: types.Message):
+    """Показывает прикреплённые каналы текущего (последнего) моего черновика/актива."""
+    uid = m.from_user.id
+    async with session_scope() as s:
+        # берём последний мой розыгрыш
+        res = await s.execute(stext(
+            "SELECT id, internal_title FROM giveaways WHERE owner_user_id=:u ORDER BY id DESC LIMIT 1"
+        ), {"u": uid})
+        row = res.first()
+        if not row:
+            await m.answer("У вас пока нет розыгрышей."); return
+        gid, title = row
+        res = await s.execute(stext(
+            "SELECT gc.chat_id, gc.title FROM giveaway_channels gc WHERE gc.giveaway_id=:g"
+        ), {"g": gid})
+        rows = res.fetchall()
+    if not rows:
+        await m.answer(f"Розыгрыш «{title}» (id={gid}). Прикреплений пока нет.")
+    else:
+        lines = [f"Розыгрыш «{title}» (id={gid}). Прикреплено:"]
+        lines += [f"• {t} (chat_id={cid})" for cid, t in rows]
+        await m.answer("\n".join(lines))
+
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
     uid = m.from_user.id
@@ -2154,6 +2178,14 @@ async def _launch_and_publish(gid: int, message: types.Message):
     except Exception as e:
         logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
 
+    # если ничего не прикреплено — сообщаем автору и выходим
+    if not chat_ids:
+        await message.answer(
+            "К этому розыгрышу пока не прикреплено ни одного канала/группы.\n"
+            "Нажми «Добавить канал/группу», отметь хотя бы один канал, чтобы рядом загорелась «✅», и повтори запуск."
+        )
+        return None
+    
     # 3) берём прикреплённые чаты
     async with session_scope() as s:
         res = await s.execute(
