@@ -32,14 +32,22 @@ app = FastAPI()
 
 @app.middleware("http")
 async def _head_as_get(request: Request, call_next):
-    # Любой HEAD превращаем во внутренний GET, а наружу отдаем только заголовки и статус
-    if request.method == "HEAD":
-        request.scope["method"] = "GET"
-        resp = await call_next(request)
-        headers = dict(resp.headers)
-        headers["content-length"] = "0"
-        return Response(status_code=resp.status_code, headers=headers)
-    return await call_next(request)
+    if request.method != "HEAD":
+        return await call_next(request)
+
+    # Притворяемся GET, чтобы роуты/статик отработали
+    request.scope["method"] = "GET"
+    resp = await call_next(request)
+
+    # Если нижний слой вернул 404/405 (нет GET-хендлера или не принял метод) —
+    # всё равно отвечаем 200 OK для HEAD, чтобы nginx не падал в 502.
+    if resp.status_code in (404, 405):
+        return Response(status_code=200, headers={"content-length": "0"})
+
+    # Иначе — отдадим те же заголовки/статус, но пустое тело (корректно для HEAD)
+    headers = dict(resp.headers)
+    headers["content-length"] = "0"
+    return Response(status_code=resp.status_code, headers=headers)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
