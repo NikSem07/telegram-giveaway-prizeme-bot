@@ -18,6 +18,7 @@ import aiogram.types as types
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup,
                            InlineKeyboardButton, InputMediaPhoto)
+from aiogram.types import WebAppInfo
 from aiogram.types import BotCommand
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, KeyboardButtonRequestChat, ChatAdministratorRights
 from aiogram.fsm.context import FSMContext
@@ -42,6 +43,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 load_dotenv()
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
+WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
 import mimetypes
 from urllib.parse import urlencode
@@ -219,10 +221,19 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # Клавиатура под постом в канале (пока неактивная)
-def kb_public_participate_disabled() -> InlineKeyboardMarkup:
+def kb_public_participate(gid: int) -> InlineKeyboardMarkup:
+    """
+    Активная кнопка «Участвовать» — открывает Mini-App.
+    В URL передаём gid для проверки на сервере.
+    """
     kb = InlineKeyboardBuilder()
-    kb.button(text="Участвовать", callback_data="raffle:noop")
-    kb.adjust(1)
+    url = f"{WEBAPP_BASE_URL.rstrip('/')}/miniapp?gid={gid}"
+    kb.row(
+        InlineKeyboardButton(
+            text="Участвовать",
+            web_app=WebAppInfo(url=url)
+        )
+    )
     return kb.as_markup()
 
 # Следующие функции
@@ -2193,7 +2204,7 @@ async def cb_launch_do(cq: CallbackQuery):
     )
 
     kind, file_id = unpack_media(gw.photo_file_id)
-    participate_kb = kb_public_participate_disabled()  # «Участвовать» (пока неактивна)
+    participate_kb = kb_public_participate(gid)  # активная WebApp-кнопка
 
     # 7) публикация в подключённых каналах/группах
     for chat_id in chat_ids:
