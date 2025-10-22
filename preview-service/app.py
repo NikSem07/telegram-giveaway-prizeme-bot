@@ -330,3 +330,12 @@ async def uploads(path: str, request: Request):
     resp.headers["Cache-Control"] = f"public, max-age={CACHE_SEC}"
     resp.headers["X-Proxy-From"] = s3_url
     return resp
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Fallback: принять ЛЮБОЙ HEAD на любом пути → 200 OK без тела
+# Это на случай, если до конкретного роутинга HEAD не «доезжает».
+# ──────────────────────────────────────────────────────────────────────────────
+@app.api_route("/{_path:path}", methods=["HEAD"])
+async def _any_head_ok(_path: str):
+    # Отдаём 200 и пустое тело (корректное поведение для HEAD)
+    return Response(status_code=200)
