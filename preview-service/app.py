@@ -11,6 +11,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, Response, HTMLResponse, RedirectResponse
+from starlette.requests import Request
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Инициализация
@@ -28,6 +29,17 @@ S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
+
+@app.middleware("http")
+async def _head_as_get(request: Request, call_next):
+    # Любой HEAD превращаем во внутренний GET, а наружу отдаем только заголовки и статус
+    if request.method == "HEAD":
+        request.scope["method"] = "GET"
+        resp = await call_next(request)
+        headers = dict(resp.headers)
+        headers["content-length"] = "0"
+        return Response(status_code=resp.status_code, headers=headers)
+    return await call_next(request)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -83,7 +95,7 @@ async def health_get():
 
 @app.head("/health")
 async def health_head():
-    # Пустой 200 OK для HEAD-запросов (nginx/health-check)
+    # пустой 200 OK
     return Response(status_code=200)
 
 
