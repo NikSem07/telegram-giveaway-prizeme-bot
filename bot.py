@@ -2263,7 +2263,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     full_text,
                     link_preview_options=lp,
                     parse_mode="HTML",
-                    reply_markup=kb_public_participate_disabled(),  # временно «неактивная» кнопка
+                    reply_markup=kb_public_participate(gid, for_channel=True),
                 )
             else:
                 # медиа нет — обычный текст + кнопка
@@ -2278,13 +2278,13 @@ async def _launch_and_publish(gid: int, message: types.Message):
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 if kind == "photo" and file_id:
-                    await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                    await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                 elif kind == "animation" and file_id:
-                    await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                    await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                 elif kind == "video" and file_id:
-                    await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                    await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                 else:
-                    await bot.send_message(chat_id, preview_text, reply_markup=kb_public_participate_disabled())
+                    await bot.send_message(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
             except Exception as e2:
                 logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e2)
 

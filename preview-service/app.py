@@ -144,39 +144,48 @@ MINIAPP_HTML = """
     try { tg?.expand?.(); } catch(e) {}
 
     async function postJSON(url, data){
-      const r = await fetch(url, {
+        const r = await fetch(url, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify(data)
-      });
-      const ct = r.headers.get("content-type") || "";
-      return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
+        });
+        const ct = r.headers.get("content-type") || "";
+        return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
     }
 
-    document.getElementById('check').onclick = async () => {
-      const result = document.getElementById('result');
-      result.textContent = "Проверяем...";
-      // Берём базовые данные из Telegram WebApp
-      const initData = tg?.initDataUnsafe || {};
-      const user = initData?.user || {};
-      // TODO: сюда добавим реальные параметры (giveaway_id и т.п.)
-      const payload = { tg_user_id: user.id || null };
+    // 1) берём параметры запуска Mini-App
+    // start_param приходит из диплинка .../app?startapp=<gid>
+    const initData      = tg?.initData || "";                // строка для валидации на сервере
+    const initDataUnsafe= tg?.initDataUnsafe || {};
+    const startParam    = initDataUnsafe?.start_param || ""; // здесь наш gid в виде строки
+    const gid           = Number(startParam) || 0;
 
-      try {
-        const resp = await postJSON('/api/check-join', payload);
+    document.getElementById('check').onclick = async () => {
+        const result = document.getElementById('result');
+        result.textContent = "Проверяем...";
+
+        try {
+        // 2) отправляем на бэкенд и gid, и init_data
+        const resp = await postJSON('/api/check-join', { gid, init_data: initData });
+
         if (resp?.ok) {
-          result.textContent = "Подписка подтверждена — билет выдан ✅";
+            result.textContent = `Подписка подтверждена — ваш билет: ${resp.ticket || '—'} ✅`;
         } else {
-          if (resp?.channels_to_join?.length){
+            // сервер возвращает список каналов в поле "need"
+            if (Array.isArray(resp?.need) && resp.need.length) {
             result.innerHTML = "Нужно подписаться на каналы:<br>" +
-              resp.channels_to_join.map(c => `<a href="${c.url}" target="_blank" rel="noopener">${c.title}</a>`).join("<br>");
-          } else {
+                resp.need.map(c => {
+                const url = c.url || (c.username ? `https://t.me/${c.username}` : "#");
+                const title = c.title || "канал";
+                return `<a href="${url}" target="_blank" rel="noopener">${title}</a>`;
+                }).join("<br>");
+            } else {
             result.textContent = "Не удалось подтвердить подписку. Попробуйте ещё раз.";
-          }
+            }
         }
-      } catch (e) {
+        } catch (e) {
         result.textContent = "Ошибка сети. Попробуйте позже.";
-      }
+        }
     };
   </script>
 </body>
