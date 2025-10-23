@@ -116,77 +116,114 @@ MINIAPP_HTML = """
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PrizeMe — Участие</title>
+  <title>PrizeMe — участие</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    html,body{margin:0;padding:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f1115;color:#fff}
-    .wrap{max-width:640px;margin:0 auto;padding:24px}
-    .card{background:#161a20;border:1px solid #22262e;border-radius:16px;padding:20px}
-    .btn{display:inline-block;margin-top:16px;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
-    .btn-primary{background:#4f46e5;color:#fff}
-    .muted{color:#cbd5e1;font-size:14px}
-    a{color:#93c5fd;text-decoration:none}
-    a:hover{text-decoration:underline}
+    :root{--bg:#0f1115;--card:#161a20;--muted:#cbd5e1;--line:#22262e;--primary:#6d5cff}
+    html,body{margin:0;padding:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:640px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+    h1{margin:0 0 8px 0;font-size:22px;line-height:1.2}
+    .muted{color:var(--muted);font-size:14px}
+    .btn{display:inline-block;margin-top:16px;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600;background:var(--primary);color:#fff}
+    .list{margin:12px 0 0 0;padding:0;list-style:none}
+    .item{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#0f1217}
+    .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
+    .link{color:#93c5fd;text-decoration:none}
+    .link:hover{text-decoration:underline}
+    .center{display:flex;align-items:center;justify-content:center;height:120px}
+    .big{font-size:18px}
+    .ticket{font-weight:800;font-size:24px;letter-spacing:2px}
+    .ok{color:#6ee7a6}
+    .err{color:#fca5a5}
+    .hidden{display:none}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>PrizeMe — участие в розыгрыше</h1>
-      <p class="muted">Проверим подписку на каналы и выдадим «билет участника».</p>
-      <button id="check" class="btn btn-primary">Проверить подписку</button>
-      <div id="result" class="muted" style="margin-top:12px;"></div>
+      <div id="screen-loading" class="center big">Загружаем данные…</div>
+
+      <div id="screen-fail" class="hidden">
+        <h1>Вы не выполнили условия розыгрыша</h1>
+        <p class="muted">Подпишитесь на все каналы ниже, затем вернитесь в мини-апп — проверка запустится автоматически.</p>
+        <ul id="need-list" class="list"></ul>
+        <button id="btn-retry" class="btn">Проверить ещё раз</button>
+      </div>
+
+      <div id="screen-ok" class="hidden">
+        <h1 class="ok">Готово! Билет получен</h1>
+        <p class="muted">Теперь вы участвуете в розыгрыше.</p>
+        <div class="item"><div class="row"><span>Ваш билет:</span><span id="ticket" class="ticket"></span></div></div>
+        <button id="btn-done" class="btn">Закрыть</button>
+      </div>
     </div>
   </div>
 
   <script>
     const tg = window.Telegram?.WebApp;
-    try { tg?.expand?.(); } catch(e) {}
+    try { tg?.expand?.(); } catch(_) {}
 
+    // Утилиты
     async function postJSON(url, data){
-        const r = await fetch(url, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(data)
-        });
-        const ct = r.headers.get("content-type") || "";
-        return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
+      const r = await fetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) });
+      const ct = r.headers.get("content-type") || "";
+      return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
+    }
+    const Q = (id)=>document.getElementById(id);
+    const show = (id)=>Q(id).classList.remove("hidden");
+    const hide = (id)=>Q(id).classList.add("hidden");
+
+    // Параметры запуска (gid приходит из deep link .../app?startapp=<gid>)
+    const initData       = tg?.initData || "";
+    const startParam     = tg?.initDataUnsafe?.start_param || "";
+    const gid            = Number(startParam) || 0;
+
+    async function checkNow(){
+      hide("screen-ok"); hide("screen-fail"); show("screen-loading");
+      try{
+        const resp = await postJSON("/api/check-join", { gid, init_data: initData });
+        if (resp?.ok){
+          // успех
+          Q("ticket").textContent = resp.ticket || "— — — — — —";
+          hide("screen-loading"); show("screen-ok");
+        }else{
+          // нужен список каналов
+          const need = Array.isArray(resp?.need) ? resp.need : [];
+          const ul = Q("need-list"); ul.innerHTML = "";
+          need.forEach(ch => {
+            const url = ch.url || (ch.username ? ("https://t.me/"+ch.username) : "#");
+            const li = document.createElement("li"); li.className = "item";
+            li.innerHTML = `
+              <div class="row">
+                <div><strong>${ch.title || "Канал"}</strong><div class="muted">${ch.username ? "@"+ch.username : ""}</div></div>
+                <a class="link" href="${url}" target="_blank" rel="noopener">Открыть</a>
+              </div>`;
+            li.querySelector("a").addEventListener("click", (e) => {
+              e.preventDefault();
+              const link = e.currentTarget.getAttribute("href");
+              if (tg?.openTelegramLink){ tg.openTelegramLink(link); } else { window.open(link, "_blank"); }
+            });
+            ul.appendChild(li);
+          });
+          hide("screen-loading"); show("screen-fail");
+        }
+      }catch(e){
+        // сетевой сбой — мягкая ошибка
+        const ul = Q("need-list");
+        ul.innerHTML = `<li class="item err">Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.</li>`;
+        hide("screen-loading"); show("screen-fail");
+      }
     }
 
-    // 1) берём параметры запуска Mini-App
-    // start_param приходит из диплинка .../app?startapp=<gid>
-    const initData      = tg?.initData || "";                // строка для валидации на сервере
-    const initDataUnsafe= tg?.initDataUnsafe || {};
-    const startParam    = initDataUnsafe?.start_param || ""; // здесь наш gid в виде строки
-    const gid           = Number(startParam) || 0;
+    // Авто-проверка при старте
+    document.addEventListener("DOMContentLoaded", checkNow);
+    // Авто-повтор при возвращении в мини-апп из канала
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNow(); });
 
-    document.getElementById('check').onclick = async () => {
-        const result = document.getElementById('result');
-        result.textContent = "Проверяем...";
-
-        try {
-        // 2) отправляем на бэкенд и gid, и init_data
-        const resp = await postJSON('/api/check-join', { gid, init_data: initData });
-
-        if (resp?.ok) {
-            result.textContent = `Подписка подтверждена — ваш билет: ${resp.ticket || '—'} ✅`;
-        } else {
-            // сервер возвращает список каналов в поле "need"
-            if (Array.isArray(resp?.need) && resp.need.length) {
-            result.innerHTML = "Нужно подписаться на каналы:<br>" +
-                resp.need.map(c => {
-                const url = c.url || (c.username ? `https://t.me/${c.username}` : "#");
-                const title = c.title || "канал";
-                return `<a href="${url}" target="_blank" rel="noopener">${title}</a>`;
-                }).join("<br>");
-            } else {
-            result.textContent = "Не удалось подтвердить подписку. Попробуйте ещё раз.";
-            }
-        }
-        } catch (e) {
-        result.textContent = "Ошибка сети. Попробуйте позже.";
-        }
-    };
+    // Кнопки
+    Q("btn-retry").onclick = checkNow;
+    Q("btn-done").onclick  = () => { try{ tg?.close(); } catch(_){} };
   </script>
 </body>
 </html>
