@@ -225,11 +225,15 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
 
 def kb_public_participate(gid: int, *, for_channel: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={gid}"
-    kb.button(
-        text="Участвовать",
-        web_app=WebAppInfo(url=webapp_url),
-    )
+    if for_channel:
+        # В КАНАЛЫ — ТОЛЬКО URL-кнопка на t.me с startapp (web_app в каналах запрещён)
+        global BOT_USERNAME
+        url = f"https://t.me/{BOT_USERNAME}?startapp={gid}"
+        kb.button(text="Участвовать", url=url)
+    else:
+        # В ЛИЧКЕ/ГРУППЕ можно открыть напрямую наш домен как WebApp
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={gid}"
+        kb.button(text="Участвовать", web_app=WebAppInfo(url=webapp_url))
     return kb.as_markup()
 
 def kb_public_participate_disabled() -> InlineKeyboardMarkup:
