@@ -234,15 +234,22 @@ MINIAPP_HTML = """
 async def miniapp_entry(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/html")
-    return RedirectResponse(url="/miniapp/", status_code=307)
+    # важный момент: добавим версию в редирект, чтобы сбить кэш Telegram
+    return RedirectResponse(url="/miniapp/?v=2025-10-23-1", status_code=307)
 
 # Основной рендер мини-аппа: GET и HEAD
 @app.api_route("/miniapp/", methods=["GET", "HEAD"])
 async def miniapp_both(request: Request):
     if request.method == "HEAD":
-        # важен правильный media_type, чтобы Nginx не «ругается»
         return Response(status_code=200, media_type="text/html")
-    return HTMLResponse(content=MINIAPP_HTML, status_code=200)
+
+    # Жёстко запрещаем кэширование мини-аппа
+    headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+    return HTMLResponse(content=MINIAPP_HTML, status_code=200, headers=headers)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
