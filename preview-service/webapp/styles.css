@@ -1,0 +1,18 @@
+:root{--bg:#0f1115;--card:#161a20;--muted:#cbd5e1;--line:#22262e;--primary:#6d5cff}
+html,body{margin:0;padding:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+h1{margin:0 0 8px 0;font-size:22px;line-height:1.2}
+.muted{color:var(--muted);font-size:14px}
+.btn{display:inline-block;margin-top:16px;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600;background:var(--primary);color:#fff}
+.list{margin:12px 0 0 0;padding:0;list-style:none}
+.item{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#0f1217}
+.row{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.link{color:#93c5fd;text-decoration:none}
+.link:hover{text-decoration:underline}
+.center{display:flex;align-items:center;justify-content:center;height:120px}
+.big{font-size:18px}
+.ticket{font-weight:800;font-size:24px;letter-spacing:2px}
+.ok{color:#6ee7a6}
+.err{color:#fca5a5}
+.hidden{display:none}

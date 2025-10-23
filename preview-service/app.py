@@ -6,6 +6,7 @@ import json, hmac, hashlib
 from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any
+from starlette.staticfiles import StaticFiles
 
 import httpx
 from dotenv import load_dotenv
@@ -29,6 +30,31 @@ S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
+
+# Раздача /miniapp/ из папки webapp (index.html, styles.css, app.js)
+WEBAPP_DIR = Path(file).with_name("webapp")
+
+# HEAD -> 200 без тела (чтобы Nginx не падал) — это уже покрывает наше middleware,
+# но для статик добавим заголовки no-store:
+@app.middleware("http")
+async def _no_cache_miniapp(request: Request, call_next):
+    resp = await call_next(request)
+    path = request.url.path or ""
+    if path.startswith("/miniapp/"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
+# /miniapp -> редирект на /miniapp/ с версией (сбиваем кэш Telegram)
+@app.api_route("/miniapp", methods=["GET", "HEAD"])
+async def _miniapp_redirect(request: Request):
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="text/html")
+    return RedirectResponse(url="/miniapp/?v=2025-10-23-1", status_code=307)
+
+# Статика мини-аппа
+app.mount("/miniapp/", StaticFiles(directory=WEBAPP_DIR, html=True), name="miniapp_static")
 
 @app.middleware("http")
 async def _head_as_get(request: Request, call_next):
@@ -103,153 +129,6 @@ async def health_any(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/plain")
     return PlainTextResponse("ok")
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Mini-App (фронт) — одна HTML-страница (GET) + отдельный HEAD
-# ──────────────────────────────────────────────────────────────────────────────
-
-# ================== PRIZEME MINI-APP BLOCK (BEGIN) ==================
-# HTML контент мини-приложения (встроенный)
-MINIAPP_HTML = """
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PrizeMe — участие</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root{--bg:#0f1115;--card:#161a20;--muted:#cbd5e1;--line:#22262e;--primary:#6d5cff}
-    html,body{margin:0;padding:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:640px;margin:0 auto;padding:16px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
-    h1{margin:0 0 8px 0;font-size:22px;line-height:1.2}
-    .muted{color:var(--muted);font-size:14px}
-    .btn{display:inline-block;margin-top:16px;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600;background:var(--primary);color:#fff}
-    .list{margin:12px 0 0 0;padding:0;list-style:none}
-    .item{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#0f1217}
-    .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
-    .link{color:#93c5fd;text-decoration:none}
-    .link:hover{text-decoration:underline}
-    .center{display:flex;align-items:center;justify-content:center;height:120px}
-    .big{font-size:18px}
-    .ticket{font-weight:800;font-size:24px;letter-spacing:2px}
-    .ok{color:#6ee7a6}
-    .err{color:#fca5a5}
-    .hidden{display:none}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div id="screen-loading" class="center big">Загружаем данные…</div>
-
-      <div id="screen-fail" class="hidden">
-        <h1>Вы не выполнили условия розыгрыша</h1>
-        <p class="muted">Подпишитесь на все каналы ниже, затем вернитесь в мини-апп — проверка запустится автоматически.</p>
-        <ul id="need-list" class="list"></ul>
-        <button id="btn-retry" class="btn">Проверить ещё раз</button>
-      </div>
-
-      <div id="screen-ok" class="hidden">
-        <h1 class="ok">Готово! Билет получен</h1>
-        <p class="muted">Теперь вы участвуете в розыгрыше.</p>
-        <div class="item"><div class="row"><span>Ваш билет:</span><span id="ticket" class="ticket"></span></div></div>
-        <button id="btn-done" class="btn">Закрыть</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const tg = window.Telegram?.WebApp;
-    try { tg?.expand?.(); } catch(_) {}
-
-    // Утилиты
-    async function postJSON(url, data){
-      const r = await fetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) });
-      const ct = r.headers.get("content-type") || "";
-      return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
-    }
-    const Q = (id)=>document.getElementById(id);
-    const show = (id)=>Q(id).classList.remove("hidden");
-    const hide = (id)=>Q(id).classList.add("hidden");
-
-    // Параметры запуска (gid приходит из deep link .../app?startapp=<gid>)
-    const initData       = tg?.initData || "";
-    const startParam     = tg?.initDataUnsafe?.start_param || "";
-    const gid            = Number(startParam) || 0;
-
-    async function checkNow(){
-      hide("screen-ok"); hide("screen-fail"); show("screen-loading");
-      try{
-        const resp = await postJSON("/api/check-join", { gid, init_data: initData });
-        if (resp?.ok){
-          // успех
-          Q("ticket").textContent = resp.ticket || "— — — — — —";
-          hide("screen-loading"); show("screen-ok");
-        }else{
-          // нужен список каналов
-          const need = Array.isArray(resp?.need) ? resp.need : [];
-          const ul = Q("need-list"); ul.innerHTML = "";
-          need.forEach(ch => {
-            const url = ch.url || (ch.username ? ("https://t.me/"+ch.username) : "#");
-            const li = document.createElement("li"); li.className = "item";
-            li.innerHTML = `
-              <div class="row">
-                <div><strong>${ch.title || "Канал"}</strong><div class="muted">${ch.username ? "@"+ch.username : ""}</div></div>
-                <a class="link" href="${url}" target="_blank" rel="noopener">Открыть</a>
-              </div>`;
-            li.querySelector("a").addEventListener("click", (e) => {
-              e.preventDefault();
-              const link = e.currentTarget.getAttribute("href");
-              if (tg?.openTelegramLink){ tg.openTelegramLink(link); } else { window.open(link, "_blank"); }
-            });
-            ul.appendChild(li);
-          });
-          hide("screen-loading"); show("screen-fail");
-        }
-      }catch(e){
-        // сетевой сбой — мягкая ошибка
-        const ul = Q("need-list");
-        ul.innerHTML = `<li class="item err">Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.</li>`;
-        hide("screen-loading"); show("screen-fail");
-      }
-    }
-
-    // Авто-проверка при старте
-    document.addEventListener("DOMContentLoaded", checkNow);
-    // Авто-повтор при возвращении в мини-апп из канала
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNow(); });
-
-    // Кнопки
-    Q("btn-retry").onclick = checkNow;
-    Q("btn-done").onclick  = () => { try{ tg?.close(); } catch(_){} };
-  </script>
-</body>
-</html>
-"""
-
-# /miniapp -> /miniapp/ (редирект только на GET; для HEAD дадим 200 без тела)
-@app.api_route("/miniapp", methods=["GET", "HEAD"])
-async def miniapp_entry(request: Request):
-    if request.method == "HEAD":
-        return Response(status_code=200, media_type="text/html")
-    # важный момент: добавим версию в редирект, чтобы сбить кэш Telegram
-    return RedirectResponse(url="/miniapp/?v=2025-10-23-1", status_code=307)
-
-# Основной рендер мини-аппа: GET и HEAD
-@app.api_route("/miniapp/", methods=["GET", "HEAD"])
-async def miniapp_both(request: Request):
-    if request.method == "HEAD":
-        return Response(status_code=200, media_type="text/html")
-
-    # Жёстко запрещаем кэширование мини-аппа
-    headers = {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-        "Expires": "0",
-    }
-    return HTMLResponse(content=MINIAPP_HTML, status_code=200, headers=headers)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
