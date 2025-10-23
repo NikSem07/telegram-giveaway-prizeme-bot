@@ -42,18 +42,6 @@ BASE_DIR = Path(__file__).resolve().parent           # preview-service/
 WEBAPP_DIR = BASE_DIR / "webapp"                     # preview-service/webapp/
 INDEX_HTML = WEBAPP_DIR / "index.html"               # preview-service/webapp/index.html
 
-# 2) Анти-кеш для Mini App
-@app.middleware("http")
-async def _no_cache_miniapp(request: Request, call_next):
-    resp = await call_next(request)
-    p = request.url.path
-    if p == "/miniapp" or p.startswith("/miniapp/"):
-        # Важно: Telegram WebView часто кеширует
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-    return resp
-
 # 3) Статика Mini App (JS/CSS/картинки)
 #    Будем подключать их относительными путями из index.html. 
 #    Например: <link href="/miniapp-static/styles.css"> и <script src="/miniapp-static/app.js">
@@ -63,25 +51,16 @@ app.mount(
     name="miniapp-static",
 )
 
-# 4) Сам index.html
+# 4) Сам index.html + catch-all для всех подпутей
 @app.get("/miniapp", include_in_schema=False)
 @app.get("/miniapp/", include_in_schema=False)
-async def miniapp_entry():
-    # Отдаём ровно тот index.html, что лежит в preview-service/webapp/index.html
+@app.get("/miniapp/{_subpath:path}", include_in_schema=False)
+async def miniapp_entry(_subpath: str | None = None):
+    # Для SPA всегда отдаём один и тот же index.html,
+    # а статику берём по /miniapp-static/*
     return FileResponse(str(INDEX_HTML))
-# === /Mini App ===
 
-# HEAD -> 200 без тела (чтобы Nginx не падал) — это уже покрывает наше middleware,
-# но для статик добавим заголовки no-store:
-@app.middleware("http")
-async def _no_cache_miniapp(request: Request, call_next):
-    resp = await call_next(request)
-    path = request.url.path or ""
-    if path.startswith("/miniapp/"):
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-    return resp
+# === /Mini App ===
 
 @app.middleware("http")
 async def _head_as_get(request: Request, call_next):
