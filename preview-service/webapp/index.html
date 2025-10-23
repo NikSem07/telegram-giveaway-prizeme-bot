@@ -3,31 +3,36 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PrizeMe — участие</title>
-  <link rel="stylesheet" href="/miniapp-static/styles.css?v=1">
-  <script src="/miniapp-static/app.js?v=1"></script>
+  <title>PrizeMe — Участие (AUTO v1)</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=AUTO-V1"/>
+  <script defer src="/miniapp-static/app.js?v=AUTO-V1"></script>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <div id="screen-loading" class="center big">Загружаем данные…</div>
+    <div id="screen-loading" class="card">
+      <h1>Загружаем данные…</h1>
+      <p class="sub">Идёт автоматическая проверка условий розыгрыша.</p>
+    </div>
 
-      <div id="screen-fail" class="hidden">
-        <h1>Вы не выполнили условия розыгрыша</h1>
-        <p class="muted">Подпишитесь на все каналы ниже, затем вернитесь в мини-апп — проверка запустится автоматически.</p>
-        <ul id="need-list" class="list"></ul>
-        <button id="btn-retry" class="btn">Проверить ещё раз</button>
-      </div>
+    <div id="screen-ok" class="card hide">
+      <h1 class="ok">Вы получили билет <span id="ticket">—</span></h1>
+      <p class="sub">Теперь вы участвуете в розыгрыше! Не отписывайтесь до его окончания.</p>
+      <button id="btn-done">Закрыть</button>
+    </div>
 
-      <div id="screen-ok" class="hidden">
-        <h1 class="ok">Готово! Билет получен</h1>
-        <p class="muted">Теперь вы участвуете в розыгрыше.</p>
-        <div class="item"><div class="row"><span>Ваш билет:</span><span id="ticket" class="ticket"></span></div></div>
-        <button id="btn-done" class="btn">Закрыть</button>
-      </div>
+    <div id="screen-need" class="card hide">
+      <h1 class="warn">Вы не выполнили условия</h1>
+      <p class="sub">Подпишитесь на каналы ниже и вернитесь в это окно.</p>
+      <ul id="need-list" class="list"></ul>
+      <button id="btn-retry">Проверить снова</button>
+    </div>
+
+    <div id="screen-fail" class="card hide">
+      <h1 class="err">Не удалось проверить</h1>
+      <p class="sub">Попробуйте ещё раз. Если ошибка повторяется — сообщите администратору.</p>
+      <button id="btn-retry-2">Повторить</button>
     </div>
   </div>
-
-  <script src="./app.js?v=2025-10-23-1"></script>
 </body>
 </html>

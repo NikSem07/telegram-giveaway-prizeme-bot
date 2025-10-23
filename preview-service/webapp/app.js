@@ -1,55 +1,80 @@
-const tg = window.Telegram?.WebApp;
-try { tg?.expand?.(); } catch(_) {}
+// AUTO-V1 build — автопроверка подписки и выдача билета
+console.log("[PrizeMe][AUTO-V1] app.js loaded");
 
-async function postJSON(url, data){
-  const r = await fetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) });
-  const ct = r.headers.get("content-type") || "";
-  return ct.includes("application/json") ? r.json() : { ok:false, status:r.status };
+const tg = window.Telegram?.WebApp || {};
+tg.expand?.();
+tg.enableClosingConfirmation?.(false);
+
+const $ = (q) => document.querySelector(q);
+const show = (sel) => $(sel).classList.remove("hide");
+const hide = (sel) => $(sel).classList.add("hide");
+
+function getStartParam() {
+  try {
+    const p = tg.initDataUnsafe?.start_param;
+    if (p) return p;
+  } catch {}
+  const url = new URL(location.href);
+  return url.searchParams.get("tgWebAppStartParam");
 }
-const Q = (id)=>document.getElementById(id);
-const show = (id)=>Q(id).classList.remove("hidden");
-const hide = (id)=>Q(id).classList.add("hidden");
 
-const initData   = tg?.initData || "";
-const startParam = tg?.initDataUnsafe?.start_param || "";
-const gid        = Number(startParam) || 0;
+async function callCheck(gid) {
+  const payload = { gid, init_data: tg.initData || "" };
+  const resp = await fetch("/api/check-join", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+  if (!resp.ok) throw new Error("HTTP "+resp.status+" "+(await resp.text().catch(()=>resp.statusText)));
+  return resp.json();
+}
 
-async function checkNow(){
-  hide("screen-ok"); hide("screen-fail"); show("screen-loading");
-  try{
-    const resp = await postJSON("/api/check-join", { gid, init_data: initData });
-    if (resp?.ok){
-      Q("ticket").textContent = resp.ticket || "— — — — — —";
-      hide("screen-loading"); show("screen-ok");
-    }else{
-      const need = Array.isArray(resp?.need) ? resp.need : [];
-      const ul = Q("need-list"); ul.innerHTML = "";
-      need.forEach(ch => {
-        const url = ch.url || (ch.username ? ("https://t.me/"+ch.username) : "#");
-        const li = document.createElement("li"); li.className = "item";
-        li.innerHTML = `
-          <div class="row">
-            <div><strong>${ch.title || "Канал"}</strong><div class="muted">${ch.username ? "@"+ch.username : ""}</div></div>
-            <a class="link" href="${url}" target="_blank" rel="noopener">Открыть</a>
-          </div>`;
-        li.querySelector("a").addEventListener("click", (e) => {
-          e.preventDefault();
-          const link = e.currentTarget.getAttribute("href");
-          if (tg?.openTelegramLink){ tg.openTelegramLink(link); } else { window.open(link, "_blank"); }
-        });
-        ul.appendChild(li);
-      });
-      hide("screen-loading"); show("screen-fail");
+function renderNeed(channels) {
+  const ul = $("#need-list");
+  ul.innerHTML = "";
+  (channels || []).forEach((ch) => {
+    const li = document.createElement("li");
+    li.className = "item";
+    const url = ch.url || (ch.username ? `https://t.me/${ch.username}` : "#");
+    li.innerHTML = `<div><strong>${ch.title || "Канал"}</strong></div>
+                    <a class="link" href="${url}" target="_blank" rel="noopener">Открыть</a>`;
+    li.querySelector("a").addEventListener("click", (e) => {
+      try { if (tg.openTelegramLink) { e.preventDefault(); tg.openTelegramLink(url); } } catch {}
+    });
+    ul.appendChild(li);
+  });
+}
+
+async function checkFlow() {
+  hide("#screen-ok"); hide("#screen-need"); hide("#screen-fail");
+  show("#screen-loading");
+  try {
+    const gid = getStartParam();
+    if (!gid) throw new Error("start_param is empty");
+
+    const data = await callCheck(gid);
+    if (data.ok) {
+      $("#ticket").textContent = data.ticket || "—";
+      hide("#screen-loading"); show("#screen-ok");
+      tg.MainButton?.hide?.();
+    } else {
+      renderNeed(data.need || []);
+      hide("#screen-loading"); show("#screen-need");
     }
-  }catch(e){
-    const ul = Q("need-list");
-    ul.innerHTML = `<li class="item err">Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.</li>`;
-    hide("screen-loading"); show("screen-fail");
+  } catch (err) {
+    console.error("[PrizeMe] check error:", err);
+    hide("#screen-loading"); show("#screen-fail");
   }
 }
 
-document.addEventListener("DOMContentLoaded", checkNow);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNow(); });
+$("#btn-retry")?.addEventListener("click", checkFlow);
+$("#btn-retry-2")?.addEventListener("click", checkFlow);
+$("#btn-done")?.addEventListener("click", () => { try{ tg.close?.(); }catch{} });
 
-Q("btn-retry").onclick = checkNow;
-Q("btn-done").onclick  = () => { try{ tg?.close(); } catch(_){} };
+document.addEventListener("DOMContentLoaded", checkFlow);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && $("#screen-need") && !$("#screen-need").classList.contains("hide")) {
+    checkFlow();
+  }
+});
