@@ -222,34 +222,19 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # Клавиатура под постом в канале (пока неактивная)
-def kb_public_participate(gid: int, *, for_channel: bool = True) -> InlineKeyboardMarkup:
-    """
-    Кнопка «Участвовать» для публикации в каналах/группах.
-    В каналах web_app запрещён, поэтому используем deeplink:
-      https://t.me/<bot_username>/app?startapp=<gid>
-    Если понадобится версия для личного чата — можно сделать for_channel=False.
-    """
+def kb_public_participate(gid: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-
-    if for_channel:
-        # используем deeplink на Mini-App
-        # username берём из глобальной переменной, которую выставляем в main()
-        url = f"https://t.me/{BOT_USERNAME}/app?startapp={gid}"
-        kb.row(InlineKeyboardButton(text="Участвовать", url=url))
-    else:
-        # вариант для личных чатов с ботом (разрешён web_app)
-        url = f"{WEBAPP_BASE_URL.rstrip('/')}/miniapp?gid={gid}"
-        kb.row(InlineKeyboardButton(text="Участвовать", web_app=WebAppInfo(url=url)))
-
+    # В каналах тип web_app в кнопках запрещён — используем deeplink на Main App.
+    # Для Main App НЕТ сегмента /app — правильная форма: ?startapp=<payload>
+    kb.button(
+        text="Участвовать",
+        url=f"https://t.me/{BOT_USERNAME}?startapp={gid}",
+    )
     return kb.as_markup()
 
 def kb_public_participate_disabled() -> InlineKeyboardMarkup:
-    """
-    Временная «неактивная» кнопка для публикации в канале.
-    Просто открывает наш сайт, mini-app пока не используем.
-    """
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="Участвовать", url="https://prizeme.ru"))
+    kb.button(text="Участвовать", url="https://t.me/prizeme_official_bot?startapp=demo")
     return kb.as_markup()
 
 # Следующие функции
