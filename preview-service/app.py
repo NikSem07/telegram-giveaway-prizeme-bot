@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any
 from starlette.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles
 
 import httpx
 from dotenv import load_dotenv
@@ -31,34 +32,46 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-# === Mini App: единый способ отдачи фронта ===
-from pathlib import Path
-from fastapi import Request
-from fastapi.responses import FileResponse, Response
-from starlette.staticfiles import StaticFiles
+# ===================== (NEW) Mini-App serving =====================
+# Папка со статиками мини-аппа (index.html, app.js, styles.css)
+WEBAPP_DIR = Path(__file__).parent / "webapp"
 
-# 1) Точные пути
-BASE_DIR = Path(__file__).resolve().parent           # preview-service/
-WEBAPP_DIR = BASE_DIR / "webapp"                     # preview-service/webapp/
-INDEX_HTML = WEBAPP_DIR / "index.html"               # preview-service/webapp/index.html
+# Статика без кеша (чтобы правки виделись сразу)
+class _NoCacheStatic(StaticFiles):
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        return resp
 
-# 3) Статика Mini App (JS/CSS/картинки)
-#    Будем подключать их относительными путями из index.html. 
-#    Например: <link href="/miniapp-static/styles.css"> и <script src="/miniapp-static/app.js">
+# Отдаём JS/CSS с /miniapp-static/
 app.mount(
     "/miniapp-static",
-    StaticFiles(directory=str(WEBAPP_DIR), html=False),
+    _NoCacheStatic(directory=str(WEBAPP_DIR), html=False),
     name="miniapp-static",
 )
 
-# 4) Сам index.html + catch-all для всех подпутей
-@app.get("/miniapp", include_in_schema=False)
-@app.get("/miniapp/", include_in_schema=False)
-@app.get("/miniapp/{_subpath:path}", include_in_schema=False)
-async def miniapp_entry(_subpath: str | None = None):
-    # Для SPA всегда отдаём один и тот же index.html,
-    # а статику берём по /miniapp-static/*
-    return FileResponse(str(INDEX_HTML))
+def _miniapp_index() -> FileResponse:
+    """Один и тот же index.html для любых подпутей /miniapp/..."""
+    return FileResponse(
+        path=str(WEBAPP_DIR / "index.html"),
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# /miniapp  → index.html
+@app.api_route("/miniapp", methods=["GET", "HEAD"])
+async def __miniapp_root():
+    return _miniapp_index()
+
+# /miniapp/что-угодно  → тот же index.html
+@app.api_route("/miniapp/{path:path}", methods=["GET", "HEAD"])
+async def __miniapp_any(path: str):
+    return _miniapp_index()
+# ================== / (NEW) Mini-App serving ======================
 
 # === /Mini App ===
 
@@ -278,47 +291,3 @@ async def _any_head_ok(_path: str):
     # Отдаём 200 и пустое тело (корректное поведение для HEAD)
     return Response(status_code=200)
 
-# ===================== (NEW) Mini-App serving =====================
-from pathlib import Path
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-
-# Папка со статиками мини-аппа (index.html, app.js, styles.css)
-WEBAPP_DIR = Path(__file__).parent / "webapp"
-
-# Статика без кеша (чтобы правки виделись сразу)
-class _NoCacheStatic(StaticFiles):
-    async def get_response(self, path, scope):
-        resp = await super().get_response(path, scope)
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        return resp
-
-# Отдаём JS/CSS с /miniapp-static/
-app.mount(
-    "/miniapp-static",
-    _NoCacheStatic(directory=str(WEBAPP_DIR), html=False),
-    name="miniapp-static",
-)
-
-def _miniapp_index() -> FileResponse:
-    """Один и тот же index.html для любых подпутей /miniapp/..."""
-    return FileResponse(
-        path=str(WEBAPP_DIR / "index.html"),
-        media_type="text/html",
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-        },
-    )
-
-# /miniapp  → index.html
-@app.api_route("/miniapp", methods=["GET", "HEAD"])
-async def __miniapp_root():
-    return _miniapp_index()
-
-# /miniapp/что-угодно  → тот же index.html
-@app.api_route("/miniapp/{path:path}", methods=["GET", "HEAD"])
-async def __miniapp_any(path: str):
-    return _miniapp_index()
-# ================== / (NEW) Mini-App serving ======================
