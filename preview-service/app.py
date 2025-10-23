@@ -277,3 +277,48 @@ async def uploads(path: str, request: Request):
 async def _any_head_ok(_path: str):
     # Отдаём 200 и пустое тело (корректное поведение для HEAD)
     return Response(status_code=200)
+
+# ===================== (NEW) Mini-App serving =====================
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+# Папка со статиками мини-аппа (index.html, app.js, styles.css)
+WEBAPP_DIR = Path(__file__).parent / "webapp"
+
+# Статика без кеша (чтобы правки виделись сразу)
+class _NoCacheStatic(StaticFiles):
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        return resp
+
+# Отдаём JS/CSS с /miniapp-static/
+app.mount(
+    "/miniapp-static",
+    _NoCacheStatic(directory=str(WEBAPP_DIR), html=False),
+    name="miniapp-static",
+)
+
+def _miniapp_index() -> FileResponse:
+    """Один и тот же index.html для любых подпутей /miniapp/..."""
+    return FileResponse(
+        path=str(WEBAPP_DIR / "index.html"),
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# /miniapp  → index.html
+@app.api_route("/miniapp", methods=["GET", "HEAD"])
+async def __miniapp_root():
+    return _miniapp_index()
+
+# /miniapp/что-угодно  → тот же index.html
+@app.api_route("/miniapp/{path:path}", methods=["GET", "HEAD"])
+async def __miniapp_any(path: str):
+    return _miniapp_index()
+# ================== / (NEW) Mini-App serving ======================
