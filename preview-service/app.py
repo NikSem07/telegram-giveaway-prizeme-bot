@@ -32,7 +32,7 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 app = FastAPI()
 
 # Раздача /miniapp/ из папки webapp (index.html, styles.css, app.js)
-WEBAPP_DIR = Path(file).with_name("webapp")
+WEBAPP_DIR = Path(__file__).with_name("webapp")
 
 # HEAD -> 200 без тела (чтобы Nginx не падал) — это уже покрывает наше middleware,
 # но для статик добавим заголовки no-store:
@@ -46,12 +46,20 @@ async def _no_cache_miniapp(request: Request, call_next):
         resp.headers["Expires"] = "0"
     return resp
 
-# /miniapp -> редирект на /miniapp/ с версией (сбиваем кэш Telegram)
+# /miniapp -> /miniapp/ (редирект только на GET; для HEAD вернем 200 без тела)
 @app.api_route("/miniapp", methods=["GET", "HEAD"])
-async def _miniapp_redirect(request: Request):
+async def miniapp_entry(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/html")
-    return RedirectResponse(url="/miniapp/?v=2025-10-23-1", status_code=307)
+    return RedirectResponse(url="/miniapp/", status_code=307)
+
+# Основной рендер мини-аппа из файла index.html
+@app.api_route("/miniapp/", methods=["GET", "HEAD"])
+async def miniapp_both(request: Request):
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="text/html")
+    # Отдаем файл webapp/index.html
+    return FileResponse(INDEX_HTML, media_type="text/html")
 
 # Статика мини-аппа
 app.mount("/miniapp/", StaticFiles(directory=WEBAPP_DIR, html=True), name="miniapp_static")
@@ -129,6 +137,22 @@ async def health_any(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/plain")
     return PlainTextResponse("ok")
+
+
+# ─────────────────────────────────────────────────────────────
+# Настройка файлов мини-аппа (index.html, styles.css, app.js)
+# ─────────────────────────────────────────────────────────────
+from pathlib import Path
+from starlette.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+
+# Директория с веб-приложением (мы ее уже создали: preview-service/webapp)
+WEBAPP_DIR = (Path(__file__).parent / "webapp").resolve()
+INDEX_HTML = WEBAPP_DIR / "index.html"
+
+# Раздача статики (css/js/картинки) по /miniapp-static/**
+app.mount("/miniapp-static", StaticFiles(directory=str(WEBAPP_DIR)), name="miniapp_static")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
