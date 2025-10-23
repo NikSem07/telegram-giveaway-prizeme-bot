@@ -2156,21 +2156,22 @@ async def cb_start_raffle(cq: CallbackQuery):
 #--- Хелпер ---
 async def _launch_and_publish(gid: int, message: types.Message):
     """
-    Единый запуск розыгрыша:
-      - ставит статус ACTIVE (если ещё нет),
-      - планирует завершение,
-      - публикует пост в прикреплённых каналах/группах.
-    Возвращает объект Giveaway (или None).
+    Минимальный рабочий запуск:
+      - ставим статус ACTIVE,
+      - планируем завершение,
+      - публикуем пост БЕЗ КНОПОК в прикреплённых каналах/группах.
     """
     # 1) читаем розыгрыш и при необходимости активируем
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
             await message.answer("Розыгрыш не найден.")
+            logging.error("GW %s not found, abort publish", gid)
             return None
         if getattr(gw, "status", None) != GiveawayStatus.ACTIVE:
             gw.status = GiveawayStatus.ACTIVE
             s.add(gw)
+            logging.info("GW %s status -> ACTIVE", gid)
 
     # 2) планируем завершение
     try:
@@ -2182,8 +2183,9 @@ async def _launch_and_publish(gid: int, message: types.Message):
             id=f"final_{gid}",
             replace_existing=True,
         )
+        logging.info("Scheduled finalize job id=final_%s at %s (UTC)", gid, run_dt)
     except Exception as e:
-        logging.warning("Не удалось запланировать завершение розыгрыша: %s", e)
+        logging.warning("Не удалось запланировать завершение розыгрыша %s: %s", gid, e)
 
     # 3) берём прикреплённые чаты
     async with session_scope() as s:
@@ -2193,19 +2195,22 @@ async def _launch_and_publish(gid: int, message: types.Message):
         )
         chat_ids = [row[0] for row in res.fetchall()]
 
-    # 4) если пусто — сообщаем автору и выходим
+    logging.info("GW %s: attached chats = %s", gid, chat_ids)
+
+    # 4) если пусто — сообщаем и выходим
     if not chat_ids:
         await message.answer(
             "К этому розыгрышу пока не прикреплено ни одного канала/группы.\n"
-            "Нажми «Добавить канал/группу», отметь хотя бы один канал (должна появиться «✅»), и повтори запуск."
+            "Нажми «Добавить канал/группу», отметь хотя бы один (должна появиться «✅»), и повтори запуск."
         )
         return None
 
-    # 5) собираем текст и клавиатуру «Участвовать»
+    # 5) собираем ТОЛЬКО текст (без кнопок)
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
 
+    # ВАЖНО: _compose_preview_text принимает позиционные аргументы: (title, prizes)
     preview_text = _compose_preview_text(
         "",
         gw.winners_count,
@@ -2214,20 +2219,22 @@ async def _launch_and_publish(gid: int, message: types.Message):
         days_left=days_left,
     )
 
+    # 6) публикуем в каждом чате — БЕЗ reply_markup
     kind, file_id = unpack_media(gw.photo_file_id)
-    participate_kb = kb_public_participate(gid, for_channel=True)
-
-    # 6) публикация в каждом чате
     for chat_id in chat_ids:
         try:
             if kind == "photo" and file_id:
-                await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+                logging.info("Send PHOTO to chat %s", chat_id)
+                await bot.send_photo(chat_id, file_id, caption=preview_text)
             elif kind == "animation" and file_id:
-                await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+                logging.info("Send ANIMATION to chat %s", chat_id)
+                await bot.send_animation(chat_id, file_id, caption=preview_text)
             elif kind == "video" and file_id:
-                await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=participate_kb)
+                logging.info("Send VIDEO to chat %s", chat_id)
+                await bot.send_video(chat_id, file_id, caption=preview_text)
             else:
-                await bot.send_message(chat_id, preview_text, reply_markup=participate_kb)
+                logging.info("Send TEXT to chat %s", chat_id)
+                await bot.send_message(chat_id, preview_text)
         except Exception as e:
             logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e)
 
@@ -2255,7 +2262,6 @@ async def cb_launch_do(cq: CallbackQuery):
     from html import escape as _escape
     title_html = _escape(gw.internal_title or "")
     await cq.message.answer(f"✅ Розыгрыш <b>{title_html}</b> запущен!")
-    await cq.message.answer("Подпишитесь на канал, где команда публикует важные новости о боте: https://t.me/prizeme_official_news")
 
 #--- Что=-то другое (узнать потом) ---
 
