@@ -11,7 +11,7 @@ from starlette.staticfiles import StaticFiles
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse, Response, HTMLResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse
 from starlette.requests import Request
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -31,8 +31,45 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-# Раздача /miniapp/ из папки webapp (index.html, styles.css, app.js)
-WEBAPP_DIR = Path(__file__).with_name("webapp")
+# === Mini App: единый способ отдачи фронта ===
+from pathlib import Path
+from fastapi import Request
+from fastapi.responses import FileResponse, Response
+from starlette.staticfiles import StaticFiles
+
+# 1) Точные пути
+BASE_DIR = Path(__file__).resolve().parent           # preview-service/
+WEBAPP_DIR = BASE_DIR / "webapp"                     # preview-service/webapp/
+INDEX_HTML = WEBAPP_DIR / "index.html"               # preview-service/webapp/index.html
+
+# 2) Анти-кеш для Mini App
+@app.middleware("http")
+async def _no_cache_miniapp(request: Request, call_next):
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/miniapp" or p.startswith("/miniapp/"):
+        # Важно: Telegram WebView часто кеширует
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
+# 3) Статика Mini App (JS/CSS/картинки)
+#    Будем подключать их относительными путями из index.html. 
+#    Например: <link href="/miniapp-static/styles.css"> и <script src="/miniapp-static/app.js">
+app.mount(
+    "/miniapp-static",
+    StaticFiles(directory=str(WEBAPP_DIR), html=False),
+    name="miniapp-static",
+)
+
+# 4) Сам index.html
+@app.get("/miniapp", include_in_schema=False)
+@app.get("/miniapp/", include_in_schema=False)
+async def miniapp_entry():
+    # Отдаём ровно тот index.html, что лежит в preview-service/webapp/index.html
+    return FileResponse(str(INDEX_HTML))
+# === /Mini App ===
 
 # HEAD -> 200 без тела (чтобы Nginx не падал) — это уже покрывает наше middleware,
 # но для статик добавим заголовки no-store:
@@ -45,24 +82,6 @@ async def _no_cache_miniapp(request: Request, call_next):
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
     return resp
-
-# /miniapp -> /miniapp/ (редирект только на GET; для HEAD вернем 200 без тела)
-@app.api_route("/miniapp", methods=["GET", "HEAD"])
-async def miniapp_entry(request: Request):
-    if request.method == "HEAD":
-        return Response(status_code=200, media_type="text/html")
-    return RedirectResponse(url="/miniapp/", status_code=307)
-
-# Основной рендер мини-аппа из файла index.html
-@app.api_route("/miniapp/", methods=["GET", "HEAD"])
-async def miniapp_both(request: Request):
-    if request.method == "HEAD":
-        return Response(status_code=200, media_type="text/html")
-    # Отдаем файл webapp/index.html
-    return FileResponse(INDEX_HTML, media_type="text/html")
-
-# Статика мини-аппа
-app.mount("/miniapp/", StaticFiles(directory=WEBAPP_DIR, html=True), name="miniapp_static")
 
 @app.middleware("http")
 async def _head_as_get(request: Request, call_next):
@@ -137,22 +156,6 @@ async def health_any(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/plain")
     return PlainTextResponse("ok")
-
-
-# ─────────────────────────────────────────────────────────────
-# Настройка файлов мини-аппа (index.html, styles.css, app.js)
-# ─────────────────────────────────────────────────────────────
-from pathlib import Path
-from starlette.staticfiles import StaticFiles
-from starlette.responses import FileResponse
-
-# Директория с веб-приложением (мы ее уже создали: preview-service/webapp)
-WEBAPP_DIR = (Path(__file__).parent / "webapp").resolve()
-INDEX_HTML = WEBAPP_DIR / "index.html"
-
-# Раздача статики (css/js/картинки) по /miniapp-static/**
-app.mount("/miniapp-static", StaticFiles(directory=str(WEBAPP_DIR)), name="miniapp_static")
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
