@@ -221,23 +221,21 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     kb.adjust(1)
     return kb.as_markup()
 
-# Клавиатура под постом в канале (пока неактивная)
+# Клавиатура под постом в канале: открываем WebApp по нашему домену, а не по t.me/startapp
+
 def kb_public_participate(gid: int, *, for_channel: bool = False) -> InlineKeyboardMarkup:
-    """
-    Кнопка для запуска Mini App. Параметр for_channel оставлен,
-    чтобы не падать на вызовах вида kb_public_participate(..., for_channel=True).
-    На логику он не влияет.
-    """
     kb = InlineKeyboardBuilder()
+    webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={gid}"
     kb.button(
         text="Участвовать",
-        url=f"https://t.me/{BOT_USERNAME}?startapp={gid}",
+        web_app=WebAppInfo(url=webapp_url),
     )
     return kb.as_markup()
 
 def kb_public_participate_disabled() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Участвовать", url="https://t.me/prizeme_official_bot?startapp=demo")
+    webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=demo"
+    kb.button(text="Участвовать", web_app=WebAppInfo(url=webapp_url))
     return kb.as_markup()
 
 # Следующие функции
