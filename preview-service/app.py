@@ -32,45 +32,55 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-# ===================== (NEW) Mini-App serving =====================
-WEBAPP_DIR = Path(__file__).parent / "preview-service" / "webapp"
+# === MiniApp: UI и API (минимум, который обязан работать) ===
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse, Response, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
-# Статика без кеша (чтобы правки виделись сразу)
-class _NoCacheStatic(StaticFiles):
-    async def get_response(self, path, scope):
-        resp = await super().get_response(path, scope)
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        return resp
+app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
 
-# Отдаём JS/CSS с /miniapp-static/
-app.mount(
-    "/miniapp-static",
-    _NoCacheStatic(directory=str(WEBAPP_DIR), html=False),
-    name="miniapp-static",
-)
+WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
+INDEX_FILE = WEBAPP_DIR / "index.html"
 
-def _miniapp_index() -> FileResponse:
-    """Один и тот же index.html для любых подпутей /miniapp/..."""
-    return FileResponse(
-        path=str(WEBAPP_DIR / "index.html"),
-        media_type="text/html",
+# 1. Отдаём всегда один и тот же index.html независимо от под-путей
+@app.get("/miniapp/", response_class=HTMLResponse)
+async def miniapp_index_get() -> HTMLResponse:
+    html = INDEX_FILE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        html,
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
         },
     )
 
-# /miniapp  → index.html
-@app.api_route("/miniapp", methods=["GET", "HEAD"])
-async def __miniapp_root():
-    return _miniapp_index()
+# Для HEAD просто отдаём заголовки 200 (телу быть не обязательно)
+@app.head("/miniapp/")
+async def miniapp_index_head():
+    return Response(
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
-# /miniapp/что-угодно  → тот же index.html
-@app.api_route("/miniapp/{path:path}", methods=["GET", "HEAD"])
-async def __miniapp_any(path: str):
-    return _miniapp_index()
-# ================== / (NEW) Mini-App serving ======================
+# 2. Подключаем статику (js/css) из preview-service/webapp/
+#    Директория должна существовать и содержать app.js, styles.css, index.html
+app.mount(
+    "/miniapp-static",
+    StaticFiles(directory=str(WEBAPP_DIR), html=False),
+    name="miniapp-static",
+)
+
+# 3. Простейшее API, чтобы страница не падала, пока не подключим твою бизнес-логику
+@app.post("/api/check-join")
+async def api_check_join(req: Request):
+    body = await req.json()
+    gid = str(body.get("gid") or "")
+    # временный ответ — всегда "ок" с тестовым билетом
+    return JSONResponse({"ok": True, "ticket": f"TEST-{gid or '000000'}"})
 
 # === /Mini App ===
 
