@@ -243,6 +243,15 @@ def kb_public_participate(gid: int, *, for_channel: bool = True) -> InlineKeyboa
 
     return kb.as_markup()
 
+def kb_public_participate_disabled() -> InlineKeyboardMarkup:
+    """
+    Временная «неактивная» кнопка для публикации в канале.
+    Просто открывает наш сайт, mini-app пока не используем.
+    """
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="Участвовать", url="https://prizeme.ru"))
+    return kb.as_markup()
+
 # Следующие функции
 
 def format_endtime_prompt() -> str:
@@ -2219,24 +2228,65 @@ async def _launch_and_publish(gid: int, message: types.Message):
         days_left=days_left,
     )
 
-    # 6) публикуем в каждом чате — БЕЗ reply_markup
+    # 6) публикуем в каждом чате — С клавиатурой «Участвовать» и попыткой link-preview
     kind, file_id = unpack_media(gw.photo_file_id)
     for chat_id in chat_ids:
         try:
-            if kind == "photo" and file_id:
-                logging.info("Send PHOTO to chat %s", chat_id)
-                await bot.send_photo(chat_id, file_id, caption=preview_text)
-            elif kind == "animation" and file_id:
-                logging.info("Send ANIMATION to chat %s", chat_id)
-                await bot.send_animation(chat_id, file_id, caption=preview_text)
-            elif kind == "video" and file_id:
-                logging.info("Send VIDEO to chat %s", chat_id)
-                await bot.send_video(chat_id, file_id, caption=preview_text)
+            # --- Пытаемся отправить «фиолетовую рамку» как в предпросмотре ---
+            if file_id:
+                # подбираем «имя» (важно для корректного Content-Type)
+                if kind == "photo":
+                    suggested = "image.jpg"
+                elif kind == "animation":
+                    suggested = "animation.mp4"
+                elif kind == "video":
+                    suggested = "video.mp4"
+                else:
+                    suggested = "file.bin"
+
+                # выгружаем из TG в S3 и собираем наш preview_url
+                key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id, suggested)
+                preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+
+                hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                full_text = f"{preview_text}\n\n{hidden_link}"
+
+                lp = LinkPreviewOptions(
+                    is_disabled=False,
+                    prefer_large_media=True,
+                    prefer_small_media=False,
+                    show_above_text=False,  # медиа снизу, как в нашем дефолтном предпросмотре
+                )
+
+                await bot.send_message(
+                    chat_id,
+                    full_text,
+                    link_preview_options=lp,
+                    parse_mode="HTML",
+                    reply_markup=kb_public_participate_disabled(),  # временно «неактивная» кнопка
+                )
             else:
-                logging.info("Send TEXT to chat %s", chat_id)
-                await bot.send_message(chat_id, preview_text)
+                # медиа нет — обычный текст + кнопка
+                await bot.send_message(
+                    chat_id,
+                    preview_text,
+                    reply_markup=kb_public_participate_disabled(),
+                )
+
         except Exception as e:
-            logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e)
+            logging.warning("Link-preview не вышел в чате %s (%s), пробую fallback-медиа...", chat_id, e)
+            # --- Fallback: нативное медиа с той же подписью + кнопка ---
+            try:
+                if kind == "photo" and file_id:
+                    await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                elif kind == "animation" and file_id:
+                    await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                elif kind == "video" and file_id:
+                    await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate_disabled())
+                else:
+                    await bot.send_message(chat_id, preview_text, reply_markup=kb_public_participate_disabled())
+            except Exception as e2:
+                logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e2)
 
     return gw
 
@@ -2262,6 +2312,10 @@ async def cb_launch_do(cq: CallbackQuery):
     from html import escape as _escape
     title_html = _escape(gw.internal_title or "")
     await cq.message.answer(f"✅ Розыгрыш <b>{title_html}</b> запущен!")
+    await cq.message.answer(
+    "Подпишитесь на канал, где команда публикует важные новости о боте и анонсы нового функционала:\n"
+    "https://t.me/prizeme_official_news"
+)
 
 #--- Что=-то другое (узнать потом) ---
 
