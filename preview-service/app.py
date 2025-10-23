@@ -33,8 +33,7 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 app = FastAPI()
 
 # ===================== (NEW) Mini-App serving =====================
-# Папка со статиками мини-аппа (index.html, app.js, styles.css)
-WEBAPP_DIR = Path(__file__).parent / "webapp"
+WEBAPP_DIR = Path(__file__).parent / "preview-service" / "webapp"
 
 # Статика без кеша (чтобы правки виделись сразу)
 class _NoCacheStatic(StaticFiles):
