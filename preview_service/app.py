@@ -1,18 +1,19 @@
 # app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
 
 import os
+import time
 import mimetypes
 import json, hmac, hashlib
 from pathlib import Path
 import sqlite3
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from starlette.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 
 import httpx
 from dotenv import load_dotenv, find_dotenv
-from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse, JSONResponse
 from starlette.requests import Request
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -32,16 +33,79 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-# === MiniApp: UI и API (минимум, который обязан работать) ===
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse, Response, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+OT_TOKEN = os.getenv("BOT_TOKEN")
+MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
+WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
+
+# безопасность: разрешаем дергать внутренний эндпоинт бота только с localhost
+BOT_INTERNAL_URL = "http://127.0.0.1:8088"
 
 app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
 
 WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
 INDEX_FILE = WEBAPP_DIR / "index.html"
+
+# --- POST /api/claim ---
+@app.post("/api/check")
+async def api_check(req: Request):
+    """
+    Вход: { gid: string, user_id: int, username?: string }
+    Ответ: {
+      ok: bool,
+      need: [{id, title, username, link}]  # каналы, где нет подписки
+      ends_at: int,                        # unix ts окончания розыгрыша
+      ticket: str | null                   # если уже участвует
+    }
+    """
+    data = await req.json()
+    gid = str(data.get("gid") or "").strip()
+    user_id = int(data.get("user_id") or 0)
+
+    if not (gid and user_id and BOT_TOKEN):
+        return JSONResponse({"ok": False, "need": [], "ticket": None, "ends_at": int(time.time())}, status_code=400)
+
+    # 1) спросим у бота по розыгрышу: какие каналы нужны + когда дедлайн + есть ли уже билет
+    #    (бот знает структуру розыгрыша и БД; сделаем внутренний хелпер в боте)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as cli:
+            r = await cli.post(f"{BOT_INTERNAL_URL}/giveaway/info", json={"gid": gid, "user_id": user_id})
+            r.raise_for_status()
+            info = r.json()
+    except Exception:
+        return JSONResponse({"ok": False, "need": [], "ticket": None, "ends_at": int(time.time())}, status_code=502)
+
+    channels: List[Dict[str, Any]] = info.get("channels", [])
+    ends_at: int = int(info.get("ends_at") or int(time.time()))
+    ticket: str | None = info.get("ticket")
+
+    # 2) проверим подписки для каждого канала
+    need: List[Dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=7.0) as cli:
+        for ch in channels:
+            chat_id = ch["id"]      # numeric id (или @username — бот вернёт готовое)
+            title = ch.get("title") or ""
+            username = ch.get("username")  # без @
+            link = ch.get("link") or (f"https://t.me/{username}" if username else None)
+
+            try:
+                resp = await cli.get(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember",
+                    params={"chat_id": chat_id, "user_id": user_id},
+                )
+                j = resp.json()
+                ok = j.get("ok") and j.get("result", {}).get("status") in ("member", "creator", "administrator")
+            except Exception:
+                ok = False
+
+            if not ok:
+                need.append({
+                    "id": chat_id,
+                    "title": title,
+                    "username": username,
+                    "link": link,
+                })
+
+    return {"ok": len(need) == 0, "need": need, "ticket": ticket, "ends_at": ends_at}
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
 @app.get("/miniapp/", response_class=HTMLResponse)

@@ -35,6 +35,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from io import BytesIO
 import aiohttp
+from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
 from aiogram.types import LinkPreviewOptions
 
@@ -2498,6 +2499,48 @@ async def main():
     # 6) Запускаем polling
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
+# --- Внутренний HTTP для preview_service ---
+
+async def _internal_get_giveaway_info(gid: str, user_id: int):
+    # пока просто макет — можно позже связать с реальной логикой
+    return {"ok": True, "gid": gid, "user_id": user_id}
+
+async def _internal_claim_ticket(gid: str, user_id: int):
+    # временно возвращаем просто «ок»
+    return {"ok": True, "ticket": "TEST123"}
+
+def make_internal_app():
+    app = web.Application()
+
+    async def giveaway_info(request: web.Request):
+        data = await request.json()
+        gid = str(data.get("gid") or "")
+        user_id = int(data.get("user_id") or 0)
+        if not (gid and user_id):
+            return web.json_response({"ok": False}, status=400)
+        info = await _internal_get_giveaway_info(gid, user_id)
+        return web.json_response(info)
+
+    async def claim_ticket(request: web.Request):
+        data = await request.json()
+        gid = str(data.get("gid") or "")
+        user_id = int(data.get("user_id") or 0)
+        if not (gid and user_id):
+            return web.json_response({"ok": False}, status=400)
+        result = await _internal_claim_ticket(gid, user_id)
+        return web.json_response(result)
+
+    app.router.add_post("/api/giveaway_info", giveaway_info)
+    app.router.add_post("/api/claim_ticket", claim_ticket)
+    return app
+
+
+async def run_internal_server():
+    runner = web.AppRunner(make_internal_app())
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 8088)   # ← локальный порт
+    await site.start()
+    print("📡 Internal API running on http://127.0.0.1:8088")
 
 if __name__ == "__main__":
     import asyncio

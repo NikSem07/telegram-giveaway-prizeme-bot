@@ -47,24 +47,75 @@ function renderNeed(channels) {
 }
 
 async function checkFlow() {
-  hide("#screen-ok"); hide("#screen-need"); hide("#screen-fail");
-  show("#screen-loading");
+  hide("#screen-ok"); hide("#screen-need"); show("#screen-loading");
+
   try {
-    const gid = getStartParam();
+    const gid = getStartParam(); // как у тебя: берём из startapp (gid)
     if (!gid) throw new Error("start_param is empty");
 
-    const data = await callCheck(gid);
+    // Telegram WebApp init data
+    const initDataUnsafe = tg.initDataUnsafe || {};
+    const user = initDataUnsafe.user || {};
+    const user_id = user.id;
+    const username = user.username || null;
+
+    const resp = await fetch("/api/check", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ gid, user_id, username })
+    });
+    const data = await resp.json();
+
+    if (!data || resp.status >= 400) throw new Error("check_failed");
+
+    // осталось времени
+    const endsAt = data.ends_at ? new Date(data.ends_at * 1000) : null;
+
     if (data.ok) {
-      $("#ticket").textContent = data.ticket || "—";
+      // уже участвует? покажем билет сразу
+      if (data.ticket) {
+        $("#ticket").textContent = data.ticket;
+      } else {
+        // запросим выдачу билета
+        const claimResp = await fetch("/api/claim", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ gid, user_id })
+        });
+        const claim = await claimResp.json();
+        if (claim && claim.ok && claim.ticket) {
+          $("#ticket").textContent = claim.ticket;
+        } else {
+          $("#ticket").textContent = "—";
+        }
+      }
       hide("#screen-loading"); show("#screen-ok");
-      tg.MainButton?.hide?.();
+      tg.MainButton?.hide();
     } else {
-      renderNeed(data.need || []);
+      // нужно подписаться
+      const ul = $("#need-channels");
+      ul.innerHTML = "";
+      (data.need || []).forEach(ch => {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = ch.link || (ch.username ? `https://t.me/${ch.username}` : "#");
+        a.target = "_blank";
+        a.textContent = ch.title || ch.username || ch.id;
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+
+      // кнопка «Проверить подписку»
+      const btn = $("#btn-recheck");
+      btn.onclick = () => checkFlow();
+
       hide("#screen-loading"); show("#screen-need");
     }
-  } catch (err) {
-    console.error("[PrizeMe] check error:", err);
-    hide("#screen-loading"); show("#screen-fail");
+  } catch (e) {
+    console.error(e);
+    hide("#screen-loading"); show("#screen-need");
+    $("#need-channels").innerHTML = "<li>Ошибка проверки. Нажмите «Проверить подписку».</li>";
+    $("#btn-recheck").onclick = () => checkFlow();
   }
 }
 
