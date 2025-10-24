@@ -11,6 +11,7 @@ from starlette.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 
 import httpx
+from httpx import AsyncClient
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse, JSONResponse
@@ -44,6 +45,7 @@ app: FastAPI  # приложение у тебя уже создано выше 
 
 WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
 INDEX_FILE = WEBAPP_DIR / "index.html"
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # --- POST /api/claim ---
 @app.post("/api/check")
@@ -138,14 +140,6 @@ app.mount(
     name="miniapp-static",
 )
 
-# 3. Простейшее API, чтобы страница не падала, пока не подключим твою бизнес-логику
-@app.post("/api/check-join")
-async def api_check_join(req: Request):
-    body = await req.json()
-    gid = str(body.get("gid") or "")
-    # временный ответ — всегда "ок" с тестовым билетом
-    return JSONResponse({"ok": True, "ticket": f"TEST-{gid or '000000'}"})
-
 # === /Mini App ===
 
 @app.middleware("http")
@@ -226,92 +220,161 @@ async def health_any(request: Request):
 # Mini-App (бэкенд) — проверка подписок и выдача билета
 # ──────────────────────────────────────────────────────────────────────────────
 
+# --- helper: аккуратная проверка членства с логами
+async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) -> tuple[bool, str]:
+    try:
+        r = await client.get(
+            f"{TELEGRAM_API}/getChatMember",
+            params={"chat_id": chat_id, "user_id": user_id},
+            timeout=5.0
+        )
+        data = r.json()
+    except Exception as e:
+        # сеть / таймаут / иное
+        return False, f"network_error: {type(e).__name__}: {e}"
+
+    if not data.get("ok"):
+        # типичная причина: бот не админ канала → "400 Bad Request: user not found"
+        return False, f"tg_error: {data.get('error_code')} {data.get('description')}"
+
+    status = (data["result"]["status"] or "").lower()
+    # считаем подписчиком member | administrator | creator
+    is_member = status in ("member", "administrator", "creator")
+    return is_member, f"status={status}"
+
+
 @app.post("/api/check-join")
 async def api_check_join(req: Request):
     """
-    Тело: { "gid": "<int>", "init_data": "<Telegram WebApp initData>" }
-    Алгоритм:
-      1) валидируем init_data;
-      2) достаём user_id;
-      3) читаем чаты розыгрыша из SQLite;
-      4) через Bot API проверяем подписку;
-      5) если всё ок — создаём/возвращаем билет (entries).
+    Тело: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
+
+    Возвращает:
+      { ok: bool,
+        need: [{title, username, url}],
+        ticket?: str,
+        title?: str,
+        details?: [str]  # подробные логи проверки (для отладки)
+      }
     """
     if not BOT_TOKEN:
-        return PlainTextResponse("BOT_TOKEN is not configured", status_code=500)
+        return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
 
     body = await req.json()
     gid = int(body.get("gid") or 0)
-    init_data = body.get("init_data") or ""
+    init_data = (body.get("init_data") or "").strip()
 
+    # 0) проверка init_data (подпись Telegram WebApp)
     parsed = _tg_check_webapp_initdata(init_data)
     if not parsed or not parsed.get("user_parsed"):
-        return Response(content=json.dumps({"ok": False, "reason": "bad_initdata"}), media_type="application/json")
+        return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
     user = parsed["user_parsed"]
     user_id = int(user["id"])
 
-    # читаем розыгрыш и каналы
+    # 1) читаем розыгрыш и список каналов из SQLite
     with _db() as db:
-        row_g = db.execute("SELECT internal_title FROM giveaways WHERE id=?", (gid,)).fetchone()
-        if not row_g:
-            return Response(content=json.dumps({"ok": False, "reason": "not_found"}), media_type="application/json")
+        g_row = db.execute(
+            "SELECT internal_title FROM giveaways WHERE id=?",
+            (gid,),
+        ).fetchone()
+        if not g_row:
+            return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
 
         rows = db.execute("""
             SELECT gc.chat_id, gc.title, oc.username
             FROM giveaway_channels gc
             LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
             WHERE gc.giveaway_id=?
+            ORDER BY gc.id
         """, (gid,)).fetchall()
-        chats = [{"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]} for r in rows]
 
-    # проверяем подписку
+        channels = [
+            {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
+            for r in rows
+        ]
+
+    # 2) проверяем подписку по каждому каналу через Bot API
     need = []
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        for ch in chats:
+    details = []
+    async with AsyncClient(timeout=10.0) as client:
+        for ch in channels:
+            raw_chat_id = ch.get("chat_id")
+            title = ch.get("title") or "канал"
+            username = ch.get("username")
+
+            # приводим chat_id к int если он строковый
             try:
-                url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
-                params = {"chat_id": ch["chat_id"], "user_id": user_id}
-                r = await client.get(url, params=params)
-                js = r.json()
-                st = js.get("result", {}).get("status")
-                ok = _status_member_ok(st or "")
+                chat_id = int(raw_chat_id)
             except Exception:
-                ok = False
-            if not ok:
-                link = f"https://t.me/{ch['username']}" if ch.get("username") else None
-                need.append({"title": ch["title"], "username": ch.get("username"), "url": link})
+                details.append(f"[{title}] bad chat_id={raw_chat_id!r}")
+                need.append({
+                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                    "username": username,
+                    "url": f"https://t.me/{username}" if username else None,
+                })
+                continue
 
-    if need:
-        return Response(content=json.dumps({"ok": False, "need": need}), media_type="application/json")
+            try:
+                r = await client.get(
+                    f"{TELEGRAM_API}/getChatMember",
+                    params={"chat_id": chat_id, "user_id": user_id},
+                )
+                js = r.json()
+                ok = js.get("ok", False)
+                status = (js.get("result", {}) or {}).get("status") if ok else None
+                is_member = _status_member_ok((status or "").lower())
+                details.append(f"[{title}] {js.get('description') or ''} status={status}")
+            except Exception as e:
+                is_member = False
+                details.append(f"[{title}] network_error: {type(e).__name__}: {e}")
 
-    # подписан везде → выдаем/возвращаем билет
-    code = None
-    with _db() as db:
-        row_e = db.execute("SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?", (gid, user_id)).fetchone()
-        if row_e:
-            code = row_e["ticket_code"]
-        else:
-            import random, string
-            ALPH = string.ascii_uppercase + string.digits
-            # пробуем несколько раз на случай коллизии
-            for _ in range(8):
-                try_code = "".join(random.choices(ALPH, k=6))
-                try:
-                    db.execute(
-                        "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
-                        "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
-                        (gid, user_id, try_code)
-                    )
-                    db.commit()
-                    code = try_code
-                    break
-                except Exception:
-                    continue
+            if not is_member:
+                need.append({
+                    "title": title,
+                    "username": username,
+                    "url": f"https://t.me/{username}" if username else None,
+                })
 
-    title = row_g["internal_title"]
-    return Response(content=json.dumps({"ok": True, "ticket": code, "title": title}), media_type="application/json")
+    # 3) если подписан везде — выдаём/возвращаем билет
+    if not need:
+        code = None
+        with _db() as db:
+            row = db.execute(
+                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
+                (gid, user_id),
+            ).fetchone()
+            if row:
+                code = row["ticket_code"]
+            else:
+                import random, string
+                alphabet = string.ascii_uppercase + string.digits
+                for _ in range(8):  # несколько попыток на случай коллизий
+                    try_code = "".join(random.choices(alphabet, k=6))
+                    try:
+                        db.execute(
+                            "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
+                            "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
+                            (gid, user_id, try_code),
+                        )
+                        db.commit()
+                        code = try_code
+                        break
+                    except Exception:
+                        pass
 
+        return JSONResponse({
+            "ok": True,
+            "ticket": code,
+            "title": g_row["internal_title"],
+            "details": details,
+        })
+
+    # 4) не все условия выполнены
+    return JSONResponse({
+        "ok": False,
+        "need": need,
+        "details": details,
+    })
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Прокси /uploads/* → S3 (200 OK, без редиректа) + OG для ботов
