@@ -2496,18 +2496,136 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     logging.info("🔁 Webhook удалён, включаю polling...")
 
-    # 6) Запускаем polling
+    # 6) Стартуем внутренний HTTP для preview_service
+    asyncio.create_task(run_internal_server())
+
+    # 7) Запускаем polling
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 # --- Внутренний HTTP для preview_service ---
 
 async def _internal_get_giveaway_info(gid: str, user_id: int):
-    # пока просто макет — можно позже связать с реальной логикой
-    return {"ok": True, "gid": gid, "user_id": user_id}
+    """
+    Возвращает данные для мини-апа:
+      - список каналов розыгрыша с флагом подписки текущего пользователя
+      - дату окончания (UTC) и уже выданный билет (если есть)
+    Формат ответа под фронт:
+      {
+        "ok": true,
+        "ends_at": "2025-11-11T19:20:00Z",
+        "channels": [
+            {"title": "...", "username": "mychannel", "link": "https://t.me/mychannel", "is_member": true}
+        ],
+        "ticket": "ABC123" | null
+      }
+    """
+    # приводим gid к int
+    try:
+        giveaway_id = int(gid)
+    except Exception:
+        return {"ok": False, "error": "bad_gid"}
+
+    # читаем розыгрыш и прикрепленные каналы
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            return {"ok": False, "error": "not_found"}
+
+        res = await s.execute(stext("""
+            SELECT gc.chat_id, gc.title, oc.username
+            FROM giveaway_channels gc
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE gc.giveaway_id = :g
+            ORDER BY gc.id
+        """), {"g": giveaway_id})
+        rows = res.fetchall()
+
+        # есть ли уже билет у пользователя
+        res = await s.execute(
+            stext("SELECT ticket_code FROM entries WHERE giveaway_id=:g AND user_id=:u"),
+            {"g": giveaway_id, "u": user_id}
+        )
+        row_ticket = res.first()
+        ticket = row_ticket[0] if row_ticket else None
+
+    # проверяем подписку пользователя на каждом канале
+    channels = []
+    all_ok = True
+    for chat_id, title, username in rows:
+        try:
+            m = await bot.get_chat_member(chat_id, user_id)
+            is_member = m.status in {"member", "administrator", "creator"}
+        except Exception:
+            is_member = False
+        all_ok = all_ok and is_member
+        link = f"https://t.me/{username}" if username else None
+        channels.append({
+            "title": title,
+            "username": username,
+            "link": link,
+            "is_member": is_member,
+        })
+
+    return {
+        "ok": True,
+        "ends_at": gw.end_at_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "channels": channels,
+        "ticket": ticket
+    }
 
 async def _internal_claim_ticket(gid: str, user_id: int):
-    # временно возвращаем просто «ок»
-    return {"ok": True, "ticket": "TEST123"}
+    """
+    Выдаёт билет, если пользователь подписан на все каналы розыгрыша.
+    Возвращает {ok, ticket} или {ok:false, need=[список каналов без подписки]}.
+    """
+    try:
+        giveaway_id = int(gid)
+    except Exception:
+        return {"ok": False, "error": "bad_gid"}
+
+    # проверяем, что розыгрыш активен
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw or gw.status != GiveawayStatus.ACTIVE:
+            return {"ok": False, "error": "not_active"}
+
+    # проверяем подписку на все каналы (используем уже готовый хелпер)
+    all_ok, details = await check_membership_on_all(bot, user_id, giveaway_id)
+    if not all_ok:
+        # вернём список тех, где нет подписки
+        need = [title for (title, ok) in details if not ok]
+        return {"ok": False, "need": need}
+
+    # если подписка ок — выдаём (или возвращаем существующий) билет
+    async with session_scope() as s:
+        # есть уже билет?
+        res = await s.execute(
+            stext("SELECT ticket_code FROM entries WHERE giveaway_id=:g AND user_id=:u"),
+            {"g": giveaway_id, "u": user_id}
+        )
+        row = res.first()
+        if row:
+            ticket = row[0]
+        else:
+            # генерируем и сохраняем
+            for _ in range(5):
+                ticket = gen_ticket_code()
+                try:
+                    await s.execute(stext(
+                        "INSERT INTO entries(giveaway_id,user_id,ticket_code,prelim_ok,prelim_checked_at) "
+                        "VALUES (:g,:u,:code,1,:ts)"
+                    ), {
+                        "g": giveaway_id,
+                        "u": user_id,
+                        "code": ticket,
+                        "ts": datetime.now(timezone.utc)
+                    })
+                    break
+                except Exception:
+                    # коллизия кода — попробуем ещё раз
+                    continue
+
+    return {"ok": True, "ticket": ticket}
 
 def make_internal_app():
     app = web.Application()
