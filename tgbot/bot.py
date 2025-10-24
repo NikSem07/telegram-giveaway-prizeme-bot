@@ -1052,8 +1052,8 @@ async def on_chat_shared(m: Message, state: FSMContext):
             await s.execute(
                 stext(
                     "INSERT OR REPLACE INTO organizer_channels("
-                    "owner_user_id, chat_id, username, title, is_private, bot_role, status"
-                    ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok')"
+                    "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
+                    ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok', :ts)"
                 ),
                 {
                     "o": m.from_user.id,
@@ -1062,6 +1062,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
                     "t": title,
                     "p": int(is_private),
                     "r": role,
+                    "ts": datetime.now(timezone.utc),
                 },
             )
 
@@ -2442,11 +2443,9 @@ async def on_my_chat_member(event: ChatMemberUpdated):
             if status in ("administrator", "member"):
                 # сохраняем или обновляем
                 await s.execute(
-                    stext("""
-                    INSERT OR REPLACE INTO organizer_channels
-                    (owner_user_id, chat_id, username, title, is_private, bot_role, status)
-                    VALUES (:o, :cid, :u, :t, :p, :r, 'ok')
-                    """),
+                    stext("INSERT OR REPLACE INTO organizer_channels("
+                            "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
+                            ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok', :ts)"),
                     {
                         "o": user.id if user else 0,
                         "cid": chat.id,
@@ -2454,6 +2453,7 @@ async def on_my_chat_member(event: ChatMemberUpdated):
                         "t": title,
                         "p": int(is_private),
                         "r": status,
+                        "ts": datetime.now(timezone.utc),
                     }
                 )
             else:
