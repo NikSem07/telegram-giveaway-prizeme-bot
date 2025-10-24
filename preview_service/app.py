@@ -10,7 +10,7 @@ from starlette.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 
 import httpx
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse
 from starlette.requests import Request
@@ -20,7 +20,7 @@ from starlette.requests import Request
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Загружаем .env из текущей папки
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(find_dotenv(), override=False)
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "").strip()
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
