@@ -26,7 +26,8 @@ load_dotenv(find_dotenv(), override=False)
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "").strip()
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
-DB_PATH     = Path(__file__).with_name("bot.db")
+# БД: берём из .env, иначе по умолчанию ../tgbot/bot.db
+DB_PATH     = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
 
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
@@ -248,61 +249,71 @@ async def api_check_join(req: Request):
     """
     Тело: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
 
-    Возвращает:
-      { ok: bool,
-        need: [{title, username, url}],
-        ticket?: str,
-        title?: str,
-        details?: [str]  # подробные логи проверки (для отладки)
-      }
+    Ответ:
+      ok: bool
+      need: [{title, username, url}]
+      ticket?: str
+      title?: str
+      details?: [str]
+      reason?: str  # при ошибке
     """
     if not BOT_TOKEN:
         return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
 
-    body = await req.json()
-    gid = int(body.get("gid") or 0)
-    init_data = (body.get("init_data") or "").strip()
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
     # 0) проверка init_data (подпись Telegram WebApp)
-    parsed = _tg_check_webapp_initdata(init_data)
+    parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
     if not parsed or not parsed.get("user_parsed"):
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
-    user = parsed["user_parsed"]
-    user_id = int(user["id"])
+    user_id = int(parsed["user_parsed"]["id"])
+    gid = int(body.get("gid") or 0)
+    if not gid:
+        return JSONResponse({"ok": False, "reason": "no_gid"}, status_code=400)
 
-    # 1) читаем розыгрыш и список каналов из SQLite
-    with _db() as db:
-        g_row = db.execute(
-            "SELECT internal_title FROM giveaways WHERE id=?",
-            (gid,),
-        ).fetchone()
-        if not g_row:
-            return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
+    details: list[str] = []
+    # 1) читаем розыгрыш и каналы из БД
+    try:
+        with _db() as db:
+            g_row = db.execute(
+                "SELECT internal_title FROM giveaways WHERE id=?",
+                (gid,)
+            ).fetchone()
+            if not g_row:
+                return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
 
-        rows = db.execute("""
-            SELECT gc.chat_id, gc.title, oc.username
-            FROM giveaway_channels gc
-            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
-            WHERE gc.giveaway_id=?
-            ORDER BY gc.id
-        """, (gid,)).fetchall()
+            rows = db.execute("""
+                SELECT gc.chat_id, gc.title, oc.username
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id=?
+                ORDER BY gc.id
+            """, (gid,)).fetchall()
 
-        channels = [
-            {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
-            for r in rows
-        ]
+            channels = [
+                {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
+                for r in rows
+            ]
+    except Exception as e:
+        # самая частая причина: неправильный путь к БД → no such table ...
+        return JSONResponse({
+            "ok": False,
+            "reason": f"db_error: {type(e).__name__}: {e}",
+            "details": details
+        }, status_code=500)
 
-    # 2) проверяем подписку по каждому каналу через Bot API
+    # 2) проверяем подписку по каждому каналу
     need = []
-    details = []
     async with AsyncClient(timeout=10.0) as client:
         for ch in channels:
             raw_chat_id = ch.get("chat_id")
             title = ch.get("title") or "канал"
             username = ch.get("username")
 
-            # приводим chat_id к int если он строковый
             try:
                 chat_id = int(raw_chat_id)
             except Exception:
@@ -320,13 +331,16 @@ async def api_check_join(req: Request):
                     params={"chat_id": chat_id, "user_id": user_id},
                 )
                 js = r.json()
-                ok = js.get("ok", False)
-                status = (js.get("result", {}) or {}).get("status") if ok else None
-                is_member = _status_member_ok((status or "").lower())
-                details.append(f"[{title}] {js.get('description') or ''} status={status}")
+                if not js.get("ok"):
+                    details.append(f"[{title}] tg_error {js.get('error_code')} {js.get('description')}")
+                    is_member = False
+                else:
+                    status = (js["result"]["status"] or "").lower()
+                    details.append(f"[{title}] status={status}")
+                    is_member = status in ("member", "administrator", "creator")
             except Exception as e:
-                is_member = False
                 details.append(f"[{title}] network_error: {type(e).__name__}: {e}")
+                is_member = False
 
             if not is_member:
                 need.append({
@@ -338,29 +352,36 @@ async def api_check_join(req: Request):
     # 3) если подписан везде — выдаём/возвращаем билет
     if not need:
         code = None
-        with _db() as db:
-            row = db.execute(
-                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
-                (gid, user_id),
-            ).fetchone()
-            if row:
-                code = row["ticket_code"]
-            else:
-                import random, string
-                alphabet = string.ascii_uppercase + string.digits
-                for _ in range(8):  # несколько попыток на случай коллизий
-                    try_code = "".join(random.choices(alphabet, k=6))
-                    try:
-                        db.execute(
-                            "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
-                            "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
-                            (gid, user_id, try_code),
-                        )
-                        db.commit()
-                        code = try_code
-                        break
-                    except Exception:
-                        pass
+        try:
+            with _db() as db:
+                row = db.execute(
+                    "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
+                    (gid, user_id),
+                ).fetchone()
+                if row:
+                    code = row["ticket_code"]
+                else:
+                    import random, string
+                    alphabet = string.ascii_uppercase + string.digits
+                    for _ in range(8):
+                        try_code = "".join(random.choices(alphabet, k=6))
+                        try:
+                            db.execute(
+                                "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
+                                "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
+                                (gid, user_id, try_code),
+                            )
+                            db.commit()
+                            code = try_code
+                            break
+                        except Exception:
+                            pass
+        except Exception as e:
+            return JSONResponse({
+                "ok": False,
+                "reason": f"db_write_error: {type(e).__name__}: {e}",
+                "details": details
+            }, status_code=500)
 
         return JSONResponse({
             "ok": True,
