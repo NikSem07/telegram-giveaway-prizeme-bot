@@ -65,6 +65,7 @@ async def api_check(req: Request):
     # 0) тело запроса
     try:
         body = await req.json()
+        print(f"[CHECK] body={body!r}")
     except Exception:
         return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
@@ -81,6 +82,7 @@ async def api_check(req: Request):
     parsed = _tg_check_webapp_initdata(init_data)
     if not parsed or not parsed.get("user_parsed"):
         # здесь оставляем 400, чтобы видно было проблему на фронте
+        print(f"[CHECK] bad_initdata: init_data_len={len(init_data)}, parsed={parsed}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
     user_id = int(parsed["user_parsed"]["id"])
 
@@ -190,11 +192,13 @@ async def api_claim(req: Request):
 
     try:
         body = await req.json()
+        print(f"[CLAIM] body={body!r}")
     except Exception:
         return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
     parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
     if not parsed or not parsed.get("user_parsed"):
+        print(f"[CLAIM] bad_initdata: init_data_len={len((body.get('init_data') or ''))}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
     user_id = int(parsed["user_parsed"]["id"])
