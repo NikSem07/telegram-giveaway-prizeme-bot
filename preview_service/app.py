@@ -133,6 +133,66 @@ async def api_check(req: Request):
         "details": detail,
     })
 
+# --- POST /api/claim ---
+@app.post("/api/claim")
+async def api_claim(req: Request):
+    """
+    Фронт вызывает /api/claim после успешной предварительной проверки.
+    В теле ждём:
+      { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
+    Возвращаем:
+      { "ok": true,  "ticket": "ABC123", "details": [...] }
+      { "ok": false, "need": [ {title, username, url}, ... ], "details": [...] }
+    """
+    if not BOT_TOKEN:
+        return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
+
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
+
+    gid_raw = body.get("gid")
+    init_data = (body.get("init_data") or "").strip()
+
+    # 1) Восстанавливаем user_id из подписанного init_data
+    parsed = _tg_check_webapp_initdata(init_data)
+    if not parsed or not parsed.get("user_parsed"):
+        return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
+
+    user_id = int(parsed["user_parsed"]["id"])
+    try:
+        gid = int(gid_raw)
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
+
+    # 2) Дёргаем внутренний HTTP бота, который реально выдаёт билет
+    internal_url = f"{BOT_INTERNAL_URL}/api/claim_ticket"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as cli:
+            r = await cli.post(internal_url, json={"gid": gid, "user_id": user_id})
+            txt = r.text
+            if r.status_code != 200:
+                print(f"[api_claim] INTERNAL FAIL {internal_url} -> {r.status_code} :: {txt}")
+                return JSONResponse({"ok": False, "reason": "internal_fail"}, status_code=502)
+            data = r.json()
+    except Exception as e:
+        print(f"[api_claim] INTERNAL EXC {internal_url}: {e!r}")
+        return JSONResponse({"ok": False, "reason": "internal_exc"}, status_code=502)
+
+    # 3) Приводим ответ к формату фронта
+    if data.get("ok"):
+        return JSONResponse({"ok": True, "ticket": data.get("ticket")})
+
+    # если не ок, вернём need в том же виде, что и /api/check
+    need = data.get("need") or []
+    # внутренний сервис отдаёт просто названия — добавим username/URL, если они есть
+    # (это «мягко»: фронт всё равно умеет показать и просто title)
+    return JSONResponse({"ok": False, "need": [
+        {"title": t, "username": None, "url": None} if isinstance(t, str) else t
+        for t in need
+    ]})
+
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
 @app.get("/miniapp/", response_class=HTMLResponse)
