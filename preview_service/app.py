@@ -40,7 +40,7 @@ MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
 # безопасность: разрешаем дергать внутренний эндпоинт бота только с localhost
-BOT_INTERNAL_URL = "http://127.0.0.1:8088"
+BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8088")
 
 app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
 
@@ -52,63 +52,87 @@ TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 @app.post("/api/check")
 async def api_check(req: Request):
     """
-    Вход: { gid: string, user_id: int, username?: string }
-    Ответ: {
-      ok: bool,
-      need: [{id, title, username, link}]  # каналы, где нет подписки
-      ends_at: int,                        # unix ts окончания розыгрыша
-      ticket: str | null                   # если уже участвует
-    }
+    1) Получаем от фронта gid и user_id (он приходит из tgWebAppData).
+    2) Идём во внутренний HTTP бота (aiohttp на 127.0.0.1:8088) за сведениями о каналах и дедлайне.
+    3) Сами проверяем подписку по каждому каналу через Bot API getChatMember.
+    4) Возвращаем фронту "ok"/"need"/"error" и подробности.
     """
     data = await req.json()
-    gid = str(data.get("gid") or "").strip()
+    gid = str(data.get("gid") or "")
     user_id = int(data.get("user_id") or 0)
 
-    if not (gid and user_id and BOT_TOKEN):
-        return JSONResponse({"ok": False, "need": [], "ticket": None, "ends_at": int(time.time())}, status_code=400)
+    if not gid or not user_id:
+        return JSONResponse({"ok": False, "error": "bad_request"}, status_code=400)
 
-    # 1) спросим у бота по розыгрышу: какие каналы нужны + когда дедлайн + есть ли уже билет
-    #    (бот знает структуру розыгрыша и БД; сделаем внутренний хелпер в боте)
+    # 1) Берём сведения о розыгрыше у внутреннего сервера бота
+    internal_url = f"{BOT_INTERNAL_URL}/api/giveaway_info"
     try:
         async with httpx.AsyncClient(timeout=10.0) as cli:
-            r = await cli.post(f"{BOT_INTERNAL_URL}/giveaway/info", json={"gid": gid, "user_id": user_id})
-            r.raise_for_status()
+            r = await cli.post(internal_url, json={"gid": gid, "user_id": user_id})
+            txt = r.text
+            if r.status_code != 200:
+                print(f"[api_check] INTERNAL FAIL {internal_url} -> {r.status_code} :: {txt}")
+                return JSONResponse({"ok": False, "error": "internal_fail"}, status_code=502)
             info = r.json()
-    except Exception:
-        return JSONResponse({"ok": False, "need": [], "ticket": None, "ends_at": int(time.time())}, status_code=502)
+    except Exception as e:
+        print(f"[api_check] INTERNAL EXC {internal_url}: {e!r}")
+        return JSONResponse({"ok": False, "error": "internal_exc"}, status_code=502)
 
-    channels: List[Dict[str, Any]] = info.get("channels", [])
-    ends_at: int = int(info.get("ends_at") or int(time.time()))
-    ticket: str | None = info.get("ticket")
+    channels = info.get("channels") or []
+    ends_at  = info.get("ends_at")
 
-    # 2) проверим подписки для каждого канала
-    need: List[Dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=7.0) as cli:
-        for ch in channels:
-            chat_id = ch["id"]      # numeric id (или @username — бот вернёт готовое)
-            title = ch.get("title") or ""
-            username = ch.get("username")  # без @
-            link = ch.get("link") or (f"https://t.me/{username}" if username else None)
+    # 2) Проверяем подписку пользователя на каждом канале
+    need   = []
+    detail = []
+    try:
+        async with AsyncClient() as client:
+            for ch in channels:
+                chat_id = ch.get("chat_id")
+                title   = ch.get("title") or "канал"
 
-            try:
-                resp = await cli.get(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember",
-                    params={"chat_id": chat_id, "user_id": user_id},
-                )
-                j = resp.json()
-                ok = j.get("ok") and j.get("result", {}).get("status") in ("member", "creator", "administrator")
-            except Exception:
-                ok = False
+                # нормализуем chat_id если вдруг строка
+                try:
+                    chat_id = int(chat_id)
+                except Exception:
+                    detail.append(f"{title}: bad chat_id={chat_id!r}")
+                    need.append({
+                        "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                        "username": ch.get("username"),
+                        "url": f"https://t.me/{ch['username']}" if ch.get("username") else None,
+                    })
+                    continue
 
-            if not ok:
-                need.append({
-                    "id": chat_id,
-                    "title": title,
-                    "username": username,
-                    "link": link,
-                })
+                ok, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                detail.append(f"{title}: {dbg}")
+                if not ok:
+                    need.append({
+                        "title": title,
+                        "username": ch.get("username"),
+                        "url": f"https://t.me/{ch['username']}" if ch.get("username") else None,
+                    })
+    except Exception as e:
+        print(f"[api_check] CHAT_MEMBER EXC: {e!r}")
+        return JSONResponse({"ok": False, "error": "check_exc"}, status_code=502)
 
-    return {"ok": len(need) == 0, "need": need, "ticket": ticket, "ends_at": ends_at}
+    if need:
+        # надо подписаться хотя бы на один канал
+        return JSONResponse({
+            "ok": True,
+            "done": False,
+            "need": need,
+            "ends_at": ends_at,
+            "details": detail,
+        })
+
+    # всё ок — подписка выполнена
+    return JSONResponse({
+        "ok": True,
+        "done": True,
+        "ticket": None,   # билет выдаём отдельным вызовом (ниже)
+        "ends_at": ends_at,
+        "details": detail,
+    })
+
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
 @app.get("/miniapp/", response_class=HTMLResponse)
