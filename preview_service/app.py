@@ -109,65 +109,64 @@ async def api_check(req: Request):
 
     # 2) проверяем подписку по каждому каналу (Bot API getChatMember)
     need = []
-    async with AsyncClient(timeout=10.0) as client:
+    details = []
+    async with AsyncClient() as client:
         for ch in channels:
-            raw_chat_id = ch.get("chat_id")
-            title = ch.get("title") or "канал"
-            username = ch.get("username")
+            raw_id = ch.get("chat_id")
+            title  = ch.get("title") or ch.get("username") or "канал"
+            username = ch.get("username")  # может быть None
+            chat_id = None
 
-            try:
-                chat_id = int(raw_chat_id)
-            except Exception:
-                details.append(f"[{title}] bad chat_id={raw_chat_id!r}")
+            # 1) Пытаемся привести chat_id к int, если он есть
+            if raw_id is not None:
+                try:
+                    chat_id = int(str(raw_id))
+                except Exception as e:
+                    details.append(f"[{title}] bad chat_id={raw_id!r}: {e}")
+
+            # 2) Если chat_id всё ещё нет, но есть username — резолвим через getChat
+            if chat_id is None and username:
+                try:
+                    info = await tg_get_chat(client, username)  # используй у себя уже существующий хелпер
+                    chat_id = int(info["id"])
+                    details.append(f"[{title}] resolved id={chat_id}")
+                except Exception as e:
+                    need.append({
+                        "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                        "username": username,
+                        "url": f"https://t.me/{username}",
+                    })
+                    details.append(f"[{title}] resolve failed: {e}")
+                    continue  # к следующему каналу
+
+            # 3) Если chat_id не удалось получить ни так, ни так — показываем «ошибку проверки»
+            if chat_id is None:
                 need.append({
                     "title": "Ошибка проверки. Нажмите «Проверить подписку».",
                     "username": username,
                     "url": f"https://t.me/{username}" if username else None,
                 })
+                details.append(f"[{title}] no chat id & no username")
                 continue
 
+            # 4) Непосредственно проверка членства
             try:
-                r = await client.get(
-                    f"{TELEGRAM_API}/getChatMember",
-                    params={"chat_id": chat_id, "user_id": user_id},
-                )
-                js = r.json()
-                if not js.get("ok"):
-                    details.append(f"[{title}] tg_error {js.get('error_code')} {js.get('description')}")
-                    is_member = False
-                else:
-                    status = (js["result"]["status"] or "").lower()
-                    details.append(f"[{title}] status={status}")
-                    is_member = status in ("member", "administrator", "creator")
+                ok, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                details.append(f"[{title}] {dbg}")
+                if not ok:
+                    need.append({
+                        "title": title,
+                        "username": username,
+                        "url": f"https://t.me/{username}" if username else None,
+                    })
             except Exception as e:
-                details.append(f"[{title}] network_error: {type(e).__name__}: {e}")
-                is_member = False
-
-            if not is_member:
                 need.append({
-                    "title": title,
+                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
                     "username": username,
                     "url": f"https://t.me/{username}" if username else None,
                 })
+                details.append(f"[{title}] get_chat_member failed: {e}")
 
-    # 3) если не все подписки выполнены
-    if need:
-        return JSONResponse({"ok": True, "done": False, "need": need, "details": details})
-
-    # 4) всё выполнено — проверим, не выдавался ли уже билет (покажем его фронту)
-    ticket_code = None
-    try:
-        with _db() as db:
-            row = db.execute(
-                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
-                (gid, user_id)
-            ).fetchone()
-            if row:
-                ticket_code = row["ticket_code"]
-    except Exception as e:
-        details.append(f"ticket_lookup_error: {type(e).__name__}: {e}")
-
-    return JSONResponse({"ok": True, "done": True, "ticket": ticket_code, "details": details})
 
 # --- POST /api/claim ---
 @app.post("/api/claim")

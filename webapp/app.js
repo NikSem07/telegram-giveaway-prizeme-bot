@@ -45,40 +45,38 @@ async function checkFlow() {
     const gid = getStartParam();
     if (!gid) throw new Error("Empty start_param (gid)");
 
-    const user = tg.initDataUnsafe?.user || {};
-    const user_id = user.id;
-    const username = user.username || null;
-    if (!user_id) throw new Error("No user_id in initDataUnsafe");
+    // ВАЖНО: строго строка из Telegram WebApp
+    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) throw new Error("No initData");
 
-    // 1) Проверка подписки/статуса
-    const check = await api("/api/check", { gid, user_id, username });
+    // 1) Проверяем условия
+    const check = await api("/api/check", { gid, init_data });
 
-    if (check.ok) {
-      // уже участник? покажем билет/затребуем билет
-      if (check.ticket) {
-        $("#ticket").textContent = check.ticket;
-      } else {
-        // 2) Если билета нет — запрашиваем выдачу
-        const claim = await api("/api/claim", { gid, user_id });
-        $("#ticket").textContent = claim.ticket || "—";
+    if (check.ok && check.done) {
+      // Пользователь всё выполнил. Если билета нет — запрашиваем.
+      let ticket = check.ticket || null;
+      if (!ticket) {
+        const claim = await api("/api/claim", { gid, init_data });
+        ticket = claim.ticket || "—";
       }
+      $("#ticket").textContent = ticket;
       hide("#screen-loading"); show("#screen-ok");
-      tg.MainButton?.hide?.();
       return;
     }
 
-    // Нужны подписки — рендерим список и кнопку «Проверить подписку»
+    // 2) Нужно подписаться — показываем список
     const ul = $("#need-channels");
     ul.innerHTML = "";
     (check.need || []).forEach((ch) => {
-      const url = ch.link || (ch.username ? `https://t.me/${ch.username}` : "#");
+      const title = ch.title || ch.username || ch.id || "Канал";
+      const url   = ch.url || (ch.username ? `https://t.me/${ch.username}` : "#");
       const li = document.createElement("li");
       const a  = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.textContent = ch.title || ch.username || ch.id || "Канал";
+      a.href = url; a.target = "_blank"; a.textContent = title;
       a.addEventListener("click", (e) => {
-        try { if (tg.openTelegramLink) { e.preventDefault(); tg.openTelegramLink(url); } } catch {}
+        try {
+          if (Telegram?.WebApp?.openTelegramLink) { e.preventDefault(); Telegram.WebApp.openTelegramLink(url); }
+        } catch {}
       });
       li.appendChild(a);
       ul.appendChild(li);
@@ -86,8 +84,9 @@ async function checkFlow() {
 
     $("#btn-recheck").onclick = () => checkFlow();
     hide("#screen-loading"); show("#screen-need");
+
   } catch (err) {
-    console.error("[PrizeMe][AUTO-V1] checkFlow error:", err);
+    console.error("[PrizeMe] checkFlow error:", err);
     $("#need-channels").innerHTML = "<li>Ошибка проверки. Нажмите «Проверить подписку».</li>";
     $("#btn-recheck").onclick = () => checkFlow();
     hide("#screen-loading"); show("#screen-need");
