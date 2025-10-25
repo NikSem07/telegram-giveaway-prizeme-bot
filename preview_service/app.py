@@ -47,102 +47,18 @@ app: FastAPI  # приложение у тебя уже создано выше 
 WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
 INDEX_FILE = WEBAPP_DIR / "index.html"
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+OK_STATUSES = {"creator", "administrator", "member", "restricted"}  # restricted с is_member=true
 
-# --- POST /api/claim ---
+# --- POST /api/check ---
 @app.post("/api/check")
 async def api_check(req: Request):
     """
-    1) Получаем от фронта gid и user_id (он приходит из tgWebAppData).
-    2) Идём во внутренний HTTP бота (aiohttp на 127.0.0.1:8088) за сведениями о каналах и дедлайне.
-    3) Сами проверяем подписку по каждому каналу через Bot API getChatMember.
-    4) Возвращаем фронту "ok"/"need"/"error" и подробности.
-    """
-    data = await req.json()
-    gid = str(data.get("gid") or "")
-    user_id = int(data.get("user_id") or 0)
-
-    if not gid or not user_id:
-        return JSONResponse({"ok": False, "error": "bad_request"}, status_code=400)
-
-    # 1) Берём сведения о розыгрыше у внутреннего сервера бота
-    internal_url = f"{BOT_INTERNAL_URL}/api/giveaway_info"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as cli:
-            r = await cli.post(internal_url, json={"gid": gid, "user_id": user_id})
-            txt = r.text
-            if r.status_code != 200:
-                print(f"[api_check] INTERNAL FAIL {internal_url} -> {r.status_code} :: {txt}")
-                return JSONResponse({"ok": False, "error": "internal_fail"}, status_code=502)
-            info = r.json()
-    except Exception as e:
-        print(f"[api_check] INTERNAL EXC {internal_url}: {e!r}")
-        return JSONResponse({"ok": False, "error": "internal_exc"}, status_code=502)
-
-    channels = info.get("channels") or []
-    ends_at  = info.get("ends_at")
-
-    # 2) Проверяем подписку пользователя на каждом канале
-    need   = []
-    detail = []
-    try:
-        async with AsyncClient() as client:
-            for ch in channels:
-                chat_id = ch.get("chat_id")
-                title   = ch.get("title") or "канал"
-
-                # нормализуем chat_id если вдруг строка
-                try:
-                    chat_id = int(chat_id)
-                except Exception:
-                    detail.append(f"{title}: bad chat_id={chat_id!r}")
-                    need.append({
-                        "title": "Ошибка проверки. Нажмите «Проверить подписку».",
-                        "username": ch.get("username"),
-                        "url": f"https://t.me/{ch['username']}" if ch.get("username") else None,
-                    })
-                    continue
-
-                ok, dbg = await tg_get_chat_member(client, chat_id, user_id)
-                detail.append(f"{title}: {dbg}")
-                if not ok:
-                    need.append({
-                        "title": title,
-                        "username": ch.get("username"),
-                        "url": f"https://t.me/{ch['username']}" if ch.get("username") else None,
-                    })
-    except Exception as e:
-        print(f"[api_check] CHAT_MEMBER EXC: {e!r}")
-        return JSONResponse({"ok": False, "error": "check_exc"}, status_code=502)
-
-    if need:
-        # надо подписаться хотя бы на один канал
-        return JSONResponse({
-            "ok": True,
-            "done": False,
-            "need": need,
-            "ends_at": ends_at,
-            "details": detail,
-        })
-
-    # всё ок — подписка выполнена
-    return JSONResponse({
-        "ok": True,
-        "done": True,
-        "ticket": None,   # билет выдаём отдельным вызовом (ниже)
-        "ends_at": ends_at,
-        "details": detail,
-    })
-
-# --- POST /api/claim ---
-@app.post("/api/claim")
-async def api_claim(req: Request):
-    """
-    Фронт вызывает /api/claim после успешной предварительной проверки.
-    В теле ждём:
-      { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
+    Проверка условий розыгрыша.
+    Ждём: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
     Возвращаем:
-      { "ok": true,  "ticket": "ABC123", "details": [...] }
-      { "ok": false, "need": [ {title, username, url}, ... ], "details": [...] }
+      { ok: true, done: false, need: [{title, username, url}], details: [...] }
+      { ok: true, done: true,  ticket: "ABC123" | null, details: [...] }
+      { ok: false, reason: "..." }  # при ошибке
     """
     if not BOT_TOKEN:
         return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
@@ -152,46 +68,210 @@ async def api_claim(req: Request):
     except Exception:
         return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
-    gid_raw = body.get("gid")
-    init_data = (body.get("init_data") or "").strip()
-
-    # 1) Восстанавливаем user_id из подписанного init_data
-    parsed = _tg_check_webapp_initdata(init_data)
+    # 0) разбираем init_data → user_id (строго по доке)
+    parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
     if not parsed or not parsed.get("user_parsed"):
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
     user_id = int(parsed["user_parsed"]["id"])
     try:
-        gid = int(gid_raw)
+        gid = int(body.get("gid") or 0)
     except Exception:
+        gid = 0
+    if not gid:
         return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
 
-    # 2) Дёргаем внутренний HTTP бота, который реально выдаёт билет
-    internal_url = f"{BOT_INTERNAL_URL}/api/claim_ticket"
+    # 1) читаем каналы данного розыгрыша из БД
+    details: list[str] = []
     try:
-        async with httpx.AsyncClient(timeout=10.0) as cli:
-            r = await cli.post(internal_url, json={"gid": gid, "user_id": user_id})
-            txt = r.text
-            if r.status_code != 200:
-                print(f"[api_claim] INTERNAL FAIL {internal_url} -> {r.status_code} :: {txt}")
-                return JSONResponse({"ok": False, "reason": "internal_fail"}, status_code=502)
-            data = r.json()
+        with _db() as db:
+            g_row = db.execute(
+                "SELECT internal_title FROM giveaways WHERE id=?",
+                (gid,)
+            ).fetchone()
+            if not g_row:
+                return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
+
+            rows = db.execute("""
+                SELECT gc.chat_id, gc.title, oc.username
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id=?
+                ORDER BY gc.id
+            """, (gid,)).fetchall()
+
+            channels = [
+                {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
+                for r in rows
+            ]
     except Exception as e:
-        print(f"[api_claim] INTERNAL EXC {internal_url}: {e!r}")
-        return JSONResponse({"ok": False, "reason": "internal_exc"}, status_code=502)
+        return JSONResponse({"ok": False, "reason": f"db_error: {type(e).__name__}: {e}"}, status_code=500)
 
-    # 3) Приводим ответ к формату фронта
-    if data.get("ok"):
-        return JSONResponse({"ok": True, "ticket": data.get("ticket")})
+    # 2) проверяем подписку по каждому каналу (Bot API getChatMember)
+    need = []
+    async with AsyncClient(timeout=10.0) as client:
+        for ch in channels:
+            raw_chat_id = ch.get("chat_id")
+            title = ch.get("title") or "канал"
+            username = ch.get("username")
 
-    # если не ок, вернём need в том же виде, что и /api/check
-    need = data.get("need") or []
-    # внутренний сервис отдаёт просто названия — добавим username/URL, если они есть
-    # (это «мягко»: фронт всё равно умеет показать и просто title)
-    return JSONResponse({"ok": False, "need": [
-        {"title": t, "username": None, "url": None} if isinstance(t, str) else t
-        for t in need
-    ]})
+            try:
+                chat_id = int(raw_chat_id)
+            except Exception:
+                details.append(f"[{title}] bad chat_id={raw_chat_id!r}")
+                need.append({
+                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                    "username": username,
+                    "url": f"https://t.me/{username}" if username else None,
+                })
+                continue
+
+            try:
+                r = await client.get(
+                    f"{TELEGRAM_API}/getChatMember",
+                    params={"chat_id": chat_id, "user_id": user_id},
+                )
+                js = r.json()
+                if not js.get("ok"):
+                    details.append(f"[{title}] tg_error {js.get('error_code')} {js.get('description')}")
+                    is_member = False
+                else:
+                    status = (js["result"]["status"] or "").lower()
+                    details.append(f"[{title}] status={status}")
+                    is_member = status in ("member", "administrator", "creator")
+            except Exception as e:
+                details.append(f"[{title}] network_error: {type(e).__name__}: {e}")
+                is_member = False
+
+            if not is_member:
+                need.append({
+                    "title": title,
+                    "username": username,
+                    "url": f"https://t.me/{username}" if username else None,
+                })
+
+    # 3) если не все подписки выполнены
+    if need:
+        return JSONResponse({"ok": True, "done": False, "need": need, "details": details})
+
+    # 4) всё выполнено — проверим, не выдавался ли уже билет (покажем его фронту)
+    ticket_code = None
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
+                (gid, user_id)
+            ).fetchone()
+            if row:
+                ticket_code = row["ticket_code"]
+    except Exception as e:
+        details.append(f"ticket_lookup_error: {type(e).__name__}: {e}")
+
+    return JSONResponse({"ok": True, "done": True, "ticket": ticket_code, "details": details})
+
+# --- POST /api/claim ---
+@app.post("/api/claim")
+async def api_claim(req: Request):
+    """
+    Выдача билета (повторно безопасно).
+    Ждём: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
+    Возвращаем:
+      { ok: true,  ticket: "ABC123" }
+      { ok: false, need: [...]}  # если вдруг подписки не выполнены
+    """
+    if not BOT_TOKEN:
+        return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
+
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
+
+    parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
+    if not parsed or not parsed.get("user_parsed"):
+        return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
+
+    user_id = int(parsed["user_parsed"]["id"])
+    try:
+        gid = int(body.get("gid") or 0)
+    except Exception:
+        gid = 0
+    if not gid:
+        return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
+
+    # 1) повторная проверка подписки (защита, если фронт обходят вручную)
+    need = []
+    details = []
+    try:
+        with _db() as db:
+            rows = db.execute("""
+                SELECT gc.chat_id, gc.title, oc.username
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id=?
+                ORDER BY gc.id
+            """, (gid,)).fetchall()
+            channels = [
+                {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
+                for r in rows
+            ]
+    except Exception as e:
+        return JSONResponse({"ok": False, "reason": f"db_error: {type(e).__name__}: {e}"}, status_code=500)
+
+    async with AsyncClient(timeout=10.0) as client:
+        for ch in channels:
+            title = ch.get("title") or "канал"
+            username = ch.get("username")
+            try:
+                chat_id = int(ch.get("chat_id"))
+                r = await client.get(
+                    f"{TELEGRAM_API}/getChatMember",
+                    params={"chat_id": chat_id, "user_id": user_id},
+                )
+                js = r.json()
+                is_ok = js.get("ok") and (js["result"]["status"] or "").lower() in ("member","administrator","creator")
+            except Exception:
+                is_ok = False
+            if not is_ok:
+                need.append({
+                    "title": title,
+                    "username": username,
+                    "url": f"https://t.me/{username}" if username else None,
+                })
+
+    if need:
+        return JSONResponse({"ok": False, "need": need})
+
+    # 2) выдаём (или возвращаем существующий) билет
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
+                (gid, user_id),
+            ).fetchone()
+            if row:
+                return JSONResponse({"ok": True, "ticket": row["ticket_code"]})
+
+            import random, string
+            alphabet = string.ascii_uppercase + string.digits
+            # простая попытка с редкими коллизиями
+            for _ in range(8):
+                code = "".join(random.choices(alphabet, k=6))
+                try:
+                    db.execute(
+                        "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
+                        "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
+                        (gid, user_id, code),
+                    )
+                    db.commit()
+                    return JSONResponse({"ok": True, "ticket": code})
+                except Exception:
+                    # коллизия по уникальному коду — пробуем ещё раз
+                    pass
+    except Exception as e:
+        return JSONResponse({"ok": False, "reason": f"db_write_error: {type(e).__name__}: {e}"}, status_code=500)
+
+    return JSONResponse({"ok": False, "reason": "ticket_issue_failed"}, status_code=500)
 
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
@@ -326,160 +406,6 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
     # считаем подписчиком member | administrator | creator
     is_member = status in ("member", "administrator", "creator")
     return is_member, f"status={status}"
-
-
-@app.post("/api/check-join")
-async def api_check_join(req: Request):
-    """
-    Тело: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
-
-    Ответ:
-      ok: bool
-      need: [{title, username, url}]
-      ticket?: str
-      title?: str
-      details?: [str]
-      reason?: str  # при ошибке
-    """
-    if not BOT_TOKEN:
-        return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
-
-    try:
-        body = await req.json()
-    except Exception:
-        return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
-
-    # 0) проверка init_data (подпись Telegram WebApp)
-    parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
-    if not parsed or not parsed.get("user_parsed"):
-        return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
-
-    user_id = int(parsed["user_parsed"]["id"])
-    gid = int(body.get("gid") or 0)
-    if not gid:
-        return JSONResponse({"ok": False, "reason": "no_gid"}, status_code=400)
-
-    details: list[str] = []
-    # 1) читаем розыгрыш и каналы из БД
-    try:
-        with _db() as db:
-            g_row = db.execute(
-                "SELECT internal_title FROM giveaways WHERE id=?",
-                (gid,)
-            ).fetchone()
-            if not g_row:
-                return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
-
-            rows = db.execute("""
-                SELECT gc.chat_id, gc.title, oc.username
-                FROM giveaway_channels gc
-                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
-                WHERE gc.giveaway_id=?
-                ORDER BY gc.id
-            """, (gid,)).fetchall()
-
-            channels = [
-                {"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]}
-                for r in rows
-            ]
-    except Exception as e:
-        # самая частая причина: неправильный путь к БД → no such table ...
-        return JSONResponse({
-            "ok": False,
-            "reason": f"db_error: {type(e).__name__}: {e}",
-            "details": details
-        }, status_code=500)
-
-    # 2) проверяем подписку по каждому каналу
-    need = []
-    async with AsyncClient(timeout=10.0) as client:
-        for ch in channels:
-            raw_chat_id = ch.get("chat_id")
-            title = ch.get("title") or "канал"
-            username = ch.get("username")
-
-            try:
-                chat_id = int(raw_chat_id)
-            except Exception:
-                details.append(f"[{title}] bad chat_id={raw_chat_id!r}")
-                need.append({
-                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
-                    "username": username,
-                    "url": f"https://t.me/{username}" if username else None,
-                })
-                continue
-
-            try:
-                r = await client.get(
-                    f"{TELEGRAM_API}/getChatMember",
-                    params={"chat_id": chat_id, "user_id": user_id},
-                )
-                js = r.json()
-                if not js.get("ok"):
-                    details.append(f"[{title}] tg_error {js.get('error_code')} {js.get('description')}")
-                    is_member = False
-                else:
-                    status = (js["result"]["status"] or "").lower()
-                    details.append(f"[{title}] status={status}")
-                    is_member = status in ("member", "administrator", "creator")
-            except Exception as e:
-                details.append(f"[{title}] network_error: {type(e).__name__}: {e}")
-                is_member = False
-
-            if not is_member:
-                need.append({
-                    "title": title,
-                    "username": username,
-                    "url": f"https://t.me/{username}" if username else None,
-                })
-
-    # 3) если подписан везде — выдаём/возвращаем билет
-    if not need:
-        code = None
-        try:
-            with _db() as db:
-                row = db.execute(
-                    "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
-                    (gid, user_id),
-                ).fetchone()
-                if row:
-                    code = row["ticket_code"]
-                else:
-                    import random, string
-                    alphabet = string.ascii_uppercase + string.digits
-                    for _ in range(8):
-                        try_code = "".join(random.choices(alphabet, k=6))
-                        try:
-                            db.execute(
-                                "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
-                                "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
-                                (gid, user_id, try_code),
-                            )
-                            db.commit()
-                            code = try_code
-                            break
-                        except Exception:
-                            pass
-        except Exception as e:
-            return JSONResponse({
-                "ok": False,
-                "reason": f"db_write_error: {type(e).__name__}: {e}",
-                "details": details
-            }, status_code=500)
-
-        return JSONResponse({
-            "ok": True,
-            "ticket": code,
-            "title": g_row["internal_title"],
-            "details": details,
-        })
-
-    # 4) не все условия выполнены
-    return JSONResponse({
-        "ok": False,
-        "need": need,
-        "details": details,
-    })
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Прокси /uploads/* → S3 (200 OK, без редиректа) + OG для ботов
