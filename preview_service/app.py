@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
 from fastapi.staticfiles import StaticFiles
+from urllib.parse import parse_qsl
 
 import httpx
 from httpx import AsyncClient
@@ -348,26 +349,42 @@ def _status_member_ok(status: str) -> bool:
 
 def _tg_check_webapp_initdata(init_data: str) -> Optional[Dict[str, Any]]:
     """
-    Валидируем initData из Telegram WebApp по алгоритму из доки.
-    Возвращаем словарь parsed (tgWebAppData) либо None.
+    Проверяем initData по правилам Telegram Mini Apps.
+    ВАЖНО: при построении data_check_string игнорируем поля 'hash' и 'signature'.
+    Возвращаем parsed dict и кладём разобранного user в parsed["user_parsed"].
     """
     try:
-        # init_data: "key1=value1&key2=value2..."
-        data = dict([pair.split("=", 1) for pair in init_data.split("&")])
-        hash_recv = data.pop("hash", "")
-        data_check_string = "\n".join([f"{k}={v}" for k, v in sorted(data.items())])
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        h = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        if h != hash_recv:
+        if not init_data or not isinstance(init_data, str):
             return None
 
-        # внутри есть поле "user" с json
-        user_json = data.get("user")
+        # Разбираем query-string в словарь (сохраняем пустые значения)
+        parsed_items = dict(parse_qsl(init_data, keep_blank_values=True))
+
+        # Вынимаем хэш, а также убираем 'signature' (не участвует в подписи)
+        tg_hash = parsed_items.pop("hash", "")
+        parsed_items.pop("signature", None)
+
+        if not tg_hash:
+            return None
+
+        # Собираем data_check_string: key=value по алфавиту, через \n
+        data_check_string = "\n".join(f"{k}={parsed_items[k]}" for k in sorted(parsed_items.keys()))
+
+        # Ключ = HMAC-SHA256("WebAppData", BOT_TOKEN) → затем HMAC-SHA256(data_check_string, ключ)
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        check_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        if not hmac.compare_digest(check_hash, tg_hash):
+            return None
+
+        # Разбираем JSON из поля user
+        user_json = parsed_items.get("user")
         user = json.loads(user_json) if user_json else None
-        data["user_parsed"] = user
-        return data
+        parsed_items["user_parsed"] = user
+        return parsed_items
     except Exception:
         return None
+    
 
 def build_s3_url(key: str) -> str:
     return f"{S3_ENDPOINT}/{S3_BUCKET}/{key.lstrip('/')}"
