@@ -7,7 +7,6 @@ import json, hmac, hashlib
 from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
-from starlette.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 
 import httpx
@@ -15,7 +14,6 @@ from httpx import AsyncClient
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse, JSONResponse
-from starlette.requests import Request
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Инициализация
@@ -35,7 +33,6 @@ CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 
-OT_TOKEN = os.getenv("BOT_TOKEN")
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
