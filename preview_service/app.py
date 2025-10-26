@@ -40,7 +40,7 @@ MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
 # безопасность: разрешаем дергать внутренний эндпоинт бота только с localhost
-BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8085")
+BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8088")
 
 app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
 

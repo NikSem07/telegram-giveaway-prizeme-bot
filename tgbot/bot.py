@@ -2656,9 +2656,9 @@ def make_internal_app():
 async def run_internal_server():
     runner = web.AppRunner(make_internal_app())
     await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 8085)   # ← локальный порт
+    site = web.TCPSite(runner, "127.0.0.1", 8088)   # ← локальный порт
     await site.start()
-    print("📡 Internal API running on http://127.0.0.1:8085")
+    print("📡 Internal API running on http://127.0.0.1:8088")
 
 if __name__ == "__main__":
     import asyncio
