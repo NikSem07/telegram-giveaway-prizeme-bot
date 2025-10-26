@@ -76,12 +76,16 @@ async def api_check(req: Request):
         return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
 
     # 2) init_data → валидация и user_id
-    init_data = (body.get("init_data") or "").strip()
-    parsed = _tg_check_webapp_initdata(init_data)
+    raw_init = (body.get("init_data") or "").strip()
+
+    # Mini Apps присылают поле 'signature' — валидируем новым способом,
+    # иначе остаёмся на старом (для WebApp).
+    parsed = _tg_check_miniapp_initdata(raw_init) if "signature=" in raw_init else _tg_check_webapp_initdata(raw_init)
+
     if not parsed or not parsed.get("user_parsed"):
-        # здесь оставляем 400, чтобы видно было проблему на фронте
-        print(f"[CHECK] bad_initdata: init_data_len={len(init_data)}, parsed={parsed}")
+        print(f"[CHECK] bad_initdata: init_data_len={len(raw_init)}, parsed={parsed}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
+
     user_id = int(parsed["user_parsed"]["id"])
 
     # 3) читаем каналы розыгрыша
@@ -194,10 +198,13 @@ async def api_claim(req: Request):
     except Exception:
         return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
-    parsed = _tg_check_webapp_initdata((body.get("init_data") or "").strip())
+    raw_init = (body.get("init_data") or "").strip()
+    parsed = _tg_check_miniapp_initdata(raw_init) if "signature=" in raw_init else _tg_check_webapp_initdata(raw_init)
+
     if not parsed or not parsed.get("user_parsed"):
-        print(f"[CLAIM] bad_initdata: init_data_len={len((body.get('init_data') or ''))}")
+        print(f"[CLAIM] bad_initdata: init_data_len={len(raw_init)}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
+
 
     user_id = int(parsed["user_parsed"]["id"])
     try:
@@ -385,6 +392,44 @@ def _tg_check_webapp_initdata(init_data: str) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
     
+# --- Валидатор для Mini Apps ---
+
+def _tg_check_miniapp_initdata(init_data: str) -> dict | None:
+    """
+    Проверяем init_data из Telegram Mini Apps.
+    Отличия от WebApp:
+      - секрет = sha256(BOT_TOKEN)
+      - строка для подписи строится из ВСЕХ key=value КРОМЕ 'hash' и 'signature',
+        отсортированных по ключу и объединённых через '\n'
+    Возвращаем dict с 'user_parsed' при успехе, иначе None.
+    """
+    try:
+        # init_data приходит как query-string
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+
+        tg_hash = parsed.pop("hash", None)
+        # В Mini Apps всегда есть 'signature' — её НУЖНО игнорировать при расчёте
+        parsed.pop("signature", None)
+
+        if not tg_hash:
+            return None
+
+        data_check_string = "\n".join(f"{k}={parsed[k]}" for k in sorted(parsed.keys()))
+
+        # секрет Mini Apps
+        secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
+        check_hash = hmac.new(secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
+
+        if not hmac.compare_digest(check_hash, tg_hash):
+            return None
+
+        # разберём user JSON в отдельное поле
+        user_json = parsed.get("user")
+        parsed["user_parsed"] = json.loads(user_json) if user_json else None
+        return parsed
+    except Exception:
+        return None
+
 
 def build_s3_url(key: str) -> str:
     return f"{S3_ENDPOINT}/{S3_BUCKET}/{key.lstrip('/')}"
