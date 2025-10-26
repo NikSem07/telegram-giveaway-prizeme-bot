@@ -433,38 +433,33 @@ async def tg_get_chat(client: AsyncClient, username: str) -> dict:
 
 @app.api_route("/uploads/{path:path}", methods=["GET", "HEAD"])
 async def uploads(path: str, request: Request):
+    """
+    Отдаём ИМЕННО медиа-файл для всех клиентов (и для ботов тоже),
+    без OG-HTML — чтобы в Telegram не появлялись title/description.
+    """
     s3_url = build_s3_url(path)
-    mime_guess = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    method = "HEAD" if request.method == "HEAD" else "GET"
 
-    # Telegram/Twitter парсеры — отдаем OG HTML
-    if is_bot_request(request):
-        html = f"""<!DOCTYPE html>
-<html><head>
-  <meta property="og:type" content="article"/>
-  <meta property="og:title" content="PrizeMe | Giveaway"/>
-  <meta property="og:description" content="Participate and win!"/>
-  <meta property="og:image" content="{s3_url}"/>
-  <meta name="twitter:card" content="summary_large_image"/>
-</head><body></body></html>"""
-        return HTMLResponse(content=html, headers={"Cache-Control": f"public, max-age={CACHE_SEC}"})
-
-    # Обычный пользователь — проксируем файл
+    # Тянем файл с S3 (или только заголовки, если HEAD)
     async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-        if request.method == "HEAD":
-            r = await client.head(s3_url)
-            content = b""
-        else:
-            r = await client.get(s3_url)
-            content = r.content
+        r = await client.request(method, s3_url)
 
-    ctype = r.headers.get("content-type", mime_guess)
-    resp = Response(
-        content=content if request.method == "GET" else b"",
-        status_code=r.status_code if r.status_code < 400 else 404,
-        media_type=ctype,
-    )
-    if "content-length" in r.headers:
+    # Если S3 вернул ошибку — маппим её на 404 (чтобы Telegram не строил карточки-ошибки)
+    status = 200 if r.status_code < 400 else 404
+
+    # Тело отдаём только для GET
+    content = b"" if method == "HEAD" else (r.content or b"")
+
+    # Корректный Content-Type
+    ctype = r.headers.get("content-type") or (mimetypes.guess_type(path)[0] or "application/octet-stream")
+
+    resp = Response(content=content, status_code=status, media_type=ctype)
+
+    # Пробрасываем длину файла (для GET). Для HEAD тело пустое — длину не ставим.
+    if method == "GET" and "content-length" in r.headers:
         resp.headers["Content-Length"] = r.headers["content-length"]
+
+    # Кэш и отладка
     resp.headers["Cache-Control"] = f"public, max-age={CACHE_SEC}"
     resp.headers["X-Proxy-From"] = s3_url
     return resp
