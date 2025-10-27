@@ -523,17 +523,6 @@ def test_miniapp_validation():
 # test_miniapp_validation()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Служебные эндпоинты
-# ──────────────────────────────────────────────────────────────────────────────
-
-@app.api_route("/health", methods=["GET", "HEAD"])
-async def health_any(request: Request):
-    # Для GET вернём тело "ok", для HEAD — пустое тело с теми же заголовками/статусом
-    if request.method == "HEAD":
-        return Response(status_code=200, media_type="text/plain")
-    return PlainTextResponse("ok")
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Mini-App (бэкенд) — проверка подписок и выдача билета
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -543,19 +532,25 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
     Проверка членства с улучшенной обработкой ошибок и статусов
     """
     try:
+        print(f"[DEBUG] Checking membership: chat_id={chat_id}, user_id={user_id}")
+        
         r = await client.get(
             f"{TELEGRAM_API}/getChatMember",
             params={"chat_id": chat_id, "user_id": user_id},
-            timeout=5.0
+            timeout=10.0
         )
         data = r.json()
-        print(f"[DEBUG] getChatMember response: {data}")  # Детальный лог
+        print(f"[DEBUG] getChatMember FULL response: {data}")
+        
     except Exception as e:
+        print(f"[ERROR] Network error: {e}")
         return False, f"network_error: {type(e).__name__}: {e}"
 
     if not data.get("ok"):
         error_code = data.get('error_code')
         description = data.get('description', '')
+        
+        print(f"[ERROR] Telegram API error: {error_code} - {description}")
         
         # Анализ ошибок
         if "bot was kicked" in description.lower():
@@ -566,6 +561,8 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
             return False, "chat_not_found"
         elif "user not found" in description.lower():
             return False, "user_not_found_in_chat"
+        elif "not enough rights" in description.lower():
+            return False, "bot_not_admin"
         elif error_code == 400:
             return False, f"bad_request: {description}"
         elif error_code == 403:
@@ -576,13 +573,19 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
     result = data["result"]
     status = (result.get("status") or "").lower()
     
+    print(f"[DEBUG] User status: {status}")
+    
     # Расширенная проверка статусов
     is_member = False
     if status in ("member", "administrator", "creator"):
         is_member = True
+        print(f"[DEBUG] User is member with status: {status}")
     elif status == "restricted":
         # Для restricted проверяем is_member
         is_member = result.get("is_member", False)
+        print(f"[DEBUG] Restricted user, is_member: {is_member}")
+    else:
+        print(f"[DEBUG] User is NOT member, status: {status}")
     
     debug_info = f"status={status}, is_member={is_member}"
     
@@ -590,6 +593,7 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
     if status == "restricted":
         debug_info += f", permissions={result.get('permissions', {})}"
     
+    print(f"[DEBUG] Final result: {debug_info}")
     return is_member, debug_info
 
 
@@ -639,3 +643,65 @@ async def _any_head_ok(_path: str):
     # Отдаём 200 и пустое тело (корректное поведение для HEAD)
     return Response(status_code=200)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Служебные эндпоинты
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health_any(request: Request):
+    # Для GET вернём тело "ok", для HEAD — пустое тело с теми же заголовками/статусом
+    if request.method == "HEAD":
+        return Response(status_code=200, media_type="text/plain")
+    return PlainTextResponse("ok")
+
+# ДОБАВЬТЕ этот эндпоинт для диагностики
+@app.post("/api/debug/check_membership")
+async def debug_check_membership(req: Request):
+    """
+    Диагностический эндпоинт для проверки членства
+    """
+    try:
+        body = await req.json()
+        chat_id = body.get("chat_id")
+        user_id = body.get("user_id")
+        username = body.get("username")
+        
+        print(f"[DEBUG] Diagnostic request: chat_id={chat_id}, user_id={user_id}, username={username}")
+        
+        if not user_id:
+            return JSONResponse({"ok": False, "error": "user_id required"})
+        
+        result = {}
+        
+        async with AsyncClient(timeout=10.0) as client:
+            # Если передан username, резолвим chat_id
+            if username:
+                try:
+                    print(f"[DEBUG] Resolving username: {username}")
+                    chat_info = await tg_get_chat(client, username)
+                    resolved_chat_id = chat_info["id"]
+                    result["resolved_chat_id"] = resolved_chat_id
+                    result["chat_info"] = chat_info
+                    chat_id = resolved_chat_id
+                    print(f"[DEBUG] Resolved chat_id: {chat_id}")
+                except Exception as e:
+                    result["resolve_error"] = str(e)
+                    print(f"[ERROR] Resolve error: {e}")
+            
+            # Проверяем членство
+            if chat_id:
+                try:
+                    is_member, debug = await tg_get_chat_member(client, int(chat_id), int(user_id))
+                    result["is_member"] = is_member
+                    result["debug"] = debug
+                    result["chat_id"] = chat_id
+                    print(f"[DEBUG] Membership result: {result}")
+                except Exception as e:
+                    result["membership_error"] = str(e)
+                    print(f"[ERROR] Membership check error: {e}")
+        
+        return JSONResponse({"ok": True, "result": result})
+        
+    except Exception as e:
+        print(f"[ERROR] Diagnostic endpoint error: {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
