@@ -427,8 +427,11 @@ def _tg_check_miniapp_initdata(init_data: str) -> dict | None:
         print(f"[CHECK][mini] str_len={len(data_check_string)} sample={data_check_string[:220].replace('\\n','|')}")
 
         # 3) считаем HMAC
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
         check_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+        
+        print(f"[CHECK][mini] data_check_string='{data_check_string}'")
+        print(f"[CHECK][mini] tg_hash='{tg_hash}' my_hash='{check_hash}'")
 
         ok = hmac.compare_digest(check_hash, tg_hash)
         print(f"[CHECK][mini] digest_ok={ok}")
