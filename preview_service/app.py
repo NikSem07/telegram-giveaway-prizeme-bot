@@ -401,37 +401,55 @@ def _tg_check_webapp_initdata(init_data: str) -> Optional[Dict[str, Any]]:
 def _tg_check_miniapp_initdata(init_data: str) -> dict | None:
     """
     Проверяем init_data из Telegram Mini Apps.
-    Отличия от WebApp:
-      - секрет = sha256(BOT_TOKEN)
-      - строка для подписи строится из ВСЕХ key=value КРОМЕ 'hash' и 'signature',
-        отсортированных по ключу и объединённых через '\n'
-    Возвращаем dict с 'user_parsed' при успехе, иначе None.
+    Отличия:
+      - используем секрет sha256(BOT_TOKEN)
+      - собираем строку для подписи из ВСЕХ key=value, КРОМЕ 'hash' и 'signature',
+        сортируем по ключу, объединяем через '\n'
+    Возвращаем dict c 'user_parsed' при успехе, иначе None.
     """
     try:
-        # init_data приходит как query-string
-        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+        raw = (init_data or "").strip()
+        print(f"[CHECK][mini] raw_len={len(raw)}")
+
+        # 1) парсим query-string
+        parsed = dict(parse_qsl(raw, keep_blank_values=True))
+        keys = sorted(parsed.keys())
+        has_hash = "hash" in parsed
+        has_sign = "signature" in parsed
+        print(f"[CHECK][mini] keys={keys}, has_hash={has_hash}, has_signature={has_sign}")
 
         tg_hash = parsed.pop("hash", None)
-        # В Mini Apps всегда есть 'signature' — её НУЖНО игнорировать при расчёте
-        parsed.pop("signature", None)
+        parsed.pop("signature", None)  # обязательно игнорируем signature
 
         if not tg_hash:
+            print("[CHECK][mini] no hash -> fail")
             return None
 
-        data_check_string = "\n".join(f"{k}={parsed[k]}" for k in sorted(parsed.keys()))
+        # 2) собираем строку для подписи
+        items = [f"{k}={parsed[k]}" for k in sorted(parsed.keys())]
+        data_check_string = "\n".join(items)
+        print(f"[CHECK][mini] str_len={len(data_check_string)} sample={data_check_string[:220].replace('\\n','|')}")
 
-        # секрет Mini Apps
+        # 3) считаем HMAC
         secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
         check_hash = hmac.new(secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
 
-        if not hmac.compare_digest(check_hash, tg_hash):
+        ok = hmac.compare_digest(check_hash, tg_hash)
+        print(f"[CHECK][mini] digest_ok={ok}")
+
+        if not ok:
             return None
 
-        # разберём user JSON в отдельное поле
+        # 4) user в init_data — это JSON-строка
         user_json = parsed.get("user")
-        parsed["user_parsed"] = json.loads(user_json) if user_json else None
-        return parsed
-    except Exception:
+        user = json.loads(user_json) if user_json else None
+        if not user or "id" not in user:
+            print("[CHECK][mini] no user.id -> fail")
+            return None
+
+        return {"user_parsed": user, "start_param": parsed.get("start_param")}
+    except Exception as e:
+        print(f"[CHECK][mini] exception={e!r}")
         return None
 
 
