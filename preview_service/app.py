@@ -163,8 +163,6 @@ async def api_check(req: Request):
 
     done = len(need) == 0
 
-    print(f"[CHECK] done={done}, need={need}, details={details}, ticket={ticket}")
-
     # 5) если всё ок — вернём уже выданный билет (если есть)
     ticket = None
     if done:
@@ -179,7 +177,6 @@ async def api_check(req: Request):
             details.append(f"ticket_lookup_error: {type(e).__name__}: {e}")
 
     return JSONResponse({"ok": True, "done": done, "need": need, "ticket": ticket, "details": details})
-
 
 # --- POST /api/claim ---
 @app.post("/api/claim")
@@ -430,8 +427,8 @@ def _tg_check_miniapp_initdata(init_data: str) -> dict | None:
         print(f"[CHECK][mini] str_len={len(data_check_string)} sample={data_check_string[:220].replace('\\n','|')}")
 
         # 3) считаем HMAC
-        secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
-        check_hash = hmac.new(secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256).digest()
+        check_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
         ok = hmac.compare_digest(check_hash, tg_hash)
         print(f"[CHECK][mini] digest_ok={ok}")
