@@ -700,8 +700,8 @@ class Winner(Base):
 # ---- DB INIT ----
 
 # путь к bot.db строго рядом с bot.py (один файл для всех)
-DB_PATH = Path(__file__).with_name("bot.db")
-DB_URL = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
+DB_PATH = Path(os.getenv("DB_PATH") or Path(__file__).with_name("bot.db")).resolve()
+DB_URL  = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
@@ -919,28 +919,28 @@ CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
     can_manage_chat=True,
     can_post_messages=True,
     can_edit_messages=True,
-    can_delete_messages=False,
+    can_delete_messages=True,
     can_invite_users=True,
-    can_restrict_members=False,
+    can_restrict_members=True,
     can_promote_members=True,
     can_change_info=True,
     can_pin_messages=False,
-    can_manage_topics=False,
+    can_manage_topics=True,
     can_post_stories=False,
     can_edit_stories=False,
     can_delete_stories=False,
-    can_manage_video_chats=False,
+    can_manage_video_chats=True,
 )
 
 GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
     is_anonymous=False,
     can_manage_chat=True,
-    can_post_messages=False,
-    can_edit_messages=False,
+    can_post_messages=True,
+    can_edit_messages=True,
     can_delete_messages=True,
     can_invite_users=True,
     can_restrict_members=True,
-    can_promote_members=False,
+    can_promote_members=True,
     can_change_info=True,
     can_pin_messages=True,
     can_manage_topics=True,

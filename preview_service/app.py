@@ -102,6 +102,8 @@ async def api_check(req: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "reason": f"db_error: {type(e).__name__}: {e}"}, status_code=500)
 
+    print(f"[CHECK] channels_in_db={channels}")
+
     # 4) проверка подписки
     need, details = [], []
     async with AsyncClient(timeout=10.0) as client:
@@ -162,6 +164,8 @@ async def api_check(req: Request):
                 details.append(f"[{title}] get_chat_member failed: {e}")
 
     done = len(need) == 0
+
+    print(f"[CHECK] done={done}, need={need}, details={details}, ticket={ticket}")
 
     # 5) если всё ок — вернём уже выданный билет (если есть)
     ticket = None
