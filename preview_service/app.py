@@ -102,6 +102,7 @@ async def api_check(req: Request):
 
     print(f"[CHECK] channels_in_db={channels}")
 
+
     # 4) проверка подписки
     need, details = [], []
     async with AsyncClient(timeout=10.0) as client:
@@ -111,22 +112,29 @@ async def api_check(req: Request):
             uname   = ch.get("username")
             chat_id = None
 
+            print(f"[DEBUG] Processing channel: {title}, username: {uname}, raw_id: {raw_id}")
+
             # a) привести chat_id к int, если он передан
             if raw_id is not None:
                 try:
                     chat_id = int(str(raw_id))
+                    details.append(f"[{title}] using chat_id={chat_id}")
                 except Exception as e:
                     details.append(f"[{title}] bad chat_id={raw_id!r}: {e}")
 
             # b) если chat_id нет, но есть username — резолвим через getChat
             if chat_id is None and uname:
                 try:
-                    info = await tg_get_chat(client, uname)  # см. helper ниже
+                    print(f"[DEBUG] Resolving username: {uname}")
+                    info = await tg_get_chat(client, uname)
                     chat_id = int(info["id"])
-                    details.append(f"[{title}] resolved id={chat_id}")
+                    details.append(f"[{title}] resolved id={chat_id} from username")
+                    
+                    # Обновляем chat_id в памяти для последующих проверок
+                    ch["chat_id"] = chat_id
                 except Exception as e:
                     need.append({
-                        "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                        "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                         "username": uname,
                         "url": f"https://t.me/{uname}",
                     })
@@ -136,7 +144,7 @@ async def api_check(req: Request):
             # c) если chat_id так и не получили — даём «ошибка проверки»
             if chat_id is None:
                 need.append({
-                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                     "username": uname,
                     "url": f"https://t.me/{uname}" if uname else None,
                 })
@@ -145,17 +153,33 @@ async def api_check(req: Request):
 
             # d) финальная проверка членства
             try:
+                print(f"[DEBUG] Checking membership: chat_id={chat_id}, user_id={user_id}")
                 ok, dbg = await tg_get_chat_member(client, chat_id, user_id)
                 details.append(f"[{title}] {dbg}")
+                
                 if not ok:
-                    need.append({
-                        "title": title,
-                        "username": uname,
-                        "url": f"https://t.me/{uname}" if uname else None,
-                    })
+                    # Анализируем причину отказа
+                    if "bot_not_member" in dbg or "bot_kicked" in dbg:
+                        need.append({
+                            "title": f"Бот не имеет доступа к {title}. Обратитесь к администратору.",
+                            "username": uname,
+                            "url": f"https://t.me/{uname}" if uname else None,
+                        })
+                    elif "user_not_found" in dbg:
+                        need.append({
+                            "title": title,
+                            "username": uname,
+                            "url": f"https://t.me/{uname}" if uname else None,
+                        })
+                    else:
+                        need.append({
+                            "title": title,
+                            "username": uname,
+                            "url": f"https://t.me/{uname}" if uname else None,
+                        })
             except Exception as e:
                 need.append({
-                    "title": "Ошибка проверки. Нажмите «Проверить подписку».",
+                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                     "username": uname,
                     "url": f"https://t.me/{uname}" if uname else None,
                 })
@@ -515,6 +539,9 @@ async def health_any(request: Request):
 
 # --- helper: аккуратная проверка членства с логами
 async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) -> tuple[bool, str]:
+    """
+    Проверка членства с улучшенной обработкой ошибок и статусов
+    """
     try:
         r = await client.get(
             f"{TELEGRAM_API}/getChatMember",
@@ -522,27 +549,48 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
             timeout=5.0
         )
         data = r.json()
+        print(f"[DEBUG] getChatMember response: {data}")  # Детальный лог
     except Exception as e:
-        # сеть / таймаут / иное
         return False, f"network_error: {type(e).__name__}: {e}"
 
     if not data.get("ok"):
-        # типичная причина: бот не админ канала → "400 Bad Request: user not found"
-        return False, f"tg_error: {data.get('error_code')} {data.get('description')}"
+        error_code = data.get('error_code')
+        description = data.get('description', '')
+        
+        # Анализ ошибок
+        if "bot was kicked" in description.lower():
+            return False, "bot_kicked_from_chat"
+        elif "bot is not a member" in description.lower():
+            return False, "bot_not_member_of_chat"
+        elif "chat not found" in description.lower():
+            return False, "chat_not_found"
+        elif "user not found" in description.lower():
+            return False, "user_not_found_in_chat"
+        elif error_code == 400:
+            return False, f"bad_request: {description}"
+        elif error_code == 403:
+            return False, f"forbidden: {description}"
+        else:
+            return False, f"tg_api_error: {error_code} {description}"
 
-    status = (data["result"]["status"] or "").lower()
-    # считаем подписчиком member | administrator | creator
-    is_member = status in ("member", "administrator", "creator")
-    return is_member, f"status={status}"
-
-# --- helper: getChat по @username -> {id, title, ...}
-async def tg_get_chat(client: AsyncClient, username: str) -> dict:
-    uname = username if username.startswith("@") else f"@{username}"
-    r = await client.get(f"{TELEGRAM_API}/getChat", params={"chat_id": uname}, timeout=5.0)
-    data = r.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"tg_error: {data.get('error_code')} {data.get('description')}")
-    return data["result"]
+    result = data["result"]
+    status = (result.get("status") or "").lower()
+    
+    # Расширенная проверка статусов
+    is_member = False
+    if status in ("member", "administrator", "creator"):
+        is_member = True
+    elif status == "restricted":
+        # Для restricted проверяем is_member
+        is_member = result.get("is_member", False)
+    
+    debug_info = f"status={status}, is_member={is_member}"
+    
+    # Дополнительная диагностика для restricted
+    if status == "restricted":
+        debug_info += f", permissions={result.get('permissions', {})}"
+    
+    return is_member, debug_info
 
 
 # ──────────────────────────────────────────────────────────────────────────────
