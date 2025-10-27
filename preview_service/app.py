@@ -77,13 +77,11 @@ async def api_check(req: Request):
 
     # 2) init_data → валидация и user_id
     raw_init = (body.get("init_data") or "").strip()
-
-    # Mini Apps присылают поле 'signature' — валидируем новым способом,
-    # иначе остаёмся на старом (для WebApp).
-    parsed = _tg_check_miniapp_initdata(raw_init) if "signature=" in raw_init else _tg_check_webapp_initdata(raw_init)
+    validator_used = "mini" if "signature=" in raw_init else "web"
+    parsed = _tg_check_miniapp_initdata(raw_init) if validator_used == "mini" else _tg_check_webapp_initdata(raw_init)
+    print(f"[CHECK] validator={validator_used} init_data_len={len(raw_init)} parsed={'ok' if parsed else 'None'}")  # лог
 
     if not parsed or not parsed.get("user_parsed"):
-        print(f"[CHECK] bad_initdata: init_data_len={len(raw_init)}, parsed={parsed}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
     user_id = int(parsed["user_parsed"]["id"])
@@ -203,10 +201,11 @@ async def api_claim(req: Request):
         return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
 
     raw_init = (body.get("init_data") or "").strip()
-    parsed = _tg_check_miniapp_initdata(raw_init) if "signature=" in raw_init else _tg_check_webapp_initdata(raw_init)
+    validator_used = "mini" if "signature=" in raw_init else "web"
+    parsed = _tg_check_miniapp_initdata(raw_init) if validator_used == "mini" else _tg_check_webapp_initdata(raw_init)
+    print(f"[CLAIM] validator={validator_used} init_data_len={len(raw_init)} parsed={'ok' if parsed else 'None'}")  # лог
 
     if not parsed or not parsed.get("user_parsed"):
-        print(f"[CLAIM] bad_initdata: init_data_len={len(raw_init)}")
         return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
 
 
