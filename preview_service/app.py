@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
 from fastapi.staticfiles import StaticFiles
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 
 import httpx
 from httpx import AsyncClient
@@ -396,59 +396,82 @@ def _tg_check_webapp_initdata(init_data: str) -> Optional[Dict[str, Any]]:
 
 def _tg_check_miniapp_initdata(init_data: str) -> dict | None:
     """
-    Проверяем init_data из Telegram Mini Apps.
-    Отличия:
-      - используем секрет sha256(BOT_TOKEN)
-      - собираем строку для подписи из ВСЕХ key=value, КРОМЕ 'hash' и 'signature',
-        сортируем по ключу, объединяем через '\n'
-    Возвращаем dict c 'user_parsed' при успехе, иначе None.
+    Проверяем init_data из Telegram Mini Apps по официальной спецификации.
+    Секрет: HMAC-SHA256("WebAppData", bot_token)
+    Data-check-string: все поля кроме 'hash' в исходном URL-encoded виде
     """
     try:
         raw = (init_data or "").strip()
         print(f"[CHECK][mini] raw_len={len(raw)}")
-
-        # 1) парсим query-string
-        parsed = dict(parse_qsl(raw, keep_blank_values=True))
-        keys = sorted(parsed.keys())
-        has_hash = "hash" in parsed
-        has_sign = "signature" in parsed
-        print(f"[CHECK][mini] keys={keys}, has_hash={has_hash}, has_signature={has_sign}")
-
-        tg_hash = parsed.pop("hash", None)
-        parsed.pop("signature", None)  # обязательно игнорируем signature
-
+        
+        # 1) Парсим как query string сохраняя исходное кодирование
+        parsed = dict(parse_qsl(raw, keep_blank_values=True, encoding='latin-1'))
+        
+        # Извлекаем hash до любой обработки
+        tg_hash = parsed.get("hash", "")
         if not tg_hash:
             print("[CHECK][mini] no hash -> fail")
             return None
-
-        # 2) собираем строку для подписи
-        items = [f"{k}={parsed[k]}" for k in sorted(parsed.keys())]
-        data_check_string = "\n".join(items)
-        print(f"[CHECK][mini] str_len={len(data_check_string)} sample={data_check_string[:220].replace('\\n','|')}")
-
-        # 3) считаем HMAC
-        secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
-        check_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
         
+        # 2) Собираем data-check-string из ВСЕХ полей кроме 'hash'
+        # Используем исходные URL-encoded значения как есть
+        check_parts = []
+        for key in sorted(parsed.keys()):
+            if key == "hash":
+                continue
+            # Берем значения в том виде, как они пришли (URL-encoded)
+            value = parsed[key]
+            check_parts.append(f"{key}={value}")
+        
+        data_check_string = "\n".join(check_parts)
         print(f"[CHECK][mini] data_check_string='{data_check_string}'")
-        print(f"[CHECK][mini] tg_hash='{tg_hash}' my_hash='{check_hash}'")
-
+        print(f"[CHECK][mini] tg_hash='{tg_hash}'")
+        
+        # 3) Вычисляем секрет по спецификации Mini Apps
+        # Ключ = HMAC-SHA256("WebAppData", bot_token)
+        secret_key = hmac.new(
+            key=b"WebAppData",
+            msg=BOT_TOKEN.encode(),
+            digestmod=hashlib.sha256
+        ).digest()
+        
+        # 4) Вычисляем ожидаемый hash
+        check_hash = hmac.new(
+            key=secret_key,
+            msg=data_check_string.encode(),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+        
+        print(f"[CHECK][mini] computed_hash='{check_hash}'")
+        
+        # 5) Сравниваем хэши
         ok = hmac.compare_digest(check_hash, tg_hash)
         print(f"[CHECK][mini] digest_ok={ok}")
-
+        
         if not ok:
             return None
 
-        # 4) user в init_data — это JSON-строка
-        user_json = parsed.get("user")
-        user = json.loads(user_json) if user_json else None
-        if not user or "id" not in user:
-            print("[CHECK][mini] no user.id -> fail")
+        # 6) Декодируем user для извлечения ID
+        user_json_encoded = parsed.get("user")
+        if user_json_encoded:
+            user_json = unquote(user_json_encoded)
+            user = json.loads(user_json)
+            if not user or "id" not in user:
+                print("[CHECK][mini] no user.id -> fail")
+                return None
+        else:
+            print("[CHECK][mini] no user -> fail")
             return None
 
-        return {"user_parsed": user, "start_param": parsed.get("start_param")}
+        return {
+            "user_parsed": user, 
+            "start_param": unquote(parsed.get("start_param", "")) if parsed.get("start_param") else None
+        }
+        
     except Exception as e:
         print(f"[CHECK][mini] exception={e!r}")
+        import traceback
+        print(f"[CHECK][mini] traceback: {traceback.format_exc()}")
         return None
 
 
@@ -459,6 +482,21 @@ def is_bot_request(request: Request) -> bool:
     ua = request.headers.get("user-agent", "").lower()
     return any(b in ua for b in ("telegrambot", "twitterbot", "facebookexternalhit", "linkedinbot"))
 
+# Добавьте эту функцию для тестирования
+def test_miniapp_validation():
+    """Тест на реальных данных Mini Apps"""
+    # Пример реального init_data (замените на актуальный из логов)
+    test_init_data = "user=%7B%22id%22%3A428883823%2C%22first_name%22%3A%22Nikita%22%2C%22last_name%22%3A%22Semenov%22%2C%22username%22%3A%22NikSemyonov%22%2C%22language_code%22%3A%22ru%22%2C%22is_premium%22%3Atrue%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2FYehTOpkUodPx8emwyz2PN7JwrDxf2aHqZN7fofdhjvw.svg%22%7D&chat_instance=3485967117599202343&chat_type=channel&start_param=13&auth_date=1761558433&signature=rvUP2hyaDgqfJ_vrS4tdwtUMQH6g_9o1DB-xYBV2iBGDEsrukYC8wSk_MAslZyVR60SW1qoX5flPM44tqldNBg&hash=2ed65a38563fcedfb9b3fb1a7091ae3a7a6e06ba9c69c2e4e75955a18b132ab4"
+    
+    result = _tg_check_miniapp_initdata(test_init_data)
+    print(f"Test result: {result is not None}")
+    if result:
+        print(f"User ID: {result['user_parsed']['id']}")
+    
+    return result
+
+# Можно вызвать тест где-нибудь в коде при запуске
+# test_miniapp_validation()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Служебные эндпоинты
