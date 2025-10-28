@@ -92,6 +92,7 @@ S3_KEY      = os.getenv("S3_ACCESS_KEY")
 S3_SECRET   = os.getenv("S3_SECRET_KEY")
 S3_REGION   = os.getenv("S3_REGION", "ru-1")
 
+t = os.getenv("BOT_TOKEN","")
 logging.info("[BOOT] BOT_TOKEN_SHA256=%s", hashlib.sha256(t.encode()).hexdigest())
 
 # Тексты экранов
