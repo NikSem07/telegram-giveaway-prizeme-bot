@@ -509,12 +509,31 @@ def test_miniapp_validation():
     
     return result
 
-# Можно вызвать тест где-нибудь в коде при запуске
-# test_miniapp_validation()
+# --- helper: getChat c поддержкой @username / ссылок / числовых id
+async def tg_get_chat(client: AsyncClient, ref: str | int) -> dict:
+    """
+    Возвращает объект chat по username (@name), t.me/ссылке или числовому chat_id.
+    Бросает Exception с понятным текстом, если Telegram API вернул ошибку.
+    """
+    # Нормализуем вход
+    if isinstance(ref, int):
+        chat_ref = ref
+    else:
+        s = str(ref).strip()
+        s = s.replace("https://t.me/", "").replace("t.me/", "")
+        if s.startswith("@"):
+            s = s[1:]
+        # если осталась чистая цифра — это id, иначе имя
+        chat_ref = int(s) if s.lstrip("-").isdigit() else f"@{s}"
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Mini-App (бэкенд) — проверка подписок и выдача билета
-# ──────────────────────────────────────────────────────────────────────────────
+    r = await client.get(f"{TELEGRAM_API}/getChat", params={"chat_id": chat_ref}, timeout=10.0)
+    data = r.json()
+    if not data.get("ok"):
+        desc = data.get("description", "")
+        code = data.get("error_code")
+        raise RuntimeError(f"getChat failed: {code} {desc}")
+
+    return data["result"]
 
 # --- helper: аккуратная проверка членства с логами
 async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) -> tuple[bool, str]:
