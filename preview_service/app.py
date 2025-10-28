@@ -86,6 +86,9 @@ def _normalize_chat_id(raw: str | int | None, username: str | None = None) -> tu
         return None, f"normalize_error {type(e).__name__}: {e}"
 
 def _is_member_local(chat_id: int, user_id: int) -> bool:
+    """
+    Проверка локальной БД на членство пользователя
+    """
     try:
         with _db() as db:
             row = db.execute(
@@ -93,7 +96,8 @@ def _is_member_local(chat_id: int, user_id: int) -> bool:
                 (int(chat_id), int(user_id)),
             ).fetchone()
             return row is not None
-    except Exception:
+    except Exception as e:
+        print(f"[WARNING] Local membership check failed: {e}")
         return False
 
 # --- POST /api/check ---
@@ -154,6 +158,8 @@ async def api_check(req: Request):
 
     # 4) проверка подписки
     need, details = [], []
+    is_ok_overall = True  # общий флаг выполнения условий
+    
     async with AsyncClient(timeout=10.0) as client:
         for ch in channels:
             raw_id  = ch.get("chat_id")
@@ -171,50 +177,50 @@ async def api_check(req: Request):
                     info = await tg_get_chat(client, uname)
                     chat_id = int(info["id"])
                     details.append(f"[{title}] resolved id={chat_id} from @{uname}")
-                    ch["chat_id"] = chat_id  # в дальнейших проверках уже будет id
+                    ch["chat_id"] = chat_id
                 except Exception as e:
-                    need.append({
-                        "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
-                        "username": uname,
-                        "url": f"https://t.me/{uname}",
-                    })
                     details.append(f"[{title}] resolve_failed: {type(e).__name__}: {e}")
-                    continue
+                    # Продолжаем с исходным chat_id для проверки через getChatMember
 
-            # 3) Если chat_id так и не появился — отдаём «ошибка проверки»
-            if chat_id is None:
-                need.append({
-                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
-                    "username": uname,
-                    "url": f"https://t.me/{uname}" if uname else None,
-                })
-                details.append(f"[{title}] no_chat_id_after_norm_and_resolve")
-                continue
+            # 3) Если chat_id так и не появился — используем raw_id для проверки
+            if chat_id is None and raw_id:
+                chat_id = raw_id
+                details.append(f"[{title}] using_raw_id: {raw_id}")
 
             # 4) Финальная проверка членства
+            channel_ok = False
             try:
-                if _is_member_local(chat_id, user_id):
+                if chat_id and _is_member_local(int(chat_id), int(user_id)):
                     details.append(f"[{title}] local=OK")
+                    channel_ok = True
                 else:
-                    ok_api, dbg = await tg_get_chat_member(client, int(chat_id), int(user_id))
+                    ok_api, dbg, status = await tg_get_chat_member(client, int(chat_id), int(user_id))
                     details.append(f"[{title}] {dbg}")
-                    if not ok_api:
+                    
+                    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем статус, а не ok_api
+                    if status in {"creator", "administrator", "member"}:
+                        channel_ok = True
+                    else:
+                        channel_ok = False
                         # ВСЕГДА отдаем username+url, чтобы фронт мог показать ссылку
                         need.append({
                             "title": title,
                             "username": uname,
-                            "url": f"https://t.me/{uname}" if uname else None,
+                            "url": f"https://t.me/{uname}" if uname else f"https://t.me/{chat_id}",
                         })
             except Exception as e:
-                # Даже при исключении — отдаем username+url
-                need.append({
-                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
-                    "username": uname,
-                    "url": f"https://t.me/{uname}" if uname else None,
-                })
                 details.append(f"[{title}] get_chat_member_failed: {type(e).__name__}: {e}")
+                channel_ok = False
+                need.append({
+                    "title": title,
+                    "username": uname,
+                    "url": f"https://t.me/{uname}" if uname else f"https://t.me/{chat_id}",
+                })
 
-    done = len(need) == 0
+            if not channel_ok:
+                is_ok_overall = False
+
+    done = is_ok_overall
 
     # 5) если всё ок — вернём уже выданный билет (если есть), иначе попробуем выдать новый
     ticket = None
@@ -573,9 +579,10 @@ async def tg_get_chat(client: AsyncClient, ref: str | int) -> dict:
     return data["result"]
 
 # --- helper: аккуратная проверка членства с логами
-async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) -> tuple[bool, str]:
+async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) -> tuple[bool, str, str]:
     """
     Проверка членства с улучшенной обработкой ошибок и статусов
+    Возвращает (ok: bool, debug: str, status: str)
     """
     try:
         print(f"[DEBUG] Checking membership: chat_id={chat_id}, user_id={user_id}")
@@ -586,11 +593,11 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
             timeout=10.0
         )
         data = r.json()
-        print(f"[DEBUG] getChatMember FULL response: {data}")
+        print(f"[DEBUG] getChatMember response: {data}")
         
     except Exception as e:
         print(f"[ERROR] Network error: {e}")
-        return False, f"network_error: {type(e).__name__}: {e}"
+        return False, f"network_error: {type(e).__name__}: {e}", "error"
 
     if not data.get("ok"):
         error_code = data.get('error_code')
@@ -600,47 +607,41 @@ async def tg_get_chat_member(client: AsyncClient, chat_id: int, user_id: int) ->
         
         # Анализ ошибок
         if "bot was kicked" in description.lower():
-            return False, "bot_kicked_from_chat"
+            return False, "bot_kicked_from_chat", "kicked"
         elif "bot is not a member" in description.lower():
-            return False, "bot_not_member_of_chat"
+            return False, "bot_not_member_of_chat", "left"
         elif "chat not found" in description.lower():
-            return False, "chat_not_found"
+            return False, "chat_not_found", "left"
         elif "user not found" in description.lower():
-            return False, "user_not_found_in_chat"
+            return False, "user_not_found_in_chat", "left"
         elif "not enough rights" in description.lower():
-            return False, "bot_not_admin"
+            return False, "bot_not_admin", "restricted"
         elif error_code == 400:
-            return False, f"bad_request: {description}"
+            return False, f"bad_request: {description}", "error"
         elif error_code == 403:
-            return False, f"forbidden: {description}"
+            return False, f"forbidden: {description}", "restricted"
         else:
-            return False, f"tg_api_error: {error_code} {description}"
+            return False, f"tg_api_error: {error_code} {description}", "error"
 
     result = data["result"]
     status = (result.get("status") or "").lower()
     
     print(f"[DEBUG] User status: {status}")
     
-    # Расширенная проверка статусов
-    is_member = False
-    if status in ("member", "administrator", "creator"):
-        is_member = True
-        print(f"[DEBUG] User is member with status: {status}")
-    elif status == "restricted":
-        # Для restricted проверяем is_member
-        is_member = result.get("is_member", False)
-        print(f"[DEBUG] Restricted user, is_member: {is_member}")
-    else:
-        print(f"[DEBUG] User is NOT member, status: {status}")
-    
-    debug_info = f"status={status}, is_member={is_member}"
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: возвращаем статус как третье значение
+    debug_info = f"status={status}"
     
     # Дополнительная диагностика для restricted
     if status == "restricted":
-        debug_info += f", permissions={result.get('permissions', {})}"
+        is_member = result.get("is_member", False)
+        debug_info += f", is_member={is_member}"
+        return is_member, debug_info, status
     
-    print(f"[DEBUG] Final result: {debug_info}")
-    return is_member, debug_info
+    # Для остальных статусов определяем доступ
+    is_ok = status in {"creator", "administrator", "member"}
+    
+    print(f"[DEBUG] Final result: {debug_info}, is_ok={is_ok}")
+    return is_ok, debug_info, status
 
 
 # ──────────────────────────────────────────────────────────────────────────────
