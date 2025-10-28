@@ -19,7 +19,11 @@ from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLRes
 # Загружаем .env из текущей папки
 load_dotenv(find_dotenv(), override=False)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+print("[BOOT] FILE =", Path(__file__).resolve())
+print("[BOOT] MTIME=", int(Path(__file__).stat().st_mtime))
+print("[BOOT] CWD  =", Path.cwd())
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8088")
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
