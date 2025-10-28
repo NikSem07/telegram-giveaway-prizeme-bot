@@ -92,6 +92,8 @@ S3_KEY      = os.getenv("S3_ACCESS_KEY")
 S3_SECRET   = os.getenv("S3_SECRET_KEY")
 S3_REGION   = os.getenv("S3_REGION", "ru-1")
 
+logging.info("[BOOT] BOT_TOKEN_SHA256=%s", hashlib.sha256(t.encode()).hexdigest())
+
 # Тексты экранов
 CONNECT_INVITE_TEXT = (
     "⭐️ Ваш розыгрыш создан, осталось только запустить!\n\n"

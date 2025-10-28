@@ -1,5 +1,6 @@
-# app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
+print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest())
 
+# app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
 import os
 import time
 import mimetypes
