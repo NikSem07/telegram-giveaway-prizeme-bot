@@ -199,12 +199,14 @@ async def api_check(req: Request):
                     ok_api, dbg = await tg_get_chat_member(client, int(chat_id), int(user_id))
                     details.append(f"[{title}] {dbg}")
                     if not ok_api:
+                        # ВСЕГДА отдаем username+url, чтобы фронт мог показать ссылку
                         need.append({
                             "title": title,
                             "username": uname,
                             "url": f"https://t.me/{uname}" if uname else None,
                         })
             except Exception as e:
+                # Даже при исключении — отдаем username+url
                 need.append({
                     "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                     "username": uname,
@@ -302,17 +304,21 @@ async def api_claim(req: Request):
     async with AsyncClient(timeout=10.0) as client:
         for ch in channels:
             title = ch.get("title") or "канал"
-            username = ch.get("username")
+            username = (ch.get("username") or "").lstrip("@") or None
             try:
                 chat_id = int(ch.get("chat_id"))
                 if _is_member_local(chat_id, user_id):
                     is_ok = True
                 else:
                     ok_check, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                    details.append(f"[{title}] {dbg}")
                     is_ok = ok_check
-            except Exception:
+            except Exception as e:
+                details.append(f"[{title}] claim_check_failed: {type(e).__name__}: {e}")
                 is_ok = False
+
             if not is_ok:
+                # ВСЕГДА отдаем username+url
                 need.append({
                     "title": title,
                     "username": username,
