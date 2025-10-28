@@ -63,23 +63,23 @@ def _normalize_chat_id(raw: str | int | None, username: str | None = None) -> tu
     Приводит chat_id к корректному виду для каналов/супергрупп.
     Возвращает (chat_id:int|None, debug:str).
     Логика:
-      - если пришло число со знаком '-' — вернём int(raw)
-      - если пришла строка вида '-100...' — вернём int(raw)
-      - если пришло положительное число/строка — пробуем резолвить через username
-      - если ничего не получилось — (None, reason)
+      - если уже начинается с '-', просто вернём int(raw)
+      - если положительное число -> попробуем превратить в -100<raw>
+      - если строка и не число -> bad format
     """
     try:
         if raw is None:
             return None, "no_raw_chat_id"
 
         s = str(raw).strip()
-        # уже корректный формат
+        # уже корректный формат (-100…)
         if s.startswith("-"):
             return int(s), "chat_id_ok"
 
-        # частый кейс: в БД лежит положительное число без -100… → не трогаем, а просим резолвить
+        # положительное число без префикса — пробуем починить
         if s.isdigit():
-            return None, f"need_resolve_from_username positive_id={s}"
+            fixed = f"-100{s}"
+            return int(fixed), f"patched_from_positive raw={s} -> {fixed}"
 
         return None, f"bad_chat_id_format raw={raw!r}"
     except Exception as e:
