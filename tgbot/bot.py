@@ -1,6 +1,4 @@
 import logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-
 import uuid
 import mimetypes
 import boto3
@@ -8,11 +6,15 @@ import asyncio, os, hashlib, random, string
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
+from io import BytesIO
+from html import escape
+from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
+from urllib.parse import urlencode
+
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
-from sqlalchemy import text as stext
-from aiogram.types import ChatMemberUpdated
-
+from aiogram.types import ChatMemberUpdated, ChatJoinRequest
 from aiogram import Bot, Dispatcher, F
 import aiogram.types as types
 from aiogram.filters import Command, StateFilter
@@ -24,30 +26,28 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import LinkPreviewOptions
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
-
+from sqlalchemy import text as _sqltext
+from sqlalchemy import text as stext
 from sqlalchemy import (text, String, Integer, BigInteger,
                         Boolean, DateTime, ForeignKey)
 from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from io import BytesIO
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.date import DateTrigger
+
 import aiohttp
 from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
-from aiogram.types import LinkPreviewOptions
 
-from html import escape
-from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
+
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
-import mimetypes
-from urllib.parse import urlencode
 
 DESCRIPTION_PROMPT = (
     "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
@@ -706,6 +706,28 @@ DB_URL  = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
+
+async def mark_membership(chat_id: int, user_id: int) -> None:
+    async with Session() as s:
+        async with s.begin():
+            await s.execute(
+                _sqltext(
+                    "INSERT OR IGNORE INTO channel_memberships(chat_id, user_id) "
+                    "VALUES (:c, :u)"
+                ),
+                {"c": chat_id, "u": user_id},
+            )
+
+async def is_member_local(chat_id: int, user_id: int) -> bool:
+    async with Session() as s:
+        r = await s.execute(
+            _sqltext(
+                "SELECT 1 FROM channel_memberships WHERE chat_id=:c AND user_id=:u"
+            ),
+            {"c": chat_id, "u": user_id},
+        )
+        return r.first() is not None
+
 # создать все таблицы по ORM-моделям (если их ещё нет)
 async def init_db():
     async with engine.begin() as conn:
@@ -742,6 +764,15 @@ async def ensure_schema():
         # 3) Индекс на owner_user_id для быстрых выборок
         await conn.exec_driver_sql("""
         CREATE INDEX IF NOT EXISTS idx_owner ON organizer_channels(owner_user_id);
+        """)
+        # 4) Локальный кэш фактов вступления (chat_id + user_id)
+        await conn.exec_driver_sql("""
+        CREATE TABLE IF NOT EXISTS channel_memberships (
+            chat_id   BIGINT NOT NULL,
+            user_id   BIGINT NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chat_id, user_id)
+        );
         """)
 
 @asynccontextmanager
@@ -797,16 +828,22 @@ async def check_membership_on_all(bot, user_id:int, giveaway_id:int):
         rows = res.all()
     details=[]; all_ok=True
     for title, chat_id in rows:
-        try:
-            m = await bot.get_chat_member(chat_id, user_id)
-            status = (m.status or "").lower()
-            ok = (
-                status in {"member", "administrator", "creator"} or
-                (status == "restricted" and getattr(m, "is_member", False))
-            )
-        except Exception:
-            ok = False
-        details.append((f"{title} (status={status}, is_member={getattr(m,'is_member',None)})", ok))
+        # 1) Быстрый путь: уже знаем, что он вступил (одобренный join-request)
+        ok = await is_member_local(int(chat_id), int(user_id))
+        status = "local" if ok else "unknown"
+
+        # 2) Если нет локальной отметки — подстрахуемся Bot API
+        if not ok:
+            try:
+                m = await bot.get_chat_member(chat_id, user_id)
+                status = (m.status or "").lower()
+                ok = (
+                    status in {"member", "administrator", "creator"} or
+                    (status == "restricted" and getattr(m, "is_member", False))
+                )
+            except Exception as e:
+                logging.warning(f"[CHK] chat={chat_id} user={user_id} err={e}")
+        details.append((f"{title} (status={status})", ok))
         all_ok = all_ok and ok
     return all_ok, details
 
@@ -912,10 +949,22 @@ class CreateFlow(StatesGroup):
     ENDAT = State()
 
 # ----------------- BOT -----------------
-from aiogram import Bot, Dispatcher, F
 bot = Bot(BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
+
+@dp.chat_join_request()
+async def on_join_request(ev: ChatJoinRequest, bot: Bot):
+    try:
+        chat_id = ev.chat.id
+        user_id = ev.from_user.id
+        # Одобряем системной кнопкой Telegram (никаких лишних сообщений пользователю)
+        await bot.approve_chat_join_request(chat_id, user_id)
+        # Фиксируем факт вступления — пригодится MiniApp
+        await mark_membership(chat_id, user_id)
+        logging.info(f"[JOIN] approved chat={chat_id} user={user_id}")
+    except Exception as e:
+        logging.exception(f"[JOIN][ERR] {e}")
 
 # --- Требуемые права администратора для каналов и групп ---
 CHAN_ADMIN_RIGHTS = ChatAdministratorRights(

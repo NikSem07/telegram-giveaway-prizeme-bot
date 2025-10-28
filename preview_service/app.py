@@ -47,6 +47,17 @@ INDEX_FILE = WEBAPP_DIR / "index.html"
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OK_STATUSES = {"creator", "administrator", "member", "restricted"}  # restricted с is_member=true
 
+def _is_member_local(chat_id: int, user_id: int) -> bool:
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT 1 FROM channel_memberships WHERE chat_id=? AND user_id=?",
+                (int(chat_id), int(user_id)),
+            ).fetchone()
+            return row is not None
+    except Exception:
+        return False
+
 # --- POST /api/check ---
 @app.post("/api/check")
 async def api_check(req: Request):
@@ -151,32 +162,27 @@ async def api_check(req: Request):
                 details.append(f"[{title}] no chat id & no username")
                 continue
 
-            # d) финальная проверка членства
+            # d) финальная проверка членства: сначала локально, потом Bot API
             try:
-                print(f"[DEBUG] Checking membership: chat_id={chat_id}, user_id={user_id}")
-                ok, dbg = await tg_get_chat_member(client, chat_id, user_id)
-                details.append(f"[{title}] {dbg}")
-                
-                if not ok:
-                    # Анализируем причину отказа
-                    if "bot_not_member" in dbg or "bot_kicked" in dbg:
-                        need.append({
-                            "title": f"Бот не имеет доступа к {title}. Обратитесь к администратору.",
-                            "username": uname,
-                            "url": f"https://t.me/{uname}" if uname else None,
-                        })
-                    elif "user_not_found" in dbg:
+                # быстрый путь — после одобренного join-request у нас уже есть отметка
+                if _is_member_local(chat_id, user_id):
+                    details.append(f"[{title}] local=OK")
+                else:
+                    ok_api, dbg = await tg_get_chat_member(client, int(chat_id), int(user_id))
+                    details.append(f"[{title}] {dbg}")
+                    if not ok_api:
                         need.append({
                             "title": title,
                             "username": uname,
                             "url": f"https://t.me/{uname}" if uname else None,
                         })
-                    else:
-                        need.append({
-                            "title": title,
-                            "username": uname,
-                            "url": f"https://t.me/{uname}" if uname else None,
-                        })
+            except Exception as e:
+                need.append({
+                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
+                    "username": uname,
+                    "url": f"https://t.me/{uname}" if uname else None,
+                })
+                details.append(f"[{title}] get_chat_member failed: {e}")
             except Exception as e:
                 need.append({
                     "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
@@ -257,8 +263,11 @@ async def api_claim(req: Request):
             username = ch.get("username")
             try:
                 chat_id = int(ch.get("chat_id"))
-                ok_check, dbg = await tg_get_chat_member(client, chat_id, user_id)
-                is_ok = ok_check
+                if _is_member_local(chat_id, user_id):
+                    is_ok = True
+                else:
+                    ok_check, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                    is_ok = ok_check
             except Exception:
                 is_ok = False
             if not is_ok:
