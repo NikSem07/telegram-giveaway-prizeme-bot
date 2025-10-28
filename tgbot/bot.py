@@ -961,9 +961,7 @@ async def on_join_request(ev: ChatJoinRequest, bot: Bot):
     try:
         chat_id = ev.chat.id
         user_id = ev.from_user.id
-        # Одобряем системной кнопкой Telegram (никаких лишних сообщений пользователю)
         await bot.approve_chat_join_request(chat_id, user_id)
-        # Фиксируем факт вступления — пригодится MiniApp
         await mark_membership(chat_id, user_id)
         logging.info(f"[JOIN] approved chat={chat_id} user={user_id}")
     except Exception as e:

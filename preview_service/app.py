@@ -1,11 +1,8 @@
-import hashlib
-print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest())
-
 # app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
 import os
 import time
 import mimetypes
-import json, hmac
+import json, hmac, hashlib
 from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
@@ -26,6 +23,9 @@ from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLRes
 load_dotenv(find_dotenv(), override=False)
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "").strip()
+if BOT_TOKEN:
+    print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:10])
+
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
 # БД: берём из .env, иначе по умолчанию ../tgbot/bot.db
 DB_PATH     = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
@@ -35,6 +35,17 @@ S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
+@app.middleware("http")
+async def _head_as_get(request, call_next):
+    if request.method != "HEAD":
+        return await call_next(request)
+    request.scope["method"] = "GET"
+    resp = await call_next(request)
+    if resp.status_code in (404, 405):
+        return Response(status_code=200, headers={"content-length": "0"})
+    headers = dict(resp.headers)
+    headers["content-length"] = "0"
+    return Response(status_code=resp.status_code, headers=headers)
 
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
@@ -346,28 +357,6 @@ app.mount(
     StaticFiles(directory=str(WEBAPP_DIR), html=False),
     name="miniapp-static",
 )
-
-# === /Mini App ===
-
-@app.middleware("http")
-async def _head_as_get(request: Request, call_next):
-    if request.method != "HEAD":
-        return await call_next(request)
-
-    # Притворяемся GET, чтобы роуты/статик отработали
-    request.scope["method"] = "GET"
-    resp = await call_next(request)
-
-    # Если нижний слой вернул 404/405 (нет GET-хендлера или не принял метод) —
-    # всё равно отвечаем 200 OK для HEAD, чтобы nginx не падал в 502.
-    if resp.status_code in (404, 405):
-        return Response(status_code=200, headers={"content-length": "0"})
-
-    # Иначе — отдадим те же заголовки/статус, но пустое тело (корректно для HEAD)
-    headers = dict(resp.headers)
-    headers["content-length"] = "0"
-    return Response(status_code=resp.status_code, headers=headers)
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Вспомогательные функции
