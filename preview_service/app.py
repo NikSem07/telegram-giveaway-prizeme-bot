@@ -205,13 +205,7 @@ async def api_check(req: Request):
 # --- POST /api/claim ---
 @app.post("/api/claim")
 async def api_claim(req: Request):
-    """
-    Выдача билета (повторно безопасно).
-    Ждём: { "gid": <int>, "init_data": "<Telegram WebApp initData>" }
-    Возвращаем:
-      { ok: true,  ticket: "ABC123" }
-      { ok: false, need: [...]}  # если вдруг подписки не выполнены
-    """
+
     if not BOT_TOKEN:
         return JSONResponse({"ok": False, "reason": "no_bot_token"}, status_code=500)
 
@@ -263,12 +257,8 @@ async def api_claim(req: Request):
             username = ch.get("username")
             try:
                 chat_id = int(ch.get("chat_id"))
-                r = await client.get(
-                    f"{TELEGRAM_API}/getChatMember",
-                    params={"chat_id": chat_id, "user_id": user_id},
-                )
-                js = r.json()
-                is_ok = js.get("ok") and (js["result"]["status"] or "").lower() in ("member","administrator","creator")
+                ok_check, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                is_ok = ok_check
             except Exception:
                 is_ok = False
             if not is_ok:
@@ -278,8 +268,10 @@ async def api_claim(req: Request):
                     "url": f"https://t.me/{username}" if username else None,
                 })
 
-    if need:
-        return JSONResponse({"ok": False, "need": need})
+    # после цикла по каналам
+    done = len(need) == 0
+    if not done:
+        return JSONResponse({"ok": True, "done": False, "need": need, "details": details})
 
     # 2) выдаём (или возвращаем существующий) билет
     try:
@@ -289,7 +281,7 @@ async def api_claim(req: Request):
                 (gid, user_id),
             ).fetchone()
             if row:
-                return JSONResponse({"ok": True, "ticket": row["ticket_code"]})
+                return JSONResponse({"ok": True, "done": True, "ticket": row["ticket_code"], "details": details})
 
             import random, string
             alphabet = string.ascii_uppercase + string.digits
@@ -303,14 +295,14 @@ async def api_claim(req: Request):
                         (gid, user_id, code),
                     )
                     db.commit()
-                    return JSONResponse({"ok": True, "ticket": code})
+                    return JSONResponse({"ok": True, "done": True, "ticket": code, "details": details})
                 except Exception:
                     # коллизия по уникальному коду — пробуем ещё раз
                     pass
     except Exception as e:
         return JSONResponse({"ok": False, "reason": f"db_write_error: {type(e).__name__}: {e}"}, status_code=500)
 
-    return JSONResponse({"ok": False, "reason": "ticket_issue_failed"}, status_code=500)
+    return JSONResponse({"ok": False, "done": True, "reason": "ticket_issue_failed"}, status_code=500)
 
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей

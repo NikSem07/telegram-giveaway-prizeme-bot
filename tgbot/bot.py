@@ -799,10 +799,14 @@ async def check_membership_on_all(bot, user_id:int, giveaway_id:int):
     for title, chat_id in rows:
         try:
             m = await bot.get_chat_member(chat_id, user_id)
-            ok = m.status in {"member","administrator","creator"}
+            status = (m.status or "").lower()
+            ok = (
+                status in {"member", "administrator", "creator"} or
+                (status == "restricted" and getattr(m, "is_member", False))
+            )
         except Exception:
             ok = False
-        details.append((title, ok))
+        details.append((f"{title} (status={status}, is_member={getattr(m,'is_member',None)})", ok))
         all_ok = all_ok and ok
     return all_ok, details
 
