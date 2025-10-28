@@ -22,17 +22,16 @@ from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLRes
 # Загружаем .env из текущей папки
 load_dotenv(find_dotenv(), override=False)
 
-BOT_TOKEN   = os.getenv("BOT_TOKEN", "").strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 if BOT_TOKEN:
     print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:10])
 
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
-# БД: берём из .env, иначе по умолчанию ../tgbot/bot.db
-DB_PATH     = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
+DB_PATH = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
 
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
-S3_BUCKET   = os.getenv("S3_BUCKET", "").strip()
-CACHE_SEC   = int(os.getenv("CACHE_SEC", "300"))
+S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
+CACHE_SEC = int(os.getenv("CACHE_SEC", "300"))
 
 app = FastAPI()
 @app.middleware("http")
