@@ -58,6 +58,33 @@ async def _head_as_get(request, call_next):
 if BOT_TOKEN:
     print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:10])
 
+def _normalize_chat_id(raw: str | int | None, username: str | None = None) -> tuple[int | None, str]:
+    """
+    Приводит chat_id к корректному виду для каналов/супергрупп.
+    Возвращает (chat_id:int|None, debug:str).
+    Логика:
+      - если пришло число со знаком '-' — вернём int(raw)
+      - если пришла строка вида '-100...' — вернём int(raw)
+      - если пришло положительное число/строка — пробуем резолвить через username
+      - если ничего не получилось — (None, reason)
+    """
+    try:
+        if raw is None:
+            return None, "no_raw_chat_id"
+
+        s = str(raw).strip()
+        # уже корректный формат
+        if s.startswith("-"):
+            return int(s), "chat_id_ok"
+
+        # частый кейс: в БД лежит положительное число без -100… → не трогаем, а просим резолвить
+        if s.isdigit():
+            return None, f"need_resolve_from_username positive_id={s}"
+
+        return None, f"bad_chat_id_format raw={raw!r}"
+    except Exception as e:
+        return None, f"normalize_error {type(e).__name__}: {e}"
+
 def _is_member_local(chat_id: int, user_id: int) -> bool:
     try:
         with _db() as db:
@@ -131,51 +158,41 @@ async def api_check(req: Request):
         for ch in channels:
             raw_id  = ch.get("chat_id")
             title   = ch.get("title") or ch.get("username") or "канал"
-            uname   = ch.get("username")
+            uname   = (ch.get("username") or "").lstrip("@") or None
             chat_id = None
 
-            print(f"[DEBUG] Processing channel: {title}, username: {uname}, raw_id: {raw_id}")
+            # 1) Нормализация chat_id
+            chat_id, dbg_norm = _normalize_chat_id(raw_id, uname)
+            details.append(f"[{title}] norm: {dbg_norm}")
 
-            # a) привести chat_id к int, если он передан
-            if raw_id is not None:
-                try:
-                    chat_id = int(str(raw_id))
-                    details.append(f"[{title}] using chat_id={chat_id}")
-                except Exception as e:
-                    details.append(f"[{title}] bad chat_id={raw_id!r}: {e}")
-
-            # b) если chat_id нет, но есть username — резолвим через getChat
+            # 2) Если не смогли получить chat_id из raw — пробуем резолв по username
             if chat_id is None and uname:
                 try:
-                    print(f"[DEBUG] Resolving username: {uname}")
                     info = await tg_get_chat(client, uname)
                     chat_id = int(info["id"])
-                    details.append(f"[{title}] resolved id={chat_id} from username")
-                    
-                    # Обновляем chat_id в памяти для последующих проверок
-                    ch["chat_id"] = chat_id
+                    details.append(f"[{title}] resolved id={chat_id} from @{uname}")
+                    ch["chat_id"] = chat_id  # в дальнейших проверках уже будет id
                 except Exception as e:
                     need.append({
                         "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                         "username": uname,
                         "url": f"https://t.me/{uname}",
                     })
-                    details.append(f"[{title}] resolve failed: {e}")
+                    details.append(f"[{title}] resolve_failed: {type(e).__name__}: {e}")
                     continue
 
-            # c) если chat_id так и не получили — даём «ошибка проверки»
+            # 3) Если chat_id так и не появился — отдаём «ошибка проверки»
             if chat_id is None:
                 need.append({
                     "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
                     "username": uname,
                     "url": f"https://t.me/{uname}" if uname else None,
                 })
-                details.append(f"[{title}] no chat id & no username")
+                details.append(f"[{title}] no_chat_id_after_norm_and_resolve")
                 continue
 
-            # d) финальная проверка членства: сначала локально, потом Bot API
+            # 4) Финальная проверка членства
             try:
-                # быстрый путь — после одобренного join-request у нас уже есть отметка
                 if _is_member_local(chat_id, user_id):
                     details.append(f"[{title}] local=OK")
                 else:
@@ -193,18 +210,11 @@ async def api_check(req: Request):
                     "username": uname,
                     "url": f"https://t.me/{uname}" if uname else None,
                 })
-                details.append(f"[{title}] get_chat_member failed: {e}")
-            except Exception as e:
-                need.append({
-                    "title": f"Ошибка проверки {title}. Нажмите «Проверить подписку».",
-                    "username": uname,
-                    "url": f"https://t.me/{uname}" if uname else None,
-                })
-                details.append(f"[{title}] get_chat_member failed: {e}")
+                details.append(f"[{title}] get_chat_member_failed: {type(e).__name__}: {e}")
 
     done = len(need) == 0
 
-    # 5) если всё ок — вернём уже выданный билет (если есть)
+    # 5) если всё ок — вернём уже выданный билет (если есть), иначе попробуем выдать новый
     ticket = None
     if done:
         try:
@@ -213,10 +223,30 @@ async def api_check(req: Request):
                     "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
                     (gid, user_id),
                 ).fetchone()
-                ticket = row["ticket_code"] if row else None
+                if row:
+                    ticket = row["ticket_code"]
+                else:
+                    import random, string
+                    alphabet = string.ascii_uppercase + string.digits
+                    # до 8 попыток, чтобы избежать редкой коллизии кода
+                    for _ in range(8):
+                        code = "".join(random.choices(alphabet, k=6))
+                        try:
+                            db.execute(
+                                "INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) "
+                                "VALUES (?, ?, ?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))",
+                                (gid, user_id, code),
+                            )
+                            db.commit()
+                            ticket = code
+                            break
+                        except Exception:
+                            # коллизия по уникальному ticket_code — пробуем ещё раз
+                            pass
         except Exception as e:
-            details.append(f"ticket_lookup_error: {type(e).__name__}: {e}")
+            details.append(f"ticket_issue_error: {type(e).__name__}: {e}")
 
+    # 6) итоговый ответ — обязательно возвращаем ticket (или None), чтобы фронт увидел билет
     return JSONResponse({"ok": True, "done": done, "need": need, "ticket": ticket, "details": details})
 
 # --- POST /api/claim ---
