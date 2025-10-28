@@ -646,54 +646,32 @@ async def health_any(request: Request):
         return Response(status_code=200, media_type="text/plain")
     return PlainTextResponse("ok")
 
-# ДОБАВЬТЕ этот эндпоинт для диагностики
+# Эндпоинт для диагностики
 @app.post("/api/debug/check_membership")
 async def debug_check_membership(req: Request):
-    """
-    Диагностический эндпоинт для проверки членства
-    """
     try:
         body = await req.json()
-        chat_id = body.get("chat_id")
-        user_id = body.get("user_id")
-        username = body.get("username")
-        
-        print(f"[DEBUG] Diagnostic request: chat_id={chat_id}, user_id={user_id}, username={username}")
-        
-        if not user_id:
-            return JSONResponse({"ok": False, "error": "user_id required"})
-        
-        result = {}
-        
-        async with AsyncClient(timeout=10.0) as client:
-            # Если передан username, резолвим chat_id
-            if username:
-                try:
-                    print(f"[DEBUG] Resolving username: {username}")
-                    chat_info = await tg_get_chat(client, username)
-                    resolved_chat_id = chat_info["id"]
-                    result["resolved_chat_id"] = resolved_chat_id
-                    result["chat_info"] = chat_info
-                    chat_id = resolved_chat_id
-                    print(f"[DEBUG] Resolved chat_id: {chat_id}")
-                except Exception as e:
-                    result["resolve_error"] = str(e)
-                    print(f"[ERROR] Resolve error: {e}")
-            
-            # Проверяем членство
-            if chat_id:
-                try:
-                    is_member, debug = await tg_get_chat_member(client, int(chat_id), int(user_id))
-                    result["is_member"] = is_member
-                    result["debug"] = debug
-                    result["chat_id"] = chat_id
-                    print(f"[DEBUG] Membership result: {result}")
-                except Exception as e:
-                    result["membership_error"] = str(e)
-                    print(f"[ERROR] Membership check error: {e}")
-        
-        return JSONResponse({"ok": True, "result": result})
-        
-    except Exception as e:
-        print(f"[ERROR] Diagnostic endpoint error: {e}")
-        return JSONResponse({"ok": False, "error": str(e)})
+    except Exception:
+        return JSONResponse({"ok": False, "error": "bad_json"}, status_code=400)
+
+    user_id = int(body.get("user_id") or 0)
+    chat_id = body.get("chat_id")
+    username = (body.get("username") or "").lstrip("@") or None
+    if not user_id or (not chat_id and not username):
+        return JSONResponse({"ok": False, "error": "bad_args"}, status_code=400)
+
+    async with AsyncClient(timeout=10.0) as client:
+        # a) resolve @username -> chat_id при необходимости
+        if chat_id is None and username:
+            try:
+                info = await tg_get_chat(client, username)   # используем существующий helper
+                chat_id = int(info["id"])
+            except Exception as e:
+                return JSONResponse({"ok": True, "result": {"resolve_error": f"{type(e).__name__}: {e}"}}, status_code=200)
+
+        # b) membership
+        try:
+            ok, dbg = await tg_get_chat_member(client, int(chat_id), int(user_id))
+            return JSONResponse({"ok": True, "result": {"is_member": ok, "debug": dbg, "chat_id": int(chat_id)}})
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status_code=500)
