@@ -220,6 +220,11 @@ async def api_check(req: Request):
             if not channel_ok:
                 is_ok_overall = False
 
+    # ДИАГНОСТИКА: логируем итоговый статус
+    print(f"[DIAGNOSTICS] user_id={user_id}, is_ok_overall={is_ok_overall}, done={done}")
+    print(f"[DIAGNOSTICS] need list: {need}")
+    print(f"[DIAGNOSTICS] details: {details}")
+
     done = is_ok_overall
 
     # 5) если всё ок — вернём уже выданный билет (если есть), иначе попробуем выдать новый
@@ -700,6 +705,60 @@ async def health_any(request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, media_type="text/plain")
     return PlainTextResponse("ok")
+
+# Эндпоинт для полной диагностики
+@app.post("/api/debug/full_check")
+async def debug_full_check(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "bad_json"}, status_code=400)
+
+    user_id = int(body.get("user_id") or 0)
+    gid = body.get("gid") or "test"
+    
+    if not user_id:
+        return JSONResponse({"ok": False, "error": "bad_user_id"}, status_code=400)
+
+    # Получаем каналы для розыгрыша
+    try:
+        with _db() as db:
+            rows = db.execute("""
+                SELECT gc.chat_id, gc.title, oc.username
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id=?
+                ORDER BY gc.id
+            """, (gid,)).fetchall()
+            channels = [{"chat_id": r["chat_id"], "title": r["title"], "username": r["username"]} for r in rows]
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"db_error: {e}"}, status_code=500)
+
+    results = []
+    async with AsyncClient(timeout=10.0) as client:
+        for ch in channels:
+            chat_id = ch.get("chat_id")
+            title = ch.get("title") or "канал"
+            
+            try:
+                # Проверяем через Telegram API
+                ok_api, dbg, status = await tg_get_chat_member(client, int(chat_id), int(user_id))
+                results.append({
+                    "channel": title,
+                    "chat_id": chat_id,
+                    "status": status,
+                    "is_member": ok_api,
+                    "debug": dbg,
+                    "allowed": status in {"creator", "administrator", "member"}
+                })
+            except Exception as e:
+                results.append({
+                    "channel": title,
+                    "chat_id": chat_id,
+                    "error": str(e)
+                })
+
+    return JSONResponse({"ok": True, "user_id": user_id, "gid": gid, "results": results})
 
 # Эндпоинт для диагностики
 @app.post("/api/debug/check_membership")
