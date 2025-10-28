@@ -1,10 +1,11 @@
+import hashlib
 print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest())
 
 # app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
 import os
 import time
 import mimetypes
-import json, hmac, hashlib
+import json, hmac
 from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
