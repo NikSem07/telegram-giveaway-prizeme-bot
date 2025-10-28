@@ -724,9 +724,9 @@ async def debug_check_membership(req: Request):
             except Exception as e:
                 return JSONResponse({"ok": True, "result": {"resolve_error": f"{type(e).__name__}: {e}"}}, status_code=200)
 
-        # b) membership
+         # b) membership
         try:
-            ok, dbg = await tg_get_chat_member(client, int(chat_id), int(user_id))
-            return JSONResponse({"ok": True, "result": {"is_member": ok, "debug": dbg, "chat_id": int(chat_id)}})
+            ok, dbg, status = await tg_get_chat_member(client, int(chat_id), int(user_id))
+            return JSONResponse({"ok": True, "result": {"is_member": ok, "debug": dbg, "status": status, "chat_id": int(chat_id)}})
         except Exception as e:
             return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status_code=500)
