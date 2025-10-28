@@ -1,8 +1,7 @@
-# app.py — MiniApp + проверки подписки + прокси /uploads/* к S3
-import os
-import time
-import mimetypes
+import os, time, mimetypes
 import json, hmac, hashlib
+from dotenv import load_dotenv, find_dotenv
+from fastapi import FastAPI, Request, Response, HTTPException
 from pathlib import Path
 import sqlite3
 from typing import Optional, Dict, Any, List
@@ -11,8 +10,6 @@ from urllib.parse import parse_qsl, unquote
 
 import httpx
 from httpx import AsyncClient
-from dotenv import load_dotenv, find_dotenv
-from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLResponse, RedirectResponse, JSONResponse
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -23,15 +20,23 @@ from fastapi.responses import PlainTextResponse, FileResponse, Response, HTMLRes
 load_dotenv(find_dotenv(), override=False)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-if BOT_TOKEN:
-    print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:10])
+BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8088")
+MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
+WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
 DB_PATH = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
-
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC = int(os.getenv("CACHE_SEC", "300"))
+
+WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
+INDEX_FILE = WEBAPP_DIR / "index.html"
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+OK_STATUSES = {"creator", "administrator", "member", "restricted"}  # restricted с is_member=true
+
+app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
+
 
 app = FastAPI()
 @app.middleware("http")
@@ -46,18 +51,8 @@ async def _head_as_get(request, call_next):
     headers["content-length"] = "0"
     return Response(status_code=resp.status_code, headers=headers)
 
-MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
-WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
-
-# безопасность: разрешаем дергать внутренний эндпоинт бота только с localhost
-BOT_INTERNAL_URL = os.getenv("BOT_INTERNAL_URL", "http://127.0.0.1:8088")
-
-app: FastAPI  # приложение у тебя уже создано выше — эту строку не трогаем
-
-WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
-INDEX_FILE = WEBAPP_DIR / "index.html"
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-OK_STATUSES = {"creator", "administrator", "member", "restricted"}  # restricted с is_member=true
+if BOT_TOKEN:
+    print("[BOOT] BOT_TOKEN_SHA256=", hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:10])
 
 def _is_member_local(chat_id: int, user_id: int) -> bool:
     try:
