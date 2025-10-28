@@ -246,8 +246,9 @@ async def api_check(req: Request):
         except Exception as e:
             details.append(f"ticket_issue_error: {type(e).__name__}: {e}")
 
-    # 6) итоговый ответ — обязательно возвращаем ticket (или None), чтобы фронт увидел билет
+    # 6) итоговый ответ
     return JSONResponse({"ok": True, "done": done, "need": need, "ticket": ticket, "details": details})
+
 
 # --- POST /api/claim ---
 @app.post("/api/claim")
