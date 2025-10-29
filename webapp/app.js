@@ -58,12 +58,21 @@ async function checkFlow() {
       console.log("[DEBUG] Conditions met");
       
       if (check.ticket) {
-        // Уже есть билет - показываем экран "Уже участвуете"
-        $("#already-ticket").textContent = check.ticket;
-        hide("#screen-loading"); 
-        show("#screen-already");
+        if (check.is_new_ticket) {
+          // НОВЫЙ билет - показываем экран успеха
+          console.log("[DEBUG] Showing NEW ticket screen");
+          $("#ticket").textContent = check.ticket;
+          hide("#screen-loading"); 
+          show("#screen-ok");
+        } else {
+          // СУЩЕСТВУЮЩИЙ билет - показываем экран "Уже участвуете"
+          console.log("[DEBUG] Showing EXISTING ticket screen");
+          $("#already-ticket").textContent = check.ticket;
+          hide("#screen-loading"); 
+          show("#screen-already");
+        }
       } else {
-        // Нет билета - получаем новый
+        // Нет билета - получаем новый через claim
         console.log("[DEBUG] No ticket, calling claim");
         const claim = await api("/api/claim", { gid, init_data });
         console.log("[DEBUG] Claim response:", claim);

@@ -293,8 +293,29 @@ async def api_check(req: Request):
             print(f"[CHECK] ❌ Ошибка при работе с билетом: {e}")
             details.append(f"ticket_issue_error: {type(e).__name__}: {e}")
 
-    # 6) итоговый ответ
-    return JSONResponse({"ok": True, "done": done, "need": need, "ticket": ticket, "details": details})
+    # 6) итоговый ответ с флагом нового билета
+    is_new_ticket = False
+    if done and ticket:
+        # Проверяем, был ли билет только что создан
+        with _db() as db:
+            row = db.execute(
+                "SELECT prelim_checked_at FROM entries WHERE giveaway_id=? AND user_id=? AND ticket_code=?",
+                (gid, user_id, ticket)
+            ).fetchone()
+            if row:
+                # Если билет создан менее 2 секунд назад - считаем его новым
+                checked_time = datetime.strptime(row["prelim_checked_at"], "%Y-%m-%d %H:%M:%f")
+                time_diff = datetime.now() - checked_time
+                is_new_ticket = time_diff.total_seconds() < 2
+
+    return JSONResponse({
+        "ok": True, 
+        "done": done, 
+        "need": need, 
+        "ticket": ticket, 
+        "is_new_ticket": is_new_ticket,
+        "details": details
+    })
 
 
 # --- POST /api/claim ---
