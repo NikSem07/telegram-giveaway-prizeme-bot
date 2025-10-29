@@ -29,7 +29,7 @@ MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "https://prizeme.ru").rstrip("/")
-DB_PATH = Path(os.getenv("DB_PATH") or (Path(__file__).resolve().parents[1] / "tgbot" / "bot.db")).resolve()
+DB_PATH = Path("/root/telegram-giveaway-prizeme-bot/tgbot/bot.db")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.twcstorage.ru").rstrip("/")
 S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
 CACHE_SEC = int(os.getenv("CACHE_SEC", "300"))
@@ -162,9 +162,17 @@ async def api_check(req: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "reason": f"db_error: {type(e).__name__}: {e}"}, status_code=500)
 
-    print(f"[CHECK] channels_in_db={channels}")
     print(f"[CHECK] user_id={user_id}, gid={gid}")
     print(f"[CHECK] channels_from_db: {channels}")
+    
+    # ДОПОЛНИТЕЛЬНАЯ ДИАГНОСТИКА: проверяем конкретные каналы для gid=25
+    if gid == 25:
+        print(f"[CHECK][GID-25] Проверяем каналы для розыгрыша 25: {channels}")
+        if not channels:
+            print("[CHECK][GID-25] ❌ НЕТ КАНАЛОВ В БАЗЕ!")
+        else:
+            for ch in channels:
+                print(f"[CHECK][GID-25] Канал: {ch}")
     
     if not channels:
         return JSONResponse({
@@ -239,12 +247,11 @@ async def api_check(req: Request):
             if not channel_ok:
                 is_ok_overall = False
 
-    # ДИАГНОСТИКА: логируем итоговый статус
-    print(f"[DIAGNOSTICS] user_id={user_id}, is_ok_overall={is_ok_overall}, done={done}")
+    print(f"[DIAGNOSTICS] user_id={user_id}, is_ok_overall={is_ok_overall}")
     print(f"[DIAGNOSTICS] need list: {need}")
     print(f"[DIAGNOSTICS] details: {details}")
 
-    done = is_ok_overall
+    done = is_ok_overall 
 
     # 5) если всё ок — вернём уже выданный билет (если есть), иначе попробуем выдать новый
     ticket = None
@@ -340,7 +347,7 @@ async def api_claim(req: Request):
                 if _is_member_local(chat_id, user_id):
                     is_ok = True
                 else:
-                    ok_check, dbg = await tg_get_chat_member(client, chat_id, user_id)
+                    ok_check, dbg, status = await tg_get_chat_member(client, chat_id, user_id)
                     details.append(f"[{title}] {dbg}")
                     is_ok = ok_check
             except Exception as e:
