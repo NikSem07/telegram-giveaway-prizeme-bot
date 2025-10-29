@@ -667,11 +667,12 @@ class Giveaway(Base):
     end_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     winners_count: Mapped[int] = mapped_column(Integer, default=1)
     commit_hash: Mapped[str|None] = mapped_column(String(128), nullable=True)
-    secret: Mapped[str|None] = mapped_column(String(128), nullable=True)   # хранится до раскрытия
+    secret: Mapped[str|None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=GiveawayStatus.DRAFT)
     tz: Mapped[str] = mapped_column(String(64), default=DEFAULT_TZ)
     cancelled_at: Mapped[datetime|None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_by: Mapped[int|None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class GiveawayChannel(Base):
     __tablename__="giveaway_channels"
@@ -2002,8 +2003,7 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
             photo_file_id=photo_id,
             end_at_utc=end_at,
             winners_count=winners,
-            status=GiveawayStatus.DRAFT,
-            created_at=datetime.now(timezone.utc)  # Добавляем текущее время
+            status=GiveawayStatus.DRAFT
         )
         s.add(gw)
         await s.flush()          # чтобы сразу появился gw.id
