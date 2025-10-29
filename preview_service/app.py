@@ -309,13 +309,20 @@ async def api_check(req: Request):
                     checked_time_str = row["prelim_checked_at"]
                     print(f"[CHECK] Checking ticket time: {checked_time_str}")
                     
-                    # Парсим время из базы
-                    checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%f")
+                    # Парсим время из базы (убираем миллисекунды если есть)
+                    if '.' in checked_time_str:
+                        # Формат с миллисекундами: 2025-10-29 11:10:14.811
+                        checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%S.%f")
+                    else:
+                        # Формат без миллисекунд: 2025-10-29 11:10:14
+                        checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%S")
+                    
                     current_time = datetime.datetime.now()
                     time_diff = current_time - checked_time
                     
                     print(f"[CHECK] Time diff: {time_diff.total_seconds()} seconds")
                     is_new_ticket = time_diff.total_seconds() < 10
+                    print(f"[CHECK] Is new ticket: {is_new_ticket}")
                     
                 except Exception as e:
                     print(f"[CHECK] Error calculating is_new_ticket: {e}")
