@@ -151,3 +151,15 @@ document.addEventListener("visibilitychange", () => {
     checkFlow();
   }
 });
+
+// Функция для расчета оставшегося времени
+function calculateTimeLeft(createdAt, endAt) {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const end = new Date(endAt);
+    
+    // Время окончания = время создания + (разница между окончанием и созданием)
+    const actualEndTime = new Date(created.getTime() + (end.getTime() - created.getTime()));
+    
+    return Math.max(0, actualEndTime - now);
+}
