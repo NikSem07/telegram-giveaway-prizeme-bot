@@ -38,6 +38,36 @@ async function api(path, body) {
   return payload || {};
 }
 
+// Функция для обновления счетчика времени ← ДОБАВЬ ЭТУ ФУНКЦИЮ
+function updateCountdown(endAtUtc) {
+    try {
+        const endTime = new Date(endAtUtc + 'Z'); // Добавляем Z для UTC
+        const now = new Date();
+        const timeLeft = endTime - now;
+
+        if (timeLeft <= 0) {
+            $("#countdown").textContent = "Розыгрыш завершен";
+            return;
+        }
+
+        // Рассчитываем дни, часы, минуты, секунды
+        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+        // Обновляем отображение
+        $("#countdown").textContent = `${days} дн., ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        // Обновляем каждую секунду
+        setTimeout(() => updateCountdown(endAtUtc), 1000);
+        
+    } catch (err) {
+        console.error("[COUNTDOWN] Error:", err);
+        $("#countdown").textContent = "Ошибка расчета времени";
+    }
+}
+
 async function checkFlow() {
   hide("#screen-ok"); hide("#screen-need"); hide("#screen-already"); show("#screen-loading");
 
@@ -62,12 +92,24 @@ async function checkFlow() {
           // НОВЫЙ билет - показываем экран успеха
           console.log("[DEBUG] Showing NEW ticket screen");
           $("#ticket").textContent = check.ticket;
+          
+          // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
+          if (check.end_at_utc) {
+            updateCountdown(check.end_at_utc);
+          }
+          
           hide("#screen-loading"); 
           show("#screen-ok");
         } else {
           // СУЩЕСТВУЮЩИЙ билет - показываем экран "Уже участвуете"
           console.log("[DEBUG] Showing EXISTING ticket screen");
           $("#already-ticket").textContent = check.ticket;
+          
+          // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
+          if (check.end_at_utc) {
+            updateCountdown(check.end_at_utc);
+          }
+          
           hide("#screen-loading"); 
           show("#screen-already");
         }
@@ -79,6 +121,12 @@ async function checkFlow() {
         
         if (claim.ok && claim.ticket) {
           $("#ticket").textContent = claim.ticket;
+          
+          // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
+          if (claim.end_at_utc) {
+            updateCountdown(claim.end_at_utc);
+          }
+          
           hide("#screen-loading"); 
           show("#screen-ok");
         } else {
@@ -151,15 +199,3 @@ document.addEventListener("visibilitychange", () => {
     checkFlow();
   }
 });
-
-// Функция для расчета оставшегося времени
-function calculateTimeLeft(createdAt, endAt) {
-    const now = new Date();
-    const created = new Date(createdAt);
-    const end = new Date(endAt);
-    
-    // Время окончания = время создания + (разница между окончанием и созданием)
-    const actualEndTime = new Date(created.getTime() + (end.getTime() - created.getTime()));
-    
-    return Math.max(0, actualEndTime - now);
-}

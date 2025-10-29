@@ -108,3 +108,29 @@ button:hover{filter:brightness(1.1)}
     padding: 16px;
   }
 }
+
+/* Стили для счетчика времени */
+.time-info {
+  text-align: center;
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.time-info p {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.timer {
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 15px;
+  border-radius: 8px;
+  display: inline-block;
+}

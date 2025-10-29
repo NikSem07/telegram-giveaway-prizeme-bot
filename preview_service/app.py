@@ -163,6 +163,19 @@ async def api_check(req: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "reason": f"db_error: {type(e).__name__}: {e}"}, status_code=500)
 
+    # 3.5) читаем время окончания розыгрыша  ← ДОБАВЬ ЭТОТ БЛОК
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT end_at_utc FROM giveaways WHERE id=?",
+                (gid,)
+            ).fetchone()
+            end_at_utc = row["end_at_utc"] if row else None
+            print(f"[CHECK] Giveaway end_at_utc: {end_at_utc}")
+    except Exception as e:
+        print(f"[CHECK] Error reading giveaway end time: {e}")
+        end_at_utc = None
+
     print(f"[CHECK] user_id={user_id}, gid={gid}")
     print(f"[CHECK] channels_from_db: {channels}")
     
@@ -180,7 +193,8 @@ async def api_check(req: Request):
             "ok": True, 
             "done": False, 
             "need": [{"title": "Ошибка конфигурации", "username": None, "url": "#"}],
-            "details": ["No channels configured for this giveaway"]
+            "details": ["No channels configured for this giveaway"],
+            "end_at_utc": end_at_utc  # ← ДОБАВЬ И СЮДА
         })
 
 
@@ -309,16 +323,17 @@ async def api_check(req: Request):
                     checked_time_str = row["prelim_checked_at"]
                     print(f"[CHECK] Checking ticket time: {checked_time_str}")
                     
-                    # Парсим время из базы (убираем миллисекунды если есть)
+                    # Парсим время из базы в UTC
                     if '.' in checked_time_str:
-                        # Формат с миллисекундами: 2025-10-29 11:10:14.811
                         checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%S.%f")
                     else:
-                        # Формат без миллисекунд: 2025-10-29 11:10:14
                         checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%S")
                     
-                    current_time = datetime.datetime.now()
-                    time_diff = current_time - checked_time
+                    # Приводим оба времени к UTC для корректного сравнения
+                    checked_time_utc = checked_time.replace(tzinfo=datetime.timezone.utc)
+                    current_time_utc = datetime.datetime.now(datetime.timezone.utc)
+                    
+                    time_diff = current_time_utc - checked_time_utc
                     
                     print(f"[CHECK] Time diff: {time_diff.total_seconds()} seconds")
                     is_new_ticket = time_diff.total_seconds() < 10
@@ -329,12 +344,14 @@ async def api_check(req: Request):
                     # В случае ошибки считаем билет существующим
                     is_new_ticket = False
 
+    # 7) финальный ответ ← ОБНОВИ ЭТОТ БЛОК
     return JSONResponse({
         "ok": True, 
         "done": done, 
         "need": need, 
         "ticket": ticket, 
         "is_new_ticket": is_new_ticket,
+        "end_at_utc": end_at_utc,  # ← ДОБАВЬ ЭТУ СТРОКУ
         "details": details
     })
 
@@ -369,6 +386,19 @@ async def api_claim(req: Request):
     if not gid:
         return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
 
+    # 0) читаем время окончания розыгрыша ← ДОБАВЬ ЭТОТ БЛОК
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT end_at_utc FROM giveaways WHERE id=?",
+                (gid,)
+            ).fetchone()
+            end_at_utc = row["end_at_utc"] if row else None
+            print(f"[CLAIM] Giveaway end_at_utc: {end_at_utc}")
+    except Exception as e:
+        print(f"[CLAIM] Error reading giveaway end time: {e}")
+        end_at_utc = None
+
     # Проверяем есть ли уже билет ПРЕЖДЕ проверки подписки
     try:
         with _db() as db:
@@ -382,6 +412,7 @@ async def api_claim(req: Request):
                     "ok": True, 
                     "done": True, 
                     "ticket": row["ticket_code"], 
+                    "end_at_utc": end_at_utc,  # ← ДОБАВЬ ЭТУ СТРОКУ
                     "details": ["Already have ticket - skipping subscription check"]
                 })
     except Exception as e:
@@ -433,7 +464,13 @@ async def api_claim(req: Request):
     # после цикла по каналам
     done = len(need) == 0
     if not done:
-        return JSONResponse({"ok": True, "done": False, "need": need, "details": details})
+        return JSONResponse({
+            "ok": True, 
+            "done": False, 
+            "need": need, 
+            "end_at_utc": end_at_utc,  # ← ДОБАВЬ ЭТУ СТРОКУ
+            "details": details
+        })
 
     # 2) выдаём (или возвращаем существующий) билет
     try:
@@ -445,7 +482,13 @@ async def api_claim(req: Request):
             ).fetchone()
             if row:
                 print(f"[CLAIM] ✅ Билет уже существует: {row['ticket_code']}")
-                return JSONResponse({"ok": True, "done": True, "ticket": row["ticket_code"], "details": details})
+                return JSONResponse({
+                    "ok": True, 
+                    "done": True, 
+                    "ticket": row["ticket_code"], 
+                    "end_at_utc": end_at_utc,  # ← ДОБАВЬ ЭТУ СТРОКУ
+                    "details": details
+                })
 
             print(f"[CLAIM] 📝 Создаем новый билет для user_id={user_id}, gid={gid}")
             import random, string
@@ -461,7 +504,13 @@ async def api_claim(req: Request):
                     )
                     db.commit()
                     print(f"[CLAIM] ✅ Успешно создан билет: {code}")
-                    return JSONResponse({"ok": True, "done": True, "ticket": code, "details": details})
+                    return JSONResponse({
+                        "ok": True, 
+                        "done": True, 
+                        "ticket": code, 
+                        "end_at_utc": end_at_utc,  # ← ДОБАВЬ ЭТУ СТРОКУ
+                        "details": details
+                    })
                 except Exception as e:
                     if "UNIQUE constraint failed" in str(e):
                         print(f"[CLAIM] ⚠️ Коллизия билета {code}, попытка {attempt + 1}")
@@ -471,11 +520,20 @@ async def api_claim(req: Request):
                         raise e
             
             print(f"[CLAIM] ❌ Не удалось создать уникальный билет после 12 попыток")
-            return JSONResponse({"ok": False, "done": True, "reason": "ticket_issue_failed_after_retries"}, status_code=500)
+            return JSONResponse({
+                "ok": False, 
+                "done": True, 
+                "reason": "ticket_issue_failed_after_retries",
+                "end_at_utc": end_at_utc  # ← ДОБАВЬ ЭТУ СТРОКУ
+            }, status_code=500)
             
     except Exception as e:
         print(f"[CLAIM] ❌ Критическая ошибка при создании билета: {e}")
-        return JSONResponse({"ok": False, "reason": f"db_write_error: {type(e).__name__}: {e}"}, status_code=500)
+        return JSONResponse({
+            "ok": False, 
+            "reason": f"db_write_error: {type(e).__name__}: {e}",
+            "end_at_utc": end_at_utc  # ← ДОБАВЬ ЭТУ СТРОКУ
+        }, status_code=500)
 
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
