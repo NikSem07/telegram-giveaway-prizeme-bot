@@ -38,15 +38,25 @@ async function api(path, body) {
   return payload || {};
 }
 
-// Функция для обновления счетчика времени ← ДОБАВЬ ЭТУ ФУНКЦИЮ
-function updateCountdown(endAtUtc) {
+// Функция для обновления счетчика времени
+function updateCountdown(endAtUtc, screenType = 'ok') {
     try {
         const endTime = new Date(endAtUtc + 'Z'); // Добавляем Z для UTC
         const now = new Date();
         const timeLeft = endTime - now;
 
+        // Выбираем правильный элемент в зависимости от экрана
+        const countdownElement = screenType === 'already' 
+            ? $("#countdown-already") 
+            : $("#countdown");
+        
+        if (!countdownElement) {
+            console.error("[COUNTDOWN] Element not found for screen:", screenType);
+            return;
+        }
+
         if (timeLeft <= 0) {
-            $("#countdown").textContent = "Розыгрыш завершен";
+            countdownElement.textContent = "Розыгрыш завершен";
             return;
         }
 
@@ -57,16 +67,22 @@ function updateCountdown(endAtUtc) {
         const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
         // Обновляем отображение
-        $("#countdown").textContent = `${days} дн., ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        countdownElement.textContent = `${days} дн., ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
         // Обновляем каждую секунду
-        setTimeout(() => updateCountdown(endAtUtc), 1000);
+        setTimeout(() => updateCountdown(endAtUtc, screenType), 1000);
         
     } catch (err) {
         console.error("[COUNTDOWN] Error:", err);
-        $("#countdown").textContent = "Ошибка расчета времени";
+        const countdownElement = screenType === 'already' 
+            ? $("#countdown-already") 
+            : $("#countdown");
+        if (countdownElement) {
+            countdownElement.textContent = "Ошибка расчета времени";
+        }
     }
 }
+
 
 async function checkFlow() {
   hide("#screen-ok"); hide("#screen-need"); hide("#screen-already"); show("#screen-loading");
@@ -95,7 +111,7 @@ async function checkFlow() {
           
           // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
           if (check.end_at_utc) {
-            updateCountdown(check.end_at_utc);
+            updateCountdown(check.end_at_utc, 'ok');
           }
           
           hide("#screen-loading"); 
@@ -107,7 +123,7 @@ async function checkFlow() {
           
           // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
           if (check.end_at_utc) {
-            updateCountdown(check.end_at_utc);
+            updateCountdown(check.end_at_utc, 'already');
           }
           
           hide("#screen-loading"); 
@@ -124,7 +140,7 @@ async function checkFlow() {
           
           // Обновляем счетчик времени если есть данные ← ДОБАВЬ ЭТО
           if (claim.end_at_utc) {
-            updateCountdown(claim.end_at_utc);
+            updateCountdown(claim.end_at_utc, 'ok');
           }
           
           hide("#screen-loading"); 
