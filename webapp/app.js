@@ -39,13 +39,12 @@ async function api(path, body) {
 }
 
 async function checkFlow() {
-  hide("#screen-ok"); hide("#screen-need"); show("#screen-loading");
+  hide("#screen-ok"); hide("#screen-need"); hide("#screen-already"); show("#screen-loading");
 
   try {
     const gid = getStartParam();
     if (!gid) throw new Error("Empty start_param (gid)");
 
-    // ВАЖНО: строго строка из Telegram WebApp
     const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
     if (!init_data) throw new Error("No initData");
 
@@ -56,24 +55,31 @@ async function checkFlow() {
     console.log("[DEBUG] Check response:", check);
 
     if (check.ok && check.done) {
-      console.log("[DEBUG] Conditions met, proceeding to claim");
+      console.log("[DEBUG] Conditions met");
       
-      // Пользователь всё выполнил. Если билета нет — запрашиваем.
-      let ticket = check.ticket || null;
-      if (!ticket) {
-        console.log("[DEBUG] No ticket in check, calling claim");
+      if (check.ticket) {
+        // Уже есть билет - показываем экран "Уже участвуете"
+        $("#already-ticket").textContent = check.ticket;
+        hide("#screen-loading"); 
+        show("#screen-already");
+      } else {
+        // Нет билета - получаем новый
+        console.log("[DEBUG] No ticket, calling claim");
         const claim = await api("/api/claim", { gid, init_data });
-        ticket = claim.ticket || "—";
         console.log("[DEBUG] Claim response:", claim);
+        
+        if (claim.ok && claim.ticket) {
+          $("#ticket").textContent = claim.ticket;
+          hide("#screen-loading"); 
+          show("#screen-ok");
+        } else {
+          throw new Error("Не удалось получить билет");
+        }
       }
-      
-      $("#ticket").textContent = ticket;
-      hide("#screen-loading"); 
-      show("#screen-ok");
       return;
     }
 
-    // 2) Нужно подписаться — показываем список
+    // 2) Нужно подписаться
     console.log("[DEBUG] Need subscription:", check.need);
     const ul = $("#need-channels");
     ul.innerHTML = "";

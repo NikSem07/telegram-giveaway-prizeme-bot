@@ -258,17 +258,20 @@ async def api_check(req: Request):
     if done:
         try:
             with _db() as db:
+                # ВАЖНО: сначала ищем существующий билет
                 row = db.execute(
                     "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
                     (gid, user_id),
                 ).fetchone()
                 if row:
                     ticket = row["ticket_code"]
+                    print(f"[CHECK] ✅ Найден существующий билет: {ticket} для user_id={user_id}, gid={gid}")
                 else:
+                    print(f"[CHECK] 📝 Билет не найден, создаем новый для user_id={user_id}, gid={gid}")
                     import random, string
                     alphabet = string.ascii_uppercase + string.digits
                     # до 8 попыток, чтобы избежать редкой коллизии кода
-                    for _ in range(8):
+                    for attempt in range(8):
                         code = "".join(random.choices(alphabet, k=6))
                         try:
                             db.execute(
@@ -278,11 +281,16 @@ async def api_check(req: Request):
                             )
                             db.commit()
                             ticket = code
+                            print(f"[CHECK] ✅ Создан новый билет: {ticket} (попытка {attempt + 1})")
                             break
-                        except Exception:
-                            # коллизия по уникальному ticket_code — пробуем ещё раз
-                            pass
+                        except Exception as e:
+                            if "UNIQUE constraint failed" in str(e):
+                                print(f"[CHECK] ⚠️ Коллизия билета {code}, пробуем другой")
+                                continue
+                            else:
+                                raise e
         except Exception as e:
+            print(f"[CHECK] ❌ Ошибка при работе с билетом: {e}")
             details.append(f"ticket_issue_error: {type(e).__name__}: {e}")
 
     # 6) итоговый ответ
@@ -319,6 +327,24 @@ async def api_claim(req: Request):
     if not gid:
         return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
 
+    # Проверяем есть ли уже билет ПРЕЖДЕ проверки подписки
+    try:
+        with _db() as db:
+            row = db.execute(
+                "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
+                (gid, user_id),
+            ).fetchone()
+            if row:
+                print(f"[CLAIM] ✅ Пользователь уже имеет билет: {row['ticket_code']}")
+                return JSONResponse({
+                    "ok": True, 
+                    "done": True, 
+                    "ticket": row["ticket_code"], 
+                    "details": ["Already have ticket - skipping subscription check"]
+                })
+    except Exception as e:
+        print(f"[CLAIM] ⚠️ Ошибка при проверке существующего билета: {e}")
+
     # 1) повторная проверка подписки (защита, если фронт обходят вручную)
     need = []
     details = []
@@ -349,7 +375,7 @@ async def api_claim(req: Request):
                 else:
                     ok_check, dbg, status = await tg_get_chat_member(client, chat_id, user_id)
                     details.append(f"[{title}] {dbg}")
-                    is_ok = ok_check
+                    is_ok = status in {"creator", "administrator", "member"}
             except Exception as e:
                 details.append(f"[{title}] claim_check_failed: {type(e).__name__}: {e}")
                 is_ok = False
@@ -370,17 +396,20 @@ async def api_claim(req: Request):
     # 2) выдаём (или возвращаем существующий) билет
     try:
         with _db() as db:
+            # Еще раз проверяем (на случай параллельных запросов)
             row = db.execute(
                 "SELECT ticket_code FROM entries WHERE giveaway_id=? AND user_id=?",
                 (gid, user_id),
             ).fetchone()
             if row:
+                print(f"[CLAIM] ✅ Билет уже существует: {row['ticket_code']}")
                 return JSONResponse({"ok": True, "done": True, "ticket": row["ticket_code"], "details": details})
 
+            print(f"[CLAIM] 📝 Создаем новый билет для user_id={user_id}, gid={gid}")
             import random, string
             alphabet = string.ascii_uppercase + string.digits
-            # простая попытка с редкими коллизиями
-            for _ in range(8):
+            
+            for attempt in range(12):  # увеличим попытки до 12
                 code = "".join(random.choices(alphabet, k=6))
                 try:
                     db.execute(
@@ -389,14 +418,22 @@ async def api_claim(req: Request):
                         (gid, user_id, code),
                     )
                     db.commit()
+                    print(f"[CLAIM] ✅ Успешно создан билет: {code}")
                     return JSONResponse({"ok": True, "done": True, "ticket": code, "details": details})
-                except Exception:
-                    # коллизия по уникальному коду — пробуем ещё раз
-                    pass
+                except Exception as e:
+                    if "UNIQUE constraint failed" in str(e):
+                        print(f"[CLAIM] ⚠️ Коллизия билета {code}, попытка {attempt + 1}")
+                        continue
+                    else:
+                        print(f"[CLAIM] ❌ Ошибка базы данных: {e}")
+                        raise e
+            
+            print(f"[CLAIM] ❌ Не удалось создать уникальный билет после 12 попыток")
+            return JSONResponse({"ok": False, "done": True, "reason": "ticket_issue_failed_after_retries"}, status_code=500)
+            
     except Exception as e:
+        print(f"[CLAIM] ❌ Критическая ошибка при создании билета: {e}")
         return JSONResponse({"ok": False, "reason": f"db_write_error: {type(e).__name__}: {e}"}, status_code=500)
-
-    return JSONResponse({"ok": False, "done": True, "reason": "ticket_issue_failed"}, status_code=500)
 
 
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей

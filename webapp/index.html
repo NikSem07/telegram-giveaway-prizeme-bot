@@ -24,12 +24,45 @@
       <button id="btn-recheck" class="btn">Проверить подписку</button>
     </section>
 
-    <!-- Успех -->
+    <!-- Успех (получил билет) -->
     <section id="screen-ok" class="hide">
       <h1>Успешно!</h1>
       <p>Вы принимаете участие в данном розыгрыше 🎉</p>
       <div class="ticket">Билет: <span id="ticket"></span></div>
     </section>
+
+    <!-- Уже участвуете (повторное нажатие) -->
+    <section id="screen-already" class="hide">
+      <div class="success-container">
+        <div class="success-icon">🎫</div>
+        <h2>Вы уже участвуете в розыгрыше!</h2>
+        <p>Не отписывайтесь от каналов до окончания розыгрыша</p>
+        
+        <div class="ticket-section">
+          <h3>Ваш билет:</h3>
+          <div class="ticket-code" id="already-ticket">XXXXXX</div>
+        </div>
+        
+        <div class="time-info">
+          <p>До завершения розыгрыша</p>
+          <div class="timer">61 день, 01:10:23</div>
+        </div>
+        
+        <button class="btn-secondary" onclick="showGiveawayInfo()">Подробнее о розыгрыше</button>
+        <button class="btn-secondary" onclick="showOtherGiveaways()">Другие розыгрыши</button>
+      </div>
+    </section>
   </div>
+
+  <script>
+    // Временные функции для кнопок (можно доработать позже)
+    function showGiveawayInfo() {
+      alert('Информация о розыгрыше будет здесь');
+    }
+    
+    function showOtherGiveaways() {
+      alert('Список других розыгрышей будет здесь');
+    }
+  </script>
 </body>
 </html>
