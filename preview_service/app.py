@@ -1,5 +1,6 @@
 import os, time, mimetypes
 import json, hmac, hashlib
+import datetime
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, Request, Response, HTTPException
 from pathlib import Path
@@ -303,10 +304,23 @@ async def api_check(req: Request):
                 (gid, user_id, ticket)
             ).fetchone()
             if row:
-                # Если билет создан менее 2 секунд назад - считаем его новым
-                checked_time = datetime.strptime(row["prelim_checked_at"], "%Y-%m-%d %H:%M:%f")
-                time_diff = datetime.now() - checked_time
-                is_new_ticket = time_diff.total_seconds() < 2
+                try:
+                    # Если билет создан менее 10 секунд назад - считаем его новым
+                    checked_time_str = row["prelim_checked_at"]
+                    print(f"[CHECK] Checking ticket time: {checked_time_str}")
+                    
+                    # Парсим время из базы
+                    checked_time = datetime.datetime.strptime(checked_time_str, "%Y-%m-%d %H:%M:%f")
+                    current_time = datetime.datetime.now()
+                    time_diff = current_time - checked_time
+                    
+                    print(f"[CHECK] Time diff: {time_diff.total_seconds()} seconds")
+                    is_new_ticket = time_diff.total_seconds() < 10
+                    
+                except Exception as e:
+                    print(f"[CHECK] Error calculating is_new_ticket: {e}")
+                    # В случае ошибки считаем билет существующим
+                    is_new_ticket = False
 
     return JSONResponse({
         "ok": True, 
