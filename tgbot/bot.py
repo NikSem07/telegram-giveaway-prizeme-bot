@@ -2002,7 +2002,8 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
             photo_file_id=photo_id,
             end_at_utc=end_at,
             winners_count=winners,
-            status=GiveawayStatus.DRAFT
+            status=GiveawayStatus.DRAFT,
+            created_at=datetime.now(timezone.utc)  # Добавляем текущее время
         )
         s.add(gw)
         await s.flush()          # чтобы сразу появился gw.id
