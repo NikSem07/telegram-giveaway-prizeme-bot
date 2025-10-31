@@ -1247,6 +1247,37 @@ async def dbg_channels(m: types.Message):
         lines = [f"{i+1}. {rec.title} (chat_id={rec.chat_id})" for i, rec in enumerate(chat_ids)]
         await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
+# Команда для ручного запуска определения победителей
+
+@dp.message(Command("admin_draw"))
+async def cmd_admin_draw(m: Message):
+    """Ручной запуск определения победителей (для тестирования)"""
+    if not m.text or " " not in m.text:
+        await m.answer("Использование: /admin_draw <giveaway_id>")
+        return
+    
+    try:
+        gid = int(m.text.split(" ")[1])
+    except ValueError:
+        await m.answer("❌ Некорректный ID розыгрыша")
+        return
+    
+    await m.answer(f"🔄 Запускаю ручное определение победителей для розыгрыша {gid}...")
+    
+    # Запускаем функцию напрямую
+    await finalize_and_draw_job(gid)
+    
+    await m.answer("✅ Функция finalize_and_draw_job завершена. Проверьте логи.")
+
+@dp.message(Command("debug_scheduler"))
+async def cmd_debug_scheduler(m: Message):
+    """Проверка запланированных jobs"""
+    jobs = scheduler.get_jobs()
+    response = f"📋 Scheduled jobs: {len(jobs)}\n"
+    for job in jobs:
+        response += f"• {job.id} - {job.next_run_time}\n"
+    await m.answer(response)
+
 @dp.message(Command("dbg_scan"))
 async def dbg_scan(m: types.Message):
     # показываем, что видим в organizer_channels, и по каждому чату — статусы
@@ -2231,6 +2262,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
     # 2) планируем завершение
     try:
         run_dt = gw.end_at_utc  # UTC
+        
+        # Диагностика
+        current_utc = datetime.now(timezone.utc)
+        time_until_run = run_dt - current_utc
+        logging.info(f"⏰ SCHEDULER DEBUG: Current UTC: {current_utc}, Run UTC: {run_dt}, Time until: {time_until_run}")
+
         scheduler.add_job(
             func=finalize_and_draw_job,
             trigger=DateTrigger(run_date=run_dt),
@@ -2239,6 +2276,14 @@ async def _launch_and_publish(gid: int, message: types.Message):
             replace_existing=True,
         )
         logging.info("Scheduled finalize job id=final_%s at %s (UTC)", gid, run_dt)
+        try:
+            job = scheduler.get_job(f"final_{gid}")
+            if job:
+                logging.info(f"✅ Job confirmed in scheduler: {job}")
+            else:
+                logging.error(f"❌ Job NOT found in scheduler after addition!")
+        except Exception as e:
+            logging.error(f"❌ Error checking job in scheduler: {e}")    
     except Exception as e:
         logging.warning("Не удалось запланировать завершение розыгрыша %s: %s", gid, e)
 
@@ -2428,44 +2473,79 @@ async def user_join(cq:CallbackQuery):
                     continue
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
-async def finalize_and_draw_job(gid:int):
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, gid)
-        if not gw or gw.status!=GiveawayStatus.ACTIVE: return
-        res = await s.execute(stext("SELECT user_id,id FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),{"gid":gid})
-        entries = res.all()
-    eligible=[]
-    for uid, entry_id in entries:
-        ok,_ = await check_membership_on_all(bot, uid, gid)
+async def finalize_and_draw_job(gid: int):
+    """Исправленная версия функции определения победителей"""
+    logging.info(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
+    
+    try:
         async with session_scope() as s:
-            await s.execute(stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
-                            {"ok":1 if ok else 0, "ts":datetime.now(timezone.utc), "eid":entry_id})
-        if ok: eligible.append(uid)
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, gid)
-        winners = deterministic_draw(gw.secret, gid, eligible, gw.winners_count)
-        rank=1
-        for uid, r, h in winners:
-            await s.execute(stext("INSERT INTO winners(giveaway_id,user_id,rank,hash_used) VALUES(:g,:u,:r,:h)"),
-                            {"g":gid,"u":uid,"r":rank,"h":h}); rank+=1
-        gw.status = GiveawayStatus.FINISHED
+            # Перечитываем розыгрыш в контексте текущей сессии
+            gw = await s.get(Giveaway, gid)
+            if not gw:
+                logging.error(f"❌ Giveaway {gid} not found")
+                return
+            if gw.status != GiveawayStatus.ACTIVE:
+                logging.warning(f"⚠️ Giveaway {gid} status is {gw.status}, not ACTIVE")
+                return
+            
+            logging.info(f"📊 Processing giveaway '{gw.internal_title}' (ID: {gid})")
+            
+            # Получаем участников с prelim_ok=1
+            res = await s.execute(
+                stext("SELECT user_id, id FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),
+                {"gid": gid}
+            )
+            entries = res.all()
+            logging.info(f"📋 Found {len(entries)} preliminary entries")
+            
+            # Проверяем финальное членство в каналах
+            eligible = []
+            for uid, entry_id in entries:
+                ok, _ = await check_membership_on_all(bot, uid, gid)
+                # Обновляем статус в текущей сессии
+                await s.execute(
+                    stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
+                    {"ok": 1 if ok else 0, "ts": datetime.now(timezone.utc), "eid": entry_id}
+                )
+                if ok:
+                    eligible.append(uid)
+            
+            logging.info(f"✅ Eligible participants: {len(eligible)}")
+            
+            # Детерминированный выбор победителей
+            if eligible and gw.winners_count > 0:
+                winners = deterministic_draw(gw.secret, gid, eligible, min(gw.winners_count, len(eligible)))
+                logging.info(f"🎉 Selected {len(winners)} winners")
+                
+                # Сохраняем победителей
+                rank = 1
+                for uid, r, h in winners:
+                    await s.execute(
+                        stext("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
+                        {"g": gid, "u": uid, "r": rank, "h": h}
+                    )
+                    rank += 1
+            else:
+                winners = []
+                logging.warning("❌ No eligible winners selected")
+            
+            # Обновляем статус розыгрыша в ТЕКУЩЕЙ сессии
+            gw.status = GiveawayStatus.FINISHED
+            await s.commit()  # Явный коммит для надежности
+            
+            logging.info(f"✅ Successfully finalized giveaway {gid}")
+            
+    except Exception as e:
+        logging.error(f"❌ CRITICAL ERROR in finalize_and_draw_job for {gid}: {e}")
+        return
     
-    # ДОБАВЛЯЕМ УВЕДОМЛЕНИЯ К СУЩЕСТВУЮЩЕЙ РАБОЧЕЙ ФУНКЦИИ
-    await notify_organizer(gid, winners, len(eligible))
-    await notify_participants(gid, winners, [(uid, "") for uid in eligible])  # ticket_code пока не важен
-    
-    if winners:
-        ids = [w[0] for w in winners]
-        textw = "\n".join([f"{i+1}) <a href='tg://user?id={uid}'>победитель</a>" for i,uid in enumerate(ids)])
-    else:
-        textw = "Победителей нет."
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, gid)
-    await bot.send_message(gw.owner_user_id,
-                           f"Финальный пул: {len(eligible)}\n"
-                           f"Победителей: {len(winners)}\n"
-                           f"secret: <code>{gw.secret}</code>\n"
-                           f"commit: <code>{gw.commit_hash}</code>\n\n{textw}")
+    # Уведомления отправляем после коммита БД
+    try:
+        await notify_organizer(gid, winners, len(eligible))
+        await notify_participants(gid, winners, [(uid, "") for uid in eligible])
+        logging.info(f"📨 Notifications sent for giveaway {gid}")
+    except Exception as e:
+        logging.error(f"❌ Error sending notifications for {gid}: {e}")
 
 
 async def notify_organizer(gid: int, winners: list, eligible_count: int):
@@ -2511,7 +2591,7 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int):
             
     except Exception as e:
         logging.error(f"❌ Error notifying organizer for giveaway {gid}: {e}")
-        
+
 
 async def notify_participants(gid: int, winners: list, eligible_entries: list):
     """Уведомление всех участников о результатах розыгрыша"""
@@ -2641,6 +2721,7 @@ async def on_my_chat_member(event: ChatMemberUpdated):
                 )
 
     logging.info(f"🔁 my_chat_member: {chat.title} ({chat.id}) -> {status}")
+
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
