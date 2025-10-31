@@ -11,6 +11,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from urllib.parse import urlencode
+import time
 
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
@@ -1416,7 +1417,16 @@ async def cmd_debug_giveaway(m: Message):
     
     await m.answer(response)
 
-
+@dp.message(Command("test_finalize"))
+async def cmd_test_finalize(m: Message):
+    """Тест что функция finalize_and_draw_job существует"""
+    try:
+        # Пробуем вызвать функцию напрямую
+        import inspect
+        source = inspect.getsource(finalize_and_draw_job)
+        await m.answer(f"✅ Функция существует\nПервые 200 символов:\n{source[:200]}")
+    except Exception as e:
+        await m.answer(f"❌ Ошибка: {e}")
 
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
@@ -2359,7 +2369,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
             id=f"final_{gid}",
             replace_existing=True,
         )
-        logging.info("Scheduled finalize job id=final_%s at %s (UTC)", gid, run_dt)
+        logging.info(f"⏰ TRYING TO SCHEDULE: giveaway {gid}, time: {run_dt}")
         try:
             job = scheduler.get_job(f"final_{gid}")
             if job:
@@ -2560,6 +2570,7 @@ async def user_join(cq:CallbackQuery):
 async def finalize_and_draw_job(gid: int):
     """Исправленная версия функции определения победителей с детальным логированием"""
     logging.info(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
+    print(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
     
     try:
         # Проверяем что функция вообще запускается
