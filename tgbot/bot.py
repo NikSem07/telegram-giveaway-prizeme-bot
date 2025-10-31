@@ -2428,90 +2428,45 @@ async def user_join(cq:CallbackQuery):
                     continue
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
-async def finalize_and_draw_job(gid: int):
-    """
-    Финальная обработка розыгрыша: проверка подписок, определение победителей, уведомления
-    """
-    logging.info(f"🎯 Starting finalization for giveaway {gid}")
+async def finalize_and_draw_job(gid:int):
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status!=GiveawayStatus.ACTIVE: return
+        res = await s.execute(stext("SELECT user_id,id FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),{"gid":gid})
+        entries = res.all()
+    eligible=[]
+    for uid, entry_id in entries:
+        ok,_ = await check_membership_on_all(bot, uid, gid)
+        async with session_scope() as s:
+            await s.execute(stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
+                            {"ok":1 if ok else 0, "ts":datetime.now(timezone.utc), "eid":entry_id})
+        if ok: eligible.append(uid)
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        winners = deterministic_draw(gw.secret, gid, eligible, gw.winners_count)
+        rank=1
+        for uid, r, h in winners:
+            await s.execute(stext("INSERT INTO winners(giveaway_id,user_id,rank,hash_used) VALUES(:g,:u,:r,:h)"),
+                            {"g":gid,"u":uid,"r":rank,"h":h}); rank+=1
+        gw.status = GiveawayStatus.FINISHED
     
-    try:
-        # 1) Получаем данные розыгрыша
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            if not gw or gw.status != GiveawayStatus.ACTIVE:
-                logging.warning(f"Giveaway {gid} not found or not active")
-                return
-            
-            # 2) Получаем всех участников с prelim_ok=1
-            res = await s.execute(stext(
-                "SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"
-            ), {"gid": gid})
-            entries = res.all()
-        
-        logging.info(f"📊 Found {len(entries)} preliminary entries for giveaway {gid}")
-        
-        # 3) Финальная проверка подписок
-        eligible = []
-        eligible_entries = []
-        
-        for uid, entry_id, ticket_code in entries:
-            ok, details = await check_membership_on_all(bot, uid, gid)
-            async with session_scope() as s:
-                await s.execute(stext(
-                    "UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"
-                ), {"ok": 1 if ok else 0, "ts": datetime.now(timezone.utc), "eid": entry_id})
-            
-            if ok:
-                eligible.append(uid)
-                eligible_entries.append((uid, ticket_code))
-                logging.info(f"✅ User {uid} eligible with ticket {ticket_code}")
-            else:
-                logging.info(f"❌ User {uid} not eligible")
-        
-        logging.info(f"🎯 Eligible users: {len(eligible)}")
-        
-        # 4) Детерминированный выбор победителей
-        winners = []
-        if eligible and gw.winners_count > 0:
-            winners = deterministic_draw(gw.secret, gid, eligible, min(gw.winners_count, len(eligible)))
-        
-        # 5) Сохраняем победителей в базу
-        async with session_scope() as s:
-            rank = 1
-            for uid, r, h in winners:
-                await s.execute(stext(
-                    "INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g, :u, :r, :h)"
-                ), {"g": gid, "u": uid, "r": rank, "h": h})
-                rank += 1
-            
-            # Обновляем статус розыгрыша
-            gw.status = GiveawayStatus.FINISHED
-            s.add(gw)
-        
-        logging.info(f"🏆 Saved {len(winners)} winners for giveaway {gid}")
-        
-        # 6) Уведомление организатора
-        await notify_organizer(gid, winners, len(eligible))
-        
-        # 7) Уведомление участников
-        await notify_participants(gid, winners, eligible_entries)
-        
-        logging.info(f"✅ Giveaway {gid} finalized successfully")
-        
-    except Exception as e:
-        logging.error(f"❌ Error finalizing giveaway {gid}: {e}")
-        # Пытаемся уведомить организатора об ошибке
-        try:
-            async with session_scope() as s:
-                gw = await s.get(Giveaway, gid)
-                if gw:
-                    await bot.send_message(
-                        gw.owner_user_id,
-                        f"❌ Произошла ошибка при завершении розыгрыша \"{gw.internal_title}\". "
-                        f"Обратитесь в поддержку."
-                    )
-        except Exception as notify_error:
-            logging.error(f"Failed to notify organizer about error: {notify_error}")
+    # ДОБАВЛЯЕМ УВЕДОМЛЕНИЯ К СУЩЕСТВУЮЩЕЙ РАБОЧЕЙ ФУНКЦИИ
+    await notify_organizer(gid, winners, len(eligible))
+    await notify_participants(gid, winners, [(uid, "") for uid in eligible])  # ticket_code пока не важен
+    
+    if winners:
+        ids = [w[0] for w in winners]
+        textw = "\n".join([f"{i+1}) <a href='tg://user?id={uid}'>победитель</a>" for i,uid in enumerate(ids)])
+    else:
+        textw = "Победителей нет."
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+    await bot.send_message(gw.owner_user_id,
+                           f"Финальный пул: {len(eligible)}\n"
+                           f"Победителей: {len(winners)}\n"
+                           f"secret: <code>{gw.secret}</code>\n"
+                           f"commit: <code>{gw.commit_hash}</code>\n\n{textw}")
+
 
 async def notify_organizer(gid: int, winners: list, eligible_count: int):
     """Уведомление организатора о результатах розыгрыша"""
@@ -2556,6 +2511,7 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int):
             
     except Exception as e:
         logging.error(f"❌ Error notifying organizer for giveaway {gid}: {e}")
+        
 
 async def notify_participants(gid: int, winners: list, eligible_entries: list):
     """Уведомление всех участников о результатах розыгрыша"""
@@ -2579,9 +2535,20 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
             
             winners_list_text = ", ".join(winner_usernames) if winner_usernames else "победители не определены"
             
+            # Получаем билеты участников из базы
+            participant_tickets = {}
+            res = await s.execute(stext(
+                "SELECT user_id, ticket_code FROM entries WHERE giveaway_id=:gid AND final_ok=1"
+            ), {"gid": gid})
+            for row in res.all():
+                participant_tickets[row[0]] = row[1]
+            
             # Уведомляем всех участников
-            for user_id, ticket_code in eligible_entries:
+            notified_count = 0
+            for user_id, _ in eligible_entries:
                 try:
+                    ticket_code = participant_tickets.get(user_id, "неизвестен")
+                    
                     if user_id in winner_ids:
                         # Победитель
                         message = (
@@ -2601,6 +2568,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
                         )
                     
                     await bot.send_message(user_id, message, parse_mode="HTML")
+                    notified_count += 1
                     logging.info(f"📨 Notified user {user_id} about giveaway results")
                     
                     # Небольшая задержка чтобы не превысить лимиты Telegram
@@ -2610,10 +2578,11 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
                     logging.warning(f"Could not notify user {user_id}: {e}")
                     continue
                     
-        logging.info(f"📨 Notified all participants of giveaway {gid}")
+        logging.info(f"📨 Notified {notified_count} participants of giveaway {gid}")
         
     except Exception as e:
         logging.error(f"❌ Error notifying participants for giveaway {gid}: {e}")
+
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
     async with session_scope() as s:
