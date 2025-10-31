@@ -1247,36 +1247,6 @@ async def dbg_channels(m: types.Message):
         lines = [f"{i+1}. {rec.title} (chat_id={rec.chat_id})" for i, rec in enumerate(chat_ids)]
         await m.answer("Всего: " + str(len(rows)) + "\n" + "\n".join(lines))
 
-# Команда для ручного запуска определения победителей
-
-@dp.message(Command("admin_draw"))
-async def cmd_admin_draw(m: Message):
-    """Ручной запуск определения победителей (для тестирования)"""
-    if not m.text or " " not in m.text:
-        await m.answer("Использование: /admin_draw <giveaway_id>")
-        return
-    
-    try:
-        gid = int(m.text.split(" ")[1])
-    except ValueError:
-        await m.answer("❌ Некорректный ID розыгрыша")
-        return
-    
-    await m.answer(f"🔄 Запускаю ручное определение победителей для розыгрыша {gid}...")
-    
-    # Запускаем функцию напрямую
-    await finalize_and_draw_job(gid)
-    
-    await m.answer("✅ Функция finalize_and_draw_job завершена. Проверьте логи.")
-
-@dp.message(Command("debug_scheduler"))
-async def cmd_debug_scheduler(m: Message):
-    """Проверка запланированных jobs"""
-    jobs = scheduler.get_jobs()
-    response = f"📋 Scheduled jobs: {len(jobs)}\n"
-    for job in jobs:
-        response += f"• {job.id} - {job.next_run_time}\n"
-    await m.answer(response)
 
 @dp.message(Command("dbg_scan"))
 async def dbg_scan(m: types.Message):
@@ -1333,6 +1303,120 @@ async def dbg_gw(m: types.Message):
         lines = [f"Розыгрыш «{title}» (id={gid}). Прикреплено:"]
         lines += [f"• {t} (chat_id={cid})" for cid, t in rows]
         await m.answer("\n".join(lines))
+
+@dp.message(Command("admin_draw"))
+async def cmd_admin_draw(m: Message):
+    """Ручной запуск определения победителей (для тестирования)"""
+    if not m.text or " " not in m.text:
+        await m.answer("Использование: /admin_draw <giveaway_id>")
+        return
+    
+    try:
+        gid = int(m.text.split(" ")[1])
+    except ValueError:
+        await m.answer("❌ Некорректный ID розыгрыша")
+        return
+    
+    await m.answer(f"🔄 Запускаю ручное определение победителей для розыгрыша {gid}...")
+    
+    # Запускаем функцию напрямую
+    await finalize_and_draw_job(gid)
+    
+    await m.answer("✅ Функция finalize_and_draw_job завершена. Проверьте логи.")
+
+@dp.message(Command("debug_scheduler"))
+async def cmd_debug_scheduler(m: Message):
+    """Проверка запланированных jobs"""
+    jobs = scheduler.get_jobs()
+    response = f"📋 Scheduled jobs: {len(jobs)}\n"
+    for job in jobs:
+        response += f"• {job.id} - {job.next_run_time}\n"
+    await m.answer(response)
+
+@dp.message(Command("debug_scheduler_full"))
+async def cmd_debug_scheduler_full(m: Message):
+    """Полная диагностика планировщика"""
+    jobs = scheduler.get_jobs()
+    response = f"📋 Scheduled jobs: {len(jobs)}\n\n"
+    
+    for job in jobs:
+        response += f"• **{job.id}**\n"
+        response += f"  Next run: {job.next_run_time}\n"
+        response += f"  Trigger: {job.trigger}\n"
+        response += f"  Func: {job.func.__name__ if hasattr(job.func, '__name__') else job.func}\n\n"
+    
+    # Проверим активные розыгрыши которые ДОЛЖНЫ быть запланированы
+    async with session_scope() as s:
+        active_giveaways = await s.execute(
+            stext("SELECT id, internal_title, end_at_utc FROM giveaways WHERE status='active'")
+        )
+        active_rows = active_giveaways.all()
+        
+        response += f"🎯 Active giveaways in DB: {len(active_rows)}\n"
+        for gid, title, end_at in active_rows:
+            job_id = f"final_{gid}"
+            job_exists = any(job.id == job_id for job in jobs)
+            status = "✅" if job_exists else "❌"
+            response += f"{status} {title} (ID: {gid}) - ends: {end_at}\n"
+    
+    await m.answer(response)
+
+@dp.message(Command("debug_giveaway"))
+async def cmd_debug_giveaway(m: Message):
+    """Диагностика конкретного розыгрыша"""
+    try:
+        gid = int(m.text.split(" ")[1])
+    except:
+        await m.answer("Использование: /debug_giveaway <id>")
+        return
+    
+    async with session_scope() as s:
+        # Данные розыгрыша
+        gw = await s.get(Giveaway, gid)
+        if not gw:
+            await m.answer("❌ Розыгрыш не найден")
+            return
+        
+        # Участники
+        entries = await s.execute(
+            stext("SELECT user_id, ticket_code, prelim_ok, final_ok FROM entries WHERE giveaway_id=:gid"),
+            {"gid": gid}
+        )
+        entries_data = entries.all()
+        
+        # Победители
+        winners = await s.execute(
+            stext("SELECT user_id, rank FROM winners WHERE giveaway_id=:gid"),
+            {"gid": gid}
+        )
+        winners_data = winners.all()
+        
+        response = f"""
+📊 **Диагностика розыгрыша {gid}**
+
+**Основные данные:**
+- Название: {gw.internal_title}
+- Статус: {gw.status}
+- Победителей: {gw.winners_count}
+- Окончание: {gw.end_at_utc}
+
+**Участники:** {len(entries_data)}
+**Победители в БД:** {len(winners_data)}
+
+**Статус планировщика:**
+"""
+        
+        # Проверим job в планировщике
+        job_id = f"final_{gid}"
+        job = scheduler.get_job(job_id)
+        if job:
+            response += f"✅ Job '{job_id}' запланирован на {job.next_run_time}"
+        else:
+            response += f"❌ Job '{job_id}' НЕ найден в планировщике!"
+    
+    await m.answer(response)
+
+
 
 async def show_my_events_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
@@ -2474,48 +2558,63 @@ async def user_join(cq:CallbackQuery):
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
 async def finalize_and_draw_job(gid: int):
-    """Исправленная версия функции определения победителей"""
+    """Исправленная версия функции определения победителей с детальным логированием"""
     logging.info(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
     
     try:
+        # Проверяем что функция вообще запускается
+        logging.info(f"🔍 STEP 1: Function started for giveaway {gid}")
+        
         async with session_scope() as s:
-            # Перечитываем розыгрыш в контексте текущей сессии
             gw = await s.get(Giveaway, gid)
             if not gw:
-                logging.error(f"❌ Giveaway {gid} not found")
+                logging.error(f"❌ Giveaway {gid} not found in database")
                 return
             if gw.status != GiveawayStatus.ACTIVE:
                 logging.warning(f"⚠️ Giveaway {gid} status is {gw.status}, not ACTIVE")
                 return
             
-            logging.info(f"📊 Processing giveaway '{gw.internal_title}' (ID: {gid})")
+            logging.info(f"📊 STEP 2: Processing giveaway '{gw.internal_title}' (ID: {gid})")
+            logging.info(f"⏰ Giveaway end time: {gw.end_at_utc}, Current UTC: {datetime.now(timezone.utc)}")
             
-            # Получаем участников с prelim_ok=1
+            # Получаем участников
             res = await s.execute(
-                stext("SELECT user_id, id FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),
+                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),
                 {"gid": gid}
             )
             entries = res.all()
-            logging.info(f"📋 Found {len(entries)} preliminary entries")
+            logging.info(f"📋 STEP 3: Found {len(entries)} preliminary entries: {entries}")
             
-            # Проверяем финальное членство в каналах
+            if not entries:
+                logging.warning("❌ No entries found for this giveaway")
+                return
+            
+            # Проверяем финальное членство
             eligible = []
-            for uid, entry_id in entries:
-                ok, _ = await check_membership_on_all(bot, uid, gid)
-                # Обновляем статус в текущей сессии
+            for uid, entry_id, ticket_code in entries:
+                logging.info(f"🔍 STEP 4: Checking user {uid} with ticket {ticket_code}")
+                ok, details = await check_membership_on_all(bot, uid, gid)
+                logging.info(f"📝 User {uid} membership check: {ok}, details: {details}")
+                
                 await s.execute(
                     stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
                     {"ok": 1 if ok else 0, "ts": datetime.now(timezone.utc), "eid": entry_id}
                 )
                 if ok:
                     eligible.append(uid)
+                    logging.info(f"✅ User {uid} is eligible")
+                else:
+                    logging.info(f"❌ User {uid} is NOT eligible")
             
-            logging.info(f"✅ Eligible participants: {len(eligible)}")
+            logging.info(f"🎯 STEP 5: Eligible participants: {len(eligible)} - {eligible}")
             
             # Детерминированный выбор победителей
             if eligible and gw.winners_count > 0:
-                winners = deterministic_draw(gw.secret, gid, eligible, min(gw.winners_count, len(eligible)))
-                logging.info(f"🎉 Selected {len(winners)} winners")
+                winners_count = min(gw.winners_count, len(eligible))
+                logging.info(f"🎲 STEP 6: Drawing {winners_count} winners from {len(eligible)} eligible")
+                
+                winners = deterministic_draw(gw.secret, gid, eligible, winners_count)
+                logging.info(f"🎉 STEP 7: Selected {len(winners)} winners: {winners}")
                 
                 # Сохраняем победителей
                 rank = 1
@@ -2524,28 +2623,32 @@ async def finalize_and_draw_job(gid: int):
                         stext("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
                         {"g": gid, "u": uid, "r": rank, "h": h}
                     )
+                    logging.info(f"🏆 STEP 8: Saved winner {uid} with rank {rank}")
                     rank += 1
             else:
                 winners = []
-                logging.warning("❌ No eligible winners selected")
+                logging.warning("❌ No eligible winners selected - no eligible users or winners_count = 0")
             
-            # Обновляем статус розыгрыша в ТЕКУЩЕЙ сессии
+            # Обновляем статус розыгрыша
             gw.status = GiveawayStatus.FINISHED
-            await s.commit()  # Явный коммит для надежности
+            logging.info(f"✅ STEP 9: Updated giveaway status to FINISHED")
             
-            logging.info(f"✅ Successfully finalized giveaway {gid}")
+            await s.commit()
+            logging.info(f"💾 STEP 10: Database committed")
             
     except Exception as e:
-        logging.error(f"❌ CRITICAL ERROR in finalize_and_draw_job for {gid}: {e}")
+        logging.error(f"❌ CRITICAL ERROR in finalize_and_draw_job: {e}")
+        logging.exception("Full traceback:")
         return
     
-    # Уведомления отправляем после коммита БД
+    # Уведомления
     try:
+        logging.info(f"📨 STEP 11: Starting notifications")
         await notify_organizer(gid, winners, len(eligible))
         await notify_participants(gid, winners, [(uid, "") for uid in eligible])
-        logging.info(f"📨 Notifications sent for giveaway {gid}")
+        logging.info(f"✅ STEP 12: Notifications completed")
     except Exception as e:
-        logging.error(f"❌ Error sending notifications for {gid}: {e}")
+        logging.error(f"❌ Error in notifications: {e}")
 
 
 async def notify_organizer(gid: int, winners: list, eligible_count: int):
