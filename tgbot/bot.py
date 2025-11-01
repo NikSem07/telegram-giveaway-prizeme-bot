@@ -43,6 +43,15 @@ import aiohttp
 from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
 
+def normalize_datetime(dt: datetime) -> datetime:
+    """
+    Нормализует datetime к timezone-aware в UTC.
+    Если naive - считаем что это UTC.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
 
@@ -1670,6 +1679,9 @@ async def step_endat(m: Message, state: FSMContext):
         # в БД храним UTC
         dt_utc = dt_msk.replace(tzinfo=MSK_TZ).astimezone(timezone.utc)
 
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: гарантируем aware datetime
+        dt_utc = normalize_datetime(dt_utc)
+
         # дедлайн не раньше чем через 5 минут
         if dt_utc <= datetime.now(timezone.utc) + timedelta(minutes=5):
             await m.answer("Дедлайн должен быть минимум через 5 минут. Введите ещё раз:")
@@ -2356,13 +2368,15 @@ async def _launch_and_publish(gid: int, message: types.Message):
             s.add(gw)
             logging.info("GW %s status -> ACTIVE", gid)
 
-    # 2) планируем завершение
+    # 2) планируем завершение - ИСПРАВЛЕННАЯ ВЕРСИЯ
     try:
-        run_dt = gw.end_at_utc  # UTC
+        run_dt = gw.end_at_utc
         
-        # Диагностика
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: нормализуем timezone
+        run_dt = normalize_datetime(run_dt)
         current_utc = datetime.now(timezone.utc)
         time_until_run = run_dt - current_utc
+        
         logging.info(f"⏰ SCHEDULER DEBUG: Current UTC: {current_utc}, Run UTC: {run_dt}, Time until: {time_until_run}")
 
         scheduler.add_job(
@@ -2372,17 +2386,20 @@ async def _launch_and_publish(gid: int, message: types.Message):
             id=f"final_{gid}",
             replace_existing=True,
         )
-        logging.info(f"⏰ TRYING TO SCHEDULE: giveaway {gid}, time: {run_dt}")
-        try:
-            job = scheduler.get_job(f"final_{gid}")
-            if job:
-                logging.info(f"✅ Job confirmed in scheduler: {job}")
-            else:
-                logging.error(f"❌ Job NOT found in scheduler after addition!")
-        except Exception as e:
-            logging.error(f"❌ Error checking job in scheduler: {e}")    
+        logging.info(f"✅ SCHEDULED: giveaway {gid}, time: {run_dt}")
+        
+        # Проверяем что job добавлен
+        job = scheduler.get_job(f"final_{gid}")
+        if job:
+            logging.info(f"✅ Job confirmed: next_run={job.next_run_time}")
+        else:
+            logging.error(f"❌ Job NOT found after scheduling!")
+            
     except Exception as e:
-        logging.warning("Не удалось запланировать завершение розыгрыша %s: %s", gid, e)
+        logging.error(f"❌ Failed to schedule giveaway {gid}: {e}")
+        # Более детальное логирование ошибки
+        import traceback
+        logging.error(f"Traceback: {traceback.format_exc()}")
 
     # 3) берём прикреплённые чаты
     async with session_scope() as s:
@@ -2910,6 +2927,44 @@ async def main():
     # 2) запускаем планировщик
     scheduler.start()
     logging.info("✅ Планировщик запущен")
+
+    # 2.5) ВОССТАНАВЛИВАЕМ активные розыгрыши в планировщике
+    try:
+        async with session_scope() as s:
+            active_giveaways = await s.execute(
+                stext("SELECT id, end_at_utc FROM giveaways WHERE status='active'")
+            )
+            active_rows = active_giveaways.all()
+            
+            restored_count = 0
+            for gid, end_at in active_rows:
+                try:
+                    # Нормализуем timezone
+                    end_at_normalized = normalize_datetime(end_at)
+                    
+                    # Проверяем что время еще не прошло
+                    if end_at_normalized > datetime.now(timezone.utc):
+                        scheduler.add_job(
+                            func=finalize_and_draw_job,
+                            trigger=DateTrigger(run_date=end_at_normalized),
+                            args=[gid, bot],
+                            id=f"final_{gid}",
+                            replace_existing=True,
+                        )
+                        restored_count += 1
+                        logging.info(f"🔄 Restored scheduler job for giveaway {gid}")
+                    else:
+                        # Время прошло - запускаем немедленно
+                        asyncio.create_task(finalize_and_draw_job(gid, bot))
+                        logging.info(f"🚨 Time passed, immediate finalize for {gid}")
+                        
+                except Exception as e:
+                    logging.error(f"❌ Failed to restore job for {gid}: {e}")
+            
+            logging.info(f"✅ Restored {restored_count} giveaway jobs")
+            
+    except Exception as e:
+        logging.error(f"❌ Error restoring scheduler jobs: {e}")
 
     # 3) Проверяем токен и подключение к Telegram
     me = await bot.get_me()
