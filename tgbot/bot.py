@@ -2715,39 +2715,61 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
 async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_instance: Bot):
     """Уведомление организатора о результатах розыгрыша"""
     try:
+        print(f"📨 Уведомляем организатора розыгрыша {gid}")
+        
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if not gw:
+                print(f"❌ Розыгрыш {gid} не найден для уведомления организатора")
                 return
             
-            # ... остальной код функции ...
-            await bot_instance.send_message(gw.owner_user_id, message)
+            # Получаем username победителей
+            winner_usernames = []
+            for winner in winners:
+                uid = winner[0]  # (uid, rank, hash)
+                try:
+                    user = await bot_instance.get_chat(uid)
+                    username = f"@{user.username}" if user.username else f"ID: {uid}"
+                    winner_usernames.append(f"{username}")
+                except Exception as e:
+                    winner_usernames.append(f"ID: {uid}")
+                    print(f"⚠️ Не удалось получить username для {uid}: {e}")
+            
+            # Формируем сообщение
+            if winner_usernames:
+                winners_text = "\n".join([f"{i+1}. {name}" for i, name in enumerate(winner_usernames)])
+                message_text = (
+                    f"🎉 Розыгрыш \"{gw.internal_title}\" завершился!\n\n"
+                    f"📊 Участников в финале: {eligible_count}\n"
+                    f"🏆 Победителей: {len(winners)}\n\n"
+                    f"Список победителей:\n{winners_text}\n\n"
+                    f"Свяжитесь с победителями для вручения призов."
+                )
+            else:
+                message_text = (
+                    f"🎉 Розыгрыш \"{gw.internal_title}\" завершился!\n\n"
+                    f"📊 Участников в финале: {eligible_count}\n"
+                    f"🏆 Победителей: {len(winners)}\n\n"
+                    "К сожалению, не удалось определить победителей."
+                )
+            
+            print(f"📤 Отправляем уведомление организатору {gw.owner_user_id}")
+            await bot_instance.send_message(gw.owner_user_id, message_text)
+            print(f"✅ Организатор уведомлен")
             
     except Exception as e:
-        print(f"❌ Error notifying organizer for giveaway {gid}: {e}")
+        print(f"❌ Ошибка уведомления организатора для розыгрыша {gid}: {e}")
+    
 
 async def notify_participants(gid: int, winners: list, eligible_entries: list, bot_instance: Bot):
     """Уведомление всех участников о результатах розыгрыша"""
     try:
+        print(f"📨 Уведомляем участников розыгрыша {gid}")
+        
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if not gw:
-                return
-            
-            # ... остальной код функции ...
-            await bot_instance.send_message(user_id, message, parse_mode="HTML")
-            
-    except Exception as e:
-        print(f"❌ Error notifying participants for giveaway {gid}: {e}")
-
-
-
-async def notify_participants(gid: int, winners: list, eligible_entries: list):
-    """Уведомление всех участников о результатах розыгрыша"""
-    try:
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            if not gw:
+                print(f"❌ Розыгрыш {gid} не найден для уведомления участников")
                 return
             
             winner_ids = [winner[0] for winner in winners]  # winner[0] = user_id
@@ -2756,7 +2778,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
             winner_usernames = []
             for winner_id in winner_ids:
                 try:
-                    user = await bot.get_chat(winner_id)
+                    user = await bot_instance.get_chat(winner_id)
                     username = f"@{user.username}" if user.username else f"победитель (ID: {winner_id})"
                     winner_usernames.append(username)
                 except Exception:
@@ -2780,14 +2802,14 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
                     
                     if user_id in winner_ids:
                         # Победитель
-                        message = (
+                        message_text = (
                             f"🎉 Поздравляем! Вы стали победителем в розыгрыше \"{gw.internal_title}\".\n\n"
                             f"Ваш билет <b>{ticket_code}</b> оказался выбранным случайным образом.\n\n"
                             f"Организатор свяжется с вами для вручения приза."
                         )
                     else:
                         # Участник (не победитель)
-                        message = (
+                        message_text = (
                             f"🏁 Завершился розыгрыш \"{gw.internal_title}\".\n\n"
                             f"Ваш билет: <b>{ticket_code}</b>\n\n"
                             f"Мы случайным образом определили победителей и, к сожалению, "
@@ -2796,21 +2818,23 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list):
                             f"Участвуйте в других розыгрышах!"
                         )
                     
-                    await bot.send_message(user_id, message, parse_mode="HTML")
+                    print(f"📤 Отправляем уведомление пользователю {user_id}")
+                    await bot_instance.send_message(user_id, message_text, parse_mode="HTML")
                     notified_count += 1
-                    logging.info(f"📨 Notified user {user_id} about giveaway results")
+                    print(f"✅ Пользователь {user_id} уведомлен")
                     
                     # Небольшая задержка чтобы не превысить лимиты Telegram
                     await asyncio.sleep(0.1)
                     
                 except Exception as e:
-                    logging.warning(f"Could not notify user {user_id}: {e}")
+                    print(f"⚠️ Не удалось уведомить пользователя {user_id}: {e}")
                     continue
                     
-        logging.info(f"📨 Notified {notified_count} participants of giveaway {gid}")
+        print(f"✅ Уведомлено {notified_count} участников розыгрыша {gid}")
         
     except Exception as e:
-        logging.error(f"❌ Error notifying participants for giveaway {gid}: {e}")
+        print(f"❌ Ошибка уведомления участников для розыгрыша {gid}: {e}")
+
 
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
