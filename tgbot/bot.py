@@ -49,6 +49,10 @@ load_dotenv()
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
 
+# ----------------- BOT -----------------
+bot = Bot(BOT_TOKEN, parse_mode="HTML")
+dp = Dispatcher()
+scheduler = AsyncIOScheduler()
 
 DESCRIPTION_PROMPT = (
     "<b>Введите текст подробного описания розыгрыша:</b>\n\n"
@@ -951,11 +955,6 @@ class CreateFlow(StatesGroup):
     MEDIA_PREVIEW = State()
     PHOTO = State()          # больше не используется, но пусть останется если где-то ссылаешься
     ENDAT = State()
-
-# ----------------- BOT -----------------
-bot = Bot(BOT_TOKEN, parse_mode="HTML")
-dp = Dispatcher()
-scheduler = AsyncIOScheduler()
 
 @dp.chat_join_request()
 async def on_join_request(ev: ChatJoinRequest, bot: Bot):
@@ -2569,24 +2568,30 @@ async def user_join(cq:CallbackQuery):
 
 async def finalize_and_draw_job(gid: int):
     """Исправленная версия функции определения победителей с детальным логированием"""
-    logging.info(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
-    print(f"🎯 STARTING finalize_and_draw_job for giveaway {gid}")
+    print(f"🎯 FINALIZE_AND_DRAW_JOB STARTED for giveaway {gid}")
+    logging.info(f"🎯 FINALIZE_AND_DRAW_JOB STARTED for giveaway {gid}")
     
     try:
-        # Проверяем что функция вообще запускается
+        print(f"🔍 STEP 1: Function started for giveaway {gid}")
         logging.info(f"🔍 STEP 1: Function started for giveaway {gid}")
         
         async with session_scope() as s:
+            print(f"🔍 STEP 2: Getting giveaway {gid} from database")
             gw = await s.get(Giveaway, gid)
             if not gw:
+                print(f"❌ Giveaway {gid} not found in database")
                 logging.error(f"❌ Giveaway {gid} not found in database")
                 return
+            
+            print(f"📊 STEP 3: Processing giveaway '{gw.internal_title}' (ID: {gid})")
+            logging.info(f"📊 STEP 3: Processing giveaway '{gw.internal_title}' (ID: {gid})")
+            
             if gw.status != GiveawayStatus.ACTIVE:
+                print(f"⚠️ Giveaway {gid} status is {gw.status}, not ACTIVE")
                 logging.warning(f"⚠️ Giveaway {gid} status is {gw.status}, not ACTIVE")
                 return
             
-            logging.info(f"📊 STEP 2: Processing giveaway '{gw.internal_title}' (ID: {gid})")
-            logging.info(f"⏰ Giveaway end time: {gw.end_at_utc}, Current UTC: {datetime.now(timezone.utc)}")
+            print(f"⏰ Giveaway end time: {gw.end_at_utc}, Current UTC: {datetime.now(timezone.utc)}")
             
             # Получаем участников
             res = await s.execute(
@@ -2594,18 +2599,20 @@ async def finalize_and_draw_job(gid: int):
                 {"gid": gid}
             )
             entries = res.all()
-            logging.info(f"📋 STEP 3: Found {len(entries)} preliminary entries: {entries}")
+            print(f"📋 STEP 4: Found {len(entries)} preliminary entries: {entries}")
+            logging.info(f"📋 STEP 4: Found {len(entries)} preliminary entries")
             
             if not entries:
+                print("❌ No entries found for this giveaway")
                 logging.warning("❌ No entries found for this giveaway")
                 return
             
             # Проверяем финальное членство
             eligible = []
             for uid, entry_id, ticket_code in entries:
-                logging.info(f"🔍 STEP 4: Checking user {uid} with ticket {ticket_code}")
+                print(f"🔍 STEP 5: Checking user {uid} with ticket {ticket_code}")
                 ok, details = await check_membership_on_all(bot, uid, gid)
-                logging.info(f"📝 User {uid} membership check: {ok}, details: {details}")
+                print(f"📝 User {uid} membership check: {ok}, details: {details}")
                 
                 await s.execute(
                     stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
@@ -2613,19 +2620,22 @@ async def finalize_and_draw_job(gid: int):
                 )
                 if ok:
                     eligible.append(uid)
-                    logging.info(f"✅ User {uid} is eligible")
+                    print(f"✅ User {uid} is eligible")
                 else:
-                    logging.info(f"❌ User {uid} is NOT eligible")
+                    print(f"❌ User {uid} is NOT eligible")
             
-            logging.info(f"🎯 STEP 5: Eligible participants: {len(eligible)} - {eligible}")
+            print(f"🎯 STEP 6: Eligible participants: {len(eligible)} - {eligible}")
+            logging.info(f"🎯 STEP 6: Eligible participants: {len(eligible)}")
             
             # Детерминированный выбор победителей
             if eligible and gw.winners_count > 0:
                 winners_count = min(gw.winners_count, len(eligible))
-                logging.info(f"🎲 STEP 6: Drawing {winners_count} winners from {len(eligible)} eligible")
+                print(f"🎲 STEP 7: Drawing {winners_count} winners from {len(eligible)} eligible")
                 
-                winners = deterministic_draw(gw.secret, gid, eligible, winners_count)
-                logging.info(f"🎉 STEP 7: Selected {len(winners)} winners: {winners}")
+                # Используем дефолтный секрет если None
+                secret = gw.secret or "default_secret_for_testing"
+                winners = deterministic_draw(secret, gid, eligible, winners_count)
+                print(f"🎉 STEP 8: Selected {len(winners)} winners: {winners}")
                 
                 # Сохраняем победителей
                 rank = 1
@@ -2634,32 +2644,43 @@ async def finalize_and_draw_job(gid: int):
                         stext("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
                         {"g": gid, "u": uid, "r": rank, "h": h}
                     )
-                    logging.info(f"🏆 STEP 8: Saved winner {uid} with rank {rank}")
+                    print(f"🏆 STEP 9: Saved winner {uid} with rank {rank}")
                     rank += 1
             else:
                 winners = []
-                logging.warning("❌ No eligible winners selected - no eligible users or winners_count = 0")
+                print("❌ No eligible winners selected - no eligible users or winners_count = 0")
+                logging.warning("❌ No eligible winners selected")
             
             # Обновляем статус розыгрыша
             gw.status = GiveawayStatus.FINISHED
-            logging.info(f"✅ STEP 9: Updated giveaway status to FINISHED")
+            print(f"✅ STEP 10: Updated giveaway status to FINISHED")
+            logging.info(f"✅ STEP 10: Updated giveaway status to FINISHED")
             
             await s.commit()
-            logging.info(f"💾 STEP 10: Database committed")
+            print(f"💾 STEP 11: Database committed")
+            logging.info(f"💾 STEP 11: Database committed")
             
     except Exception as e:
+        print(f"❌ CRITICAL ERROR in finalize_and_draw_job: {e}")
         logging.error(f"❌ CRITICAL ERROR in finalize_and_draw_job: {e}")
-        logging.exception("Full traceback:")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"TRACEBACK: {error_traceback}")
+        logging.error(f"TRACEBACK: {error_traceback}")
         return
     
     # Уведомления
     try:
-        logging.info(f"📨 STEP 11: Starting notifications")
+        print(f"📨 STEP 12: Starting notifications")
         await notify_organizer(gid, winners, len(eligible))
         await notify_participants(gid, winners, [(uid, "") for uid in eligible])
-        logging.info(f"✅ STEP 12: Notifications completed")
+        print(f"✅ STEP 13: Notifications completed")
     except Exception as e:
+        print(f"❌ Error in notifications: {e}")
         logging.error(f"❌ Error in notifications: {e}")
+
+    print(f"✅ FINALIZE_AND_DRAW_JOB COMPLETED for giveaway {gid}")
+    logging.info(f"✅ FINALIZE_AND_DRAW_JOB COMPLETED for giveaway {gid}")
 
 
 async def notify_organizer(gid: int, winners: list, eligible_count: int):
