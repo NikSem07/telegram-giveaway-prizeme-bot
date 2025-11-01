@@ -2937,10 +2937,23 @@ async def main():
             active_rows = active_giveaways.all()
             
             restored_count = 0
-            for gid, end_at in active_rows:
+            for gid, end_at_str in active_rows:
                 try:
+                    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: парсим строку в datetime
+                    if isinstance(end_at_str, str):
+                        # Парсим строку из базы в datetime
+                        if '.' in end_at_str:
+                            # Формат с микросекундами: 2025-11-19 10:22:00.000000
+                            end_at_dt = datetime.strptime(end_at_str, "%Y-%m-%d %H:%M:%S.%f")
+                        else:
+                            # Формат без микросекунд: 2025-11-19 10:22:00
+                            end_at_dt = datetime.strptime(end_at_str, "%Y-%m-%d %H:%M:%S")
+                    else:
+                        # Уже datetime объект
+                        end_at_dt = end_at_str
+                    
                     # Нормализуем timezone
-                    end_at_normalized = normalize_datetime(end_at)
+                    end_at_normalized = normalize_datetime(end_at_dt)
                     
                     # Проверяем что время еще не прошло
                     if end_at_normalized > datetime.now(timezone.utc):
@@ -2952,7 +2965,7 @@ async def main():
                             replace_existing=True,
                         )
                         restored_count += 1
-                        logging.info(f"🔄 Restored scheduler job for giveaway {gid}")
+                        logging.info(f"🔄 Restored scheduler job for giveaway {gid} at {end_at_normalized}")
                     else:
                         # Время прошло - запускаем немедленно
                         asyncio.create_task(finalize_and_draw_job(gid, bot))
@@ -2960,6 +2973,7 @@ async def main():
                         
                 except Exception as e:
                     logging.error(f"❌ Failed to restore job for {gid}: {e}")
+                    logging.error(f"❌ end_at value: {end_at_str}, type: {type(end_at_str)}")
             
             logging.info(f"✅ Restored {restored_count} giveaway jobs")
             
