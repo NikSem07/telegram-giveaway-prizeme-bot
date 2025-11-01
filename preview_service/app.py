@@ -37,6 +37,11 @@ CACHE_SEC = int(os.getenv("CACHE_SEC", "300"))
 
 WEBAPP_DIR = Path(__file__).parent / "webapp"   # preview-service/webapp/
 INDEX_FILE = WEBAPP_DIR / "index.html"
+LOADING_FILE = WEBAPP_DIR / "loading.html"
+NEED_SUB_FILE = WEBAPP_DIR / "need_subscription.html" 
+SUCCESS_FILE = WEBAPP_DIR / "success.html"
+ALREADY_FILE = WEBAPP_DIR / "already_participating.html"
+
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OK_STATUSES = {"creator", "administrator", "member", "restricted"}  # restricted с is_member=true
 
@@ -542,6 +547,94 @@ async def miniapp_index_get() -> HTMLResponse:
     html = INDEX_FILE.read_text(encoding="utf-8")
     return HTMLResponse(
         html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# Экран загрузки
+@app.get("/miniapp/loading", response_class=HTMLResponse)
+async def miniapp_loading_get() -> HTMLResponse:
+    html = LOADING_FILE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+@app.head("/miniapp/loading")
+async def miniapp_loading_head():
+    return Response(
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# Экран "Нужно подписаться"
+@app.get("/miniapp/need_subscription", response_class=HTMLResponse)
+async def miniapp_need_subscription_get() -> HTMLResponse:
+    html = NEED_SUB_FILE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+@app.head("/miniapp/need_subscription")
+async def miniapp_need_subscription_head():
+    return Response(
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# Экран "Успех" (новый билет)
+@app.get("/miniapp/success", response_class=HTMLResponse)
+async def miniapp_success_get() -> HTMLResponse:
+    html = SUCCESS_FILE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+@app.head("/miniapp/success")
+async def miniapp_success_head():
+    return Response(
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+# Экран "Уже участвуете"
+@app.get("/miniapp/already", response_class=HTMLResponse)
+async def miniapp_already_get() -> HTMLResponse:
+    html = ALREADY_FILE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+@app.head("/miniapp/already")
+async def miniapp_already_head():
+    return Response(
+        status_code=200,
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Уже участвуете</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+</head>
+<body>
+  <div class="wrap">
+    <section id="screen-already">
+      <div class="success-container">
+        <div class="success-icon">🎫</div>
+        <h2>Вы уже участвуете в розыгрыше!</h2>
+        <p>Не отписывайтесь от каналов до окончания розыгрыша</p>
+        
+        <div class="ticket-section">
+          <h3>Ваш билет:</h3>
+          <div class="ticket-code" id="already-ticket">XXXXXX</div>
+        </div>
+        
+        <div class="time-info">
+          <p>До завершения розыгрыша</p>
+          <div class="timer" id="countdown-already">загрузка...</div>
+        </div>
+        
+        <button class="btn-secondary" onclick="showGiveawayInfo()">Подробнее о розыгрыше</button>
+        <button class="btn-secondary" onclick="showOtherGiveaways()">Другие розыгрыши</button>
+      </div>
+    </section>
+  </div>
+  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
+  <script>
+    function showGiveawayInfo() { alert('Информация о розыгрыше будет здесь'); }
+    function showOtherGiveaways() { alert('Список других розыгрышей будет здесь'); }
+  </script>
+</body>
+</html>
