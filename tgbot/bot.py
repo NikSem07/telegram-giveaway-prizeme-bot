@@ -73,11 +73,12 @@ MEDIA_INSTRUCTION = (
     "<b>Внимание!</b> Видео должно быть в формате MP4, а его размер не должен превышать 5 МБ."
 )
 
-BTN_EVENTS = "Мои розыгрыши"
+BTN_GIVEAWAYS = "Мои розыгрыши"
 BTN_CREATE = "Создать розыгрыш"
 BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
 BTN_SUBSCRIPTIONS = "Подписки"
+BTN_CHANNELS = "Мои каналы"
 BOT_USERNAME: str | None = None
 
 # === callbacks for draft flow ===
@@ -1017,9 +1018,8 @@ async def set_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="перезапустить бота"),
         BotCommand(command="create", description="создать розыгрыш"),
-        BotCommand(command="events", description="мои розыгрыши"),
-        BotCommand(command="subscriptions", description="подписки"),
-        # можно позже добавить: help, menu и др.
+        BotCommand(command="giveaways", description="мои розыгрыши"),  
+        BotCommand(command="subscriptions", description="мои подписки"),
     ]
     await bot.set_my_commands(commands)
 
@@ -1053,11 +1053,12 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
         )
     )
 
+    # ОБНОВЛЕННАЯ КЛАВИАТУРА: 6 кнопок в формате 2x3
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_EVENTS), KeyboardButton(text=BTN_CREATE)],
-            [btn_add_channel, btn_add_group],
-            [KeyboardButton(text=BTN_SUBSCRIPTIONS)],
+            [KeyboardButton(text=BTN_GIVEAWAYS), KeyboardButton(text=BTN_CREATE)],
+            [KeyboardButton(text="Мои каналы"), btn_add_channel],
+            [btn_add_group, KeyboardButton(text=BTN_SUBSCRIPTIONS)],
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
@@ -1110,48 +1111,47 @@ async def on_chat_shared(m: Message, state: FSMContext):
     username = getattr(chat, "username", None)
     is_private = 0 if username else 1  # каналы с @username считаем публичными
 
-    # 1) upsert (вставка/обновление без дублей по (owner_user_id, chat_id))
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи перед вставкой
     async with Session() as s:
-        async with s.begin():
+        # Сначала проверяем, существует ли уже такой канал у пользователя
+        existing = await s.execute(
+            stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
+            (m.from_user.id, chat.id)
+        )
+        existing_row = existing.first()
+        
+        if existing_row:
+            # Канал уже существует - просто обновляем статус на 'ok' если нужно
+            await s.execute(
+                stext("UPDATE organizer_channels SET status='ok', bot_role=?, title=? WHERE id=?"),
+                (role, title, existing_row[0])
+            )
+            is_new = False
+        else:
+            # Канала нет - создаем новую запись
             await s.execute(
                 stext(
-                    "INSERT OR REPLACE INTO organizer_channels("
+                    "INSERT INTO organizer_channels("
                     "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
-                    ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok', :ts)"
+                    ") VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)"
                 ),
-                {
-                    "o": m.from_user.id,
-                    "cid": chat.id,
-                    "u": username,
-                    "t": title,
-                    "p": int(is_private),
-                    "r": role,
-                    "ts": datetime.now(timezone.utc),
-                },
+                (
+                    m.from_user.id, chat.id, username, title, 
+                    int(is_private), role, datetime.now(timezone.utc)
+                )
             )
-
-        # 2) сразу читаем ту же запись (той же сессией)
-        res = await s.execute(
-            stext(
-                "SELECT id, owner_user_id, chat_id, title, status "
-                "FROM organizer_channels "
-                "WHERE owner_user_id=:o AND chat_id=:cid"
-            ),
-            {"o": m.from_user.id, "cid": chat.id},
-        )
-        row = res.first()
-
-    logging.info("📦 saved channel row=%s", row)
+            is_new = True
 
     kind = "канал" if chat.type == "channel" else "группа"
+    action_text = "подключён" if is_new else "обновлён"
     await m.answer(
-        f"{kind.capitalize()} <b>{title}</b> подключён к боту.",
+        f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
         parse_mode="HTML",
         reply_markup=ReplyKeyboardRemove(),
     )
 
     # Если запись не нашлась — сразу подсветим проблему пользователю и выйдем
-    if not row:
+    if not existing_row and not is_new:
         return
 
     # Если сейчас идёт привязка к конкретному розыгрышу — перерисуем экран привязки
@@ -1160,7 +1160,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
     if event_id:
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
-            res = await s.execute(stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u"),
+            res = await s.execute(stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
                                   {"u": gw.owner_user_id})
             channels = [(r[0], r[1]) for r in res.all()]
             res = await s.execute(stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
@@ -1231,7 +1231,6 @@ def kb_my_events_menu(count_involved:int, count_finished:int, my_draft:int, my_f
     kb.button(text=f"Мои незапущенные ({my_draft})", callback_data="mev:my_drafts")
     kb.button(text=f"Мои завершённые ({my_finished})", callback_data="mev:my_finished")
     kb.button(text="Создать розыгрыш", callback_data="create")
-    kb.button(text="Мои каналы", callback_data="my_channels")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -1440,7 +1439,7 @@ async def cmd_test_finalize(m: Message):
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
-async def show_my_events_menu(m: Message):
+async def show_my_giveaways_menu(m: Message):
     """Собираем счётчики и показываем 6 кнопок-меню."""
     uid = m.from_user.id
     async with session_scope() as s:
@@ -1502,9 +1501,9 @@ async def create_giveaway_start(message: Message, state: FSMContext):
 # ===== Reply-кнопки: перенаправляем на готовые сценарии =====
 
 # "Мои розыгрыши" -> используем ваш cmd_events
-@dp.message(F.text == BTN_EVENTS)
-async def on_btn_events(m: Message, state: FSMContext):
-    await show_my_events_menu(m)
+@dp.message(F.text == BTN_GIVEAWAYS)
+async def on_btn_giveaways(m: Message, state: FSMContext):
+    await show_my_giveaways_menu(m)
 
 # "Новый розыгрыш" -> ваш create_giveaway_start
 @dp.message(F.text == BTN_CREATE)
@@ -1515,6 +1514,13 @@ async def on_btn_create(m: Message, state: FSMContext):
 @dp.message(F.text == BTN_SUBSCRIPTIONS)
 async def on_btn_subs(m: Message, state: FSMContext):
     await cmd_subs(m)
+
+# Обработчик для новой кнопки "Мои каналы"
+@dp.message(F.text == BTN_CHANNELS)
+async def on_btn_my_channels(m: Message):
+    rows = await get_user_org_channels(m.from_user.id)
+    text = "Ваши каналы / группы:\n\n" + ("" if rows else "Пока пусто.")
+    await m.answer(text, reply_markup=kb_my_channels(rows))
 
 @dp.message(CreateFlow.TITLE)
 async def handle_giveaway_name(m: Message, state: FSMContext):
@@ -1966,7 +1972,7 @@ async def cb_create_inline(cq: CallbackQuery, state: FSMContext):
 
 # -----------------
 
-@dp.message(Command("events"))
+@dp.message(Command("giveaways"))
 async def cmd_events(m: Message):
     async with session_scope() as s:
         res = await s.execute(
