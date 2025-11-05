@@ -1436,16 +1436,25 @@ async def cmd_test_finalize(m: Message):
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
-async def show_my_giveaways_menu(m: Message):
-    """Собираем счётчики и показываем обновленное меню."""
-    uid = m.from_user.id
+async def show_my_giveaways_menu(m: Message | CallbackQuery):
+    """УНИВЕРСАЛЬНАЯ ВЕРСИЯ: работает с Message и CallbackQuery"""
+    if isinstance(m, CallbackQuery):
+        message = m.message
+        user_id = m.from_user.id
+        is_callback = True
+    else:
+        message = m
+        user_id = m.from_user.id
+        is_callback = False
+
+    # Получаем актуальные данные для счетчиков
     async with session_scope() as s:
         # в которых участвую — уникальные активные розыгрыши, где у пользователя есть entries
         res = await s.execute(stext(
             "SELECT COUNT(DISTINCT g.id) "
             "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
             "WHERE e.user_id=:u AND g.status='active'"
-        ), {"u": uid})
+        ), {"u": user_id})
         count_involved = res.scalar_one() or 0
 
         # завершённые вообще (по системе) где пользователь участвовал
@@ -1453,7 +1462,7 @@ async def show_my_giveaways_menu(m: Message):
             "SELECT COUNT(DISTINCT g.id) "
             "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
             "WHERE e.user_id=:u AND g.status='finished'"
-        ), {"u": uid})
+        ), {"u": user_id})
         count_finished = res.scalar_one() or 0
 
         # мои активные, черновики и завершённые
@@ -1463,14 +1472,28 @@ async def show_my_giveaways_menu(m: Message):
             "SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END), "
             "SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) "
             "FROM giveaways WHERE owner_user_id=:u"
-        ), {"u": uid})
+        ), {"u": user_id})
         row = res.first()
         my_active = int(row[0] or 0)
         my_draft = int(row[1] or 0)
         my_finished = int(row[2] or 0)
 
     text = "Розыгрыши:"
-    await m.answer(text, reply_markup=kb_my_events_menu(count_involved, count_finished, my_active, my_draft, my_finished))
+    
+    if is_callback:
+        # Для callback: редактируем существующее сообщение
+        await message.edit_text(
+            text, 
+            reply_markup=kb_my_events_menu(count_involved, count_finished, my_active, my_draft, my_finished)
+        )
+        if isinstance(m, CallbackQuery):
+            await m.answer()
+    else:
+        # Для обычного сообщения: отправляем новое
+        await message.answer(
+            text, 
+            reply_markup=kb_my_events_menu(count_involved, count_finished, my_active, my_draft, my_finished)
+        )
 
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
@@ -1976,7 +1999,7 @@ async def cb_create_inline(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "mev:involved")
 async def show_involved_giveaways(cq: CallbackQuery):
-    """Показать розыгрыши, в которых пользователь участвует"""
+    """Показать розыгрыши, в которых пользователь участвует - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     uid = cq.from_user.id
     async with session_scope() as s:
         res = await s.execute(stext(
@@ -1992,7 +2015,7 @@ async def show_involved_giveaways(cq: CallbackQuery):
         text = "Ниже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2005,12 +2028,12 @@ async def show_involved_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:finished")
 async def show_finished_participated_giveaways(cq: CallbackQuery):
-    """Показать завершенные розыгрыши, в которых пользователь участвовал"""
+    """Показать завершенные розыгрыши, в которых пользователь участвовал - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     uid = cq.from_user.id
     async with session_scope() as s:
         res = await s.execute(stext(
@@ -2026,7 +2049,7 @@ async def show_finished_participated_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2039,12 +2062,12 @@ async def show_finished_participated_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_active")
 async def show_my_active_giveaways(cq: CallbackQuery):
-    """Показать активные розыгрыши пользователя"""
+    """Показать активные розыгрыши пользователя - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     uid = cq.from_user.id
     async with session_scope() as s:
         res = await s.execute(stext(
@@ -2058,7 +2081,7 @@ async def show_my_active_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2071,12 +2094,12 @@ async def show_my_active_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_drafts")
 async def show_my_drafts(cq: CallbackQuery):
-    """Показать черновики пользователя"""
+    """Показать черновики пользователя - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     uid = cq.from_user.id
     async with session_scope() as s:
         res = await s.execute(stext(
@@ -2090,7 +2113,7 @@ async def show_my_drafts(cq: CallbackQuery):
         text = "Ниже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2103,12 +2126,12 @@ async def show_my_drafts(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_finished")
 async def show_my_finished_giveaways(cq: CallbackQuery):
-    """Показать завершенные розыгрыши пользователя"""
+    """Показать завершенные розыгрыши пользователя - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     uid = cq.from_user.id
     async with session_scope() as s:
         res = await s.execute(stext(
@@ -2122,7 +2145,7 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2135,14 +2158,58 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
     await cq.answer()
+
 
 @dp.callback_query(F.data == "mev:back_to_main")
 async def back_to_events_main(cq: CallbackQuery):
-    """Вернуться в главное меню розыгрышей"""
-    await show_my_giveaways_menu(cq.message)
-    await cq.answer()
+    """Вернуться в главное меню розыгрышей - ОБНОВЛЕННАЯ ВЕРСИЯ"""
+    try:
+        # Получаем актуальные данные для счетчиков
+        uid = cq.from_user.id
+        async with session_scope() as s:
+            # в которых участвую — уникальные активные розыгрыши, где у пользователя есть entries
+            res = await s.execute(stext(
+                "SELECT COUNT(DISTINCT g.id) "
+                "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
+                "WHERE e.user_id=:u AND g.status='active'"
+            ), {"u": uid})
+            count_involved = res.scalar_one() or 0
+
+            # завершённые вообще (по системе) где пользователь участвовал
+            res = await s.execute(stext(
+                "SELECT COUNT(DISTINCT g.id) "
+                "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
+                "WHERE e.user_id=:u AND g.status='finished'"
+            ), {"u": uid})
+            count_finished = res.scalar_one() or 0
+
+            # мои активные, черновики и завершённые
+            res = await s.execute(stext(
+                "SELECT "
+                "SUM(CASE WHEN status='active' THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) "
+                "FROM giveaways WHERE owner_user_id=:u"
+            ), {"u": uid})
+            row = res.first()
+            my_active = int(row[0] or 0)
+            my_draft = int(row[1] or 0)
+            my_finished = int(row[2] or 0)
+
+        # РЕДАКТИРУЕМ текущее сообщение вместо отправки нового
+        text = "Розыгрыши:"
+        await cq.message.edit_text(
+            text, 
+            reply_markup=kb_my_events_menu(count_involved, count_finished, my_active, my_draft, my_finished)
+        )
+        await cq.answer()
+    except Exception as e:
+        logging.error(f"Error in back_to_events_main: {e}")
+        # Fallback: отправляем новое сообщение если редактирование не удалось
+        await show_my_giveaways_menu(cq.message)
+        await cq.answer()
 
 
 # --- Заглушки для просмотра конкретных розыгрышей ---
@@ -2163,23 +2230,32 @@ async def view_finished_participated_giveaway(cq: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("mev:view_my_active:"))
 async def view_my_active_giveaway(cq: CallbackQuery):
-    """Просмотр активного розыгрыша организатора"""
+    """Просмотр активного розыгрыша организатора - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
+    # Сначала показываем карточку розыгрыша
     await show_event_card(cq.message.chat.id, gid)
+    # Затем возвращаемся к списку активных розыгрышей
+    await show_my_active_giveaways(cq)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_draft:"))
 async def view_my_draft_giveaway(cq: CallbackQuery):
-    """Просмотр черновика организатора"""
+    """Просмотр черновика организатора - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
+    # Сначала показываем карточку розыгрыша
     await show_event_card(cq.message.chat.id, gid)
+    # Затем возвращаемся к списку черновиков
+    await show_my_drafts(cq)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_finished:"))
 async def view_my_finished_giveaway(cq: CallbackQuery):
-    """Просмотр завершенного розыгрыша организатора"""
+    """Просмотр завершенного розыгрыша организатора - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
+    # Сначала показываем карточку розыгрыша
     await show_event_card(cq.message.chat.id, gid)
+    # Затем возвращаемся к списку завершенных розыгрышей
+    await show_my_finished_giveaways(cq)
     await cq.answer()
 
 
