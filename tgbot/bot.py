@@ -1097,6 +1097,7 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
 async def on_chat_shared(m: Message, state: FSMContext):
     shared = m.chat_shared
     chat_id = shared.chat_id
+    user_id = m.from_user.id  # Тот, кто нажал кнопку выбора чата
 
     try:
         chat = await bot.get_chat(chat_id)
@@ -1109,34 +1110,34 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
     title = chat.title or getattr(chat, "first_name", None) or "Без названия"
     username = getattr(chat, "username", None)
-    is_private = 0 if username else 1  # каналы с @username считаем публичными
+    is_private = 0 if username else 1
 
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи перед вставкой
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем канал ТОЛЬКО для текущего пользователя
     async with Session() as s:
-        # Сначала проверяем, существует ли уже такой канал у пользователя
+        # Проверяем существование записи для ЭТОГО пользователя
         existing = await s.execute(
             stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
-            (m.from_user.id, chat.id)
+            (user_id, chat.id)
         )
         existing_row = existing.first()
         
         if existing_row:
-            # Канал уже существует - просто обновляем статус на 'ok' если нужно
+            # Обновляем существующую запись
             await s.execute(
-                stext("UPDATE organizer_channels SET status='ok', bot_role=?, title=? WHERE id=?"),
-                (role, title, existing_row[0])
+                stext("UPDATE organizer_channels SET status='ok', bot_role=?, title=? WHERE owner_user_id=? AND chat_id=?"),
+                (role, title, user_id, chat.id)
             )
             is_new = False
         else:
-            # Канала нет - создаем новую запись
+            # Создаем новую запись для этого пользователя
             await s.execute(
-                stext(
-                    "INSERT INTO organizer_channels("
-                    "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
-                    ") VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)"
-                ),
+                stext("""
+                    INSERT INTO organizer_channels(
+                        owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
+                """),
                 (
-                    m.from_user.id, chat.id, username, title, 
+                    user_id, chat.id, username, title, 
                     int(is_private), role, datetime.now(timezone.utc)
                 )
             )
@@ -1149,10 +1150,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
         parse_mode="HTML",
         reply_markup=ReplyKeyboardRemove(),
     )
-
-    # Если запись не нашлась — сразу подсветим проблему пользователю и выйдем
-    if not existing_row and not is_new:
-        return
 
     # Если сейчас идёт привязка к конкретному розыгрышу — перерисуем экран привязки
     data = await state.get_data()
@@ -1173,7 +1170,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
         await state.update_data(chooser_event_id=None)
     else:
         # Обычный кейс: показать «Мои каналы»
-        rows = await get_user_org_channels(m.from_user.id)
+        rows = await get_user_org_channels(user_id)  # Используем user_id вместо m.from_user.id для ясности
         label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
         await m.answer(label, reply_markup=kb_my_channels(rows))
 
@@ -2877,16 +2874,19 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 async def on_my_chat_member(event: ChatMemberUpdated):
     """
     Срабатывает, когда бота добавили или удалили из чата/канала.
-    Обновляем базу, чтобы бот знал, где он админ.
+    Ключевое изменение: сохраняем канал ТОЛЬКО для пользователя, который добавил бота.
     """
     chat = event.chat
     bot_id = event.new_chat_member.user.id
     if bot_id != (await bot.get_me()).id:
         return  # событие не для нас
 
-    # обновлённый статус
+    # Важно: используем from_user.id - того, кто совершил действие с ботом
+    user_id = event.from_user.id if event.from_user else 0
+    if user_id == 0:
+        return  # не можем определить кто добавил бота
+
     status = event.new_chat_member.status
-    user = event.from_user
     title = chat.title or getattr(chat, "full_name", None) or "Без названия"
     username = getattr(chat, "username", None)
     is_private = 0 if username else 1
@@ -2894,29 +2894,41 @@ async def on_my_chat_member(event: ChatMemberUpdated):
     async with Session() as s:
         async with s.begin():
             if status in ("administrator", "member"):
-                # сохраняем или обновляем
-                await s.execute(
-                    stext("INSERT OR REPLACE INTO organizer_channels("
-                            "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
-                            ") VALUES (:o, :cid, :u, :t, :p, :r, 'ok', :ts)"),
-                    {
-                        "o": user.id if user else 0,
-                        "cid": chat.id,
-                        "u": username,
-                        "t": title,
-                        "p": int(is_private),
-                        "r": status,
-                        "ts": datetime.now(timezone.utc),
-                    }
+                # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи для ЭТОГО пользователя
+                existing = await s.execute(
+                    stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
+                    (user_id, chat.id)
                 )
+                existing_row = existing.first()
+                
+                if existing_row:
+                    # Обновляем существующую запись
+                    await s.execute(
+                        stext("""
+                            UPDATE organizer_channels 
+                            SET title=?, username=?, is_private=?, bot_role=?, status='ok', added_at=?
+                            WHERE owner_user_id=? AND chat_id=?
+                        """),
+                        (title, username, int(is_private), status, datetime.now(timezone.utc), user_id, chat.id)
+                    )
+                else:
+                    # Создаем новую запись для этого пользователя
+                    await s.execute(
+                        stext("""
+                            INSERT INTO organizer_channels(
+                                owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
+                        """),
+                        (user_id, chat.id, username, title, int(is_private), status, datetime.now(timezone.utc))
+                    )
             else:
-                # если бота удалили из чата
+                # если бота удалили из чата - помечаем только для этого пользователя
                 await s.execute(
-                    stext("UPDATE organizer_channels SET status='gone' WHERE chat_id=:cid"),
-                    {"cid": chat.id},
+                    stext("UPDATE organizer_channels SET status='gone' WHERE owner_user_id=? AND chat_id=?"),
+                    (user_id, chat.id),
                 )
 
-    logging.info(f"🔁 my_chat_member: {chat.title} ({chat.id}) -> {status}")
+    logging.info(f"🔁 my_chat_member: user={user_id}, chat={chat.title} ({chat.id}) -> {status}")
 
 
 # ---------------- ENTRYPOINT ----------------
