@@ -1057,8 +1057,8 @@ def reply_main_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_GIVEAWAYS), KeyboardButton(text=BTN_CREATE)],
-            [KeyboardButton(text="Мои каналы"), btn_add_channel],
-            [btn_add_group, KeyboardButton(text=BTN_SUBSCRIPTIONS)],
+            [BTN_ADD_CHANNEL, BTN_ADD_GROUP],
+            [KeyboardButton(text=BTN_CHANNELS), KeyboardButton(text=BTN_SUBSCRIPTIONS)],
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
