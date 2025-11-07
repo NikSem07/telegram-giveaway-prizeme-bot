@@ -1661,8 +1661,13 @@ MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 # Пользователь всё равно может прислать текст «пропустить»
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.text.casefold() == "пропустить")
 async def media_skip_by_text(m: Message, state: FSMContext):
-    await state.set_state(CreateFlow.ENDAT)
-    await m.answer(format_endtime_prompt(), parse_mode="HTML")
+    """Обработчик кнопки 'Пропустить' - переходим к предпросмотру БЕЗ медиа"""
+    # Переходим к предпросмотру БЕЗ медиа
+    await state.set_state(CreateFlow.MEDIA_PREVIEW)
+    await state.update_data(media_url=None, media_top=False)
+    
+    # Рендерим предпросмотр без медиа
+    await render_text_preview_message(m, state)
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
