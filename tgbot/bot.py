@@ -1657,17 +1657,24 @@ async def media_no(cq: CallbackQuery, state: FSMContext):
 
 MAX_VIDEO_BYTES = 5 * 1024 * 1024  # 5 МБ
 
+# --- кнопка «Пропустить» ---
 
-# Пользователь всё равно может прислать текст «пропустить»
-@dp.message(CreateFlow.MEDIA_UPLOAD, F.text.casefold() == "пропустить")
-async def media_skip_by_text(m: Message, state: FSMContext):
-    """Обработчик кнопки 'Пропустить' - переходим к предпросмотру БЕЗ медиа"""
+@dp.callback_query(CreateFlow.MEDIA_UPLOAD, F.data == "media:skip")
+async def media_skip_callback(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Пропустить' в состоянии MEDIA_UPLOAD"""
+    try:
+        await cq.message.edit_reply_markup()  # убираем кнопки
+    except Exception:
+        pass
+    
     # Переходим к предпросмотру БЕЗ медиа
     await state.set_state(CreateFlow.MEDIA_PREVIEW)
     await state.update_data(media_url=None, media_top=False)
     
     # Рендерим предпросмотр без медиа
-    await render_text_preview_message(m, state)
+    await render_text_preview_message(cq.message, state)
+    await cq.answer()
+
 
 @dp.message(CreateFlow.MEDIA_UPLOAD, F.photo)
 async def got_photo(m: Message, state: FSMContext):
