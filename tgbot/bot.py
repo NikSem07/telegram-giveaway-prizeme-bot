@@ -1099,51 +1099,73 @@ async def on_chat_shared(m: Message, state: FSMContext):
     user_id = m.from_user.id  # Тот, кто нажал кнопку выбора чата
 
     try:
+        # Пробуем получить информацию о чате
         chat = await bot.get_chat(chat_id)
-        me = await bot.get_me()
-        cm = await bot.get_chat_member(chat_id, me.id)
-        role = "admin" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
+        
+        # Проверяем права бота в чате
+        try:
+            me = await bot.get_me()
+            cm = await bot.get_chat_member(chat_id, me.id)
+            role = "admin" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
+        except Exception as e:
+            logging.warning(f"Не удалось проверить права бота в чате {chat_id}: {e}")
+            role = "unknown"
+
+        title = chat.title or getattr(chat, "first_name", None) or "Без названия"
+        username = getattr(chat, "username", None)
+        
+        # ОПРЕДЕЛЯЕМ ТИП ЧАТА ПРАВИЛЬНО
+        if chat.type == "channel":
+            is_private = 0 if username else 1
+            chat_type = "channel"
+        else:
+            # Для групп и супергрупп
+            is_private = 1  # Группы всегда считаем приватными для нашей логики
+            chat_type = "group"
+
     except Exception as e:
-        await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
+        logging.error(f"Ошибка получения данных чата {chat_id}: {e}")
+        await m.answer(
+            f"Не удалось получить данные чата. Убедитесь, что бот добавлен в этот чат и имеет права администратора. ({e})",
+            reply_markup=ReplyKeyboardRemove(),
+        )
         return
 
-    title = chat.title or getattr(chat, "first_name", None) or "Без названия"
-    username = getattr(chat, "username", None)
-    is_private = 0 if username else 1
-
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем канал ТОЛЬКО для текущего пользователя
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем канал/группу ТОЛЬКО для текущего пользователя
     async with Session() as s:
-        # Проверяем существование записи для ЭТОГО пользователя
-        existing = await s.execute(
-            stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
-            (user_id, chat.id)
-        )
-        existing_row = existing.first()
-        
-        if existing_row:
-            # Обновляем существующую запись
-            await s.execute(
-                stext("UPDATE organizer_channels SET status='ok', bot_role=?, title=? WHERE owner_user_id=? AND chat_id=?"),
-                (role, title, user_id, chat.id)
+        async with s.begin():
+            # Проверяем существование записи для ЭТОГО пользователя
+            existing = await s.execute(
+                stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
+                (user_id, chat.id)
             )
-            is_new = False
-        else:
-            # Создаем новую запись для этого пользователя
-            await s.execute(
-                stext("""
-                    INSERT INTO organizer_channels(
-                        owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
-                """),
-                (
-                    user_id, chat.id, username, title, 
-                    int(is_private), role, datetime.now(timezone.utc)
+            existing_row = existing.first()
+            
+            if existing_row:
+                # Обновляем существующую запись
+                await s.execute(
+                    stext("UPDATE organizer_channels SET title=?, username=?, is_private=?, bot_role=?, status='ok' WHERE owner_user_id=? AND chat_id=?"),
+                    (title, username, int(is_private), role, user_id, chat.id)
                 )
-            )
-            is_new = True
+                is_new = False
+            else:
+                # Создаем новую запись для этого пользователя
+                await s.execute(
+                    stext("""
+                        INSERT INTO organizer_channels(
+                            owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
+                    """),
+                    (
+                        user_id, chat.id, username, title, 
+                        int(is_private), role, datetime.now(timezone.utc)
+                    )
+                )
+                is_new = True
 
-    kind = "канал" if chat.type == "channel" else "группа"
+    kind = "канал" if chat_type == "channel" else "группа"
     action_text = "подключён" if is_new else "обновлён"
+    
     await m.answer(
         f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
         parse_mode="HTML",
@@ -1162,6 +1184,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
             res = await s.execute(stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
                                   {"g": event_id})
             attached_ids = {r[0] for r in res.fetchall()}
+        
         await m.answer(
             build_connect_channels_text(gw.internal_title),
             reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
@@ -1169,7 +1192,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
         await state.update_data(chooser_event_id=None)
     else:
         # Обычный кейс: показать «Мои каналы»
-        rows = await get_user_org_channels(user_id)  # Используем user_id вместо m.from_user.id для ясности
+        rows = await get_user_org_channels(user_id)
         label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
         await m.answer(label, reply_markup=kb_my_channels(rows))
 
@@ -1790,10 +1813,7 @@ async def show_my_channels(cq: types.CallbackQuery):
 # Вернуть список организаторских каналов/групп пользователя [(id, title)]
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
     """
-    ВРЕМЕННЫЙ УПРОЩЁННЫЙ ХЕЛПЕР.
-    Берём по одной последней записи на каждый chat_id со статусом 'ok'
-    и просто возвращаем (row_id, title) — без проверок админств.
-    Задача: убедиться, что список вообще рисуется в боте.
+    Возвращает список организаторских каналов/групп пользователя [(id, title)]
     """
     async with Session() as s:
         res = await s.execute(
@@ -1804,15 +1824,15 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
                 JOIN (
                     SELECT chat_id, MAX(id) AS max_id
                     FROM organizer_channels
-                    WHERE status='ok'
+                    WHERE owner_user_id = ? AND status='ok'
                     GROUP BY chat_id
                 ) last ON last.max_id = oc.id
                 ORDER BY oc.id DESC
                 """
-            )
+            ),
+            (user_id,)  # ✅ Фильтруем по конкретному пользователю
         )
         rows = res.all()
-    # rows -> [(id, title)]
     return [(r[0], r[1]) for r in rows]
 
 # Показать карточку канала
@@ -3193,7 +3213,13 @@ async def on_my_chat_member(event: ChatMemberUpdated):
     status = event.new_chat_member.status
     title = chat.title or getattr(chat, "full_name", None) or "Без названия"
     username = getattr(chat, "username", None)
-    is_private = 0 if username else 1
+    
+    # ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ ТИПА ЧАТА
+    if chat.type == "channel":
+        is_private = 0 if username else 1
+    else:
+        # Для групп и супергрупп
+        is_private = 1  # Группы всегда считаем приватными
 
     async with Session() as s:
         async with s.begin():
