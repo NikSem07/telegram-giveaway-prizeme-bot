@@ -997,20 +997,20 @@ CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
 
 GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
     is_anonymous=False,
-    can_manage_chat=False,  
+    can_manage_chat=True,  
     can_post_messages=True,  
     can_edit_messages=True,  
-    can_delete_messages=False,  
+    can_delete_messages=True,  
     can_invite_users=True,     
-    can_restrict_members=False,  
-    can_promote_members=False,   
-    can_change_info=False,       
-    can_pin_messages=False,      
-    can_manage_topics=False,     
+    can_restrict_members=True,  
+    can_promote_members=True,   
+    can_change_info=True,       
+    can_pin_messages=True,      
+    can_manage_topics=True,     
     can_post_stories=False,
     can_edit_stories=False,
     can_delete_stories=False,
-    can_manage_video_chats=False,
+    can_manage_video_chats=True,
 )
 
 async def set_bot_commands(bot: Bot):
