@@ -997,20 +997,20 @@ CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
 
 GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
     is_anonymous=False,
-    can_manage_chat=True,
-    can_post_messages=True,
-    can_edit_messages=True,
-    can_delete_messages=True,
-    can_invite_users=True,
-    can_restrict_members=True,
-    can_promote_members=True,
-    can_change_info=True,
-    can_pin_messages=True,
-    can_manage_topics=True,
+    can_manage_chat=False,  
+    can_post_messages=True,  
+    can_edit_messages=True,  
+    can_delete_messages=False,  
+    can_invite_users=True,     
+    can_restrict_members=False,  
+    can_promote_members=False,   
+    can_change_info=False,       
+    can_pin_messages=False,      
+    can_manage_topics=False,     
     can_post_stories=False,
     can_edit_stories=False,
     can_delete_stories=False,
-    can_manage_video_chats=True,
+    can_manage_video_chats=False,
 )
 
 async def set_bot_commands(bot: Bot):
@@ -1068,7 +1068,7 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
     btn_add_channel = KeyboardButton(
         text=BTN_ADD_CHANNEL,
         request_chat=KeyboardButtonRequestChat(
-            request_id=101,  # любое число
+            request_id=101,  # Уникальный ID для каналов
             chat_is_channel=True,
             bot_administrator_rights=CHAN_ADMIN_RIGHTS,
             user_administrator_rights=CHAN_ADMIN_RIGHTS,
@@ -1077,8 +1077,9 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
     btn_add_group = KeyboardButton(
         text=BTN_ADD_GROUP,
         request_chat=KeyboardButtonRequestChat(
-            request_id=102,
+            request_id=102,  # Уникальный ID для групп
             chat_is_channel=False,
+            chat_is_forum=False,  # ✅ ДОБАВЛЕНО: явно указываем не форум
             bot_administrator_rights=GROUP_ADMIN_RIGHTS,
             user_administrator_rights=GROUP_ADMIN_RIGHTS,
         )
@@ -1094,14 +1095,24 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
 # === СИСТЕМНОЕ окно выбора канала/группы (chat_shared) ===
 @dp.message(F.chat_shared)
 async def on_chat_shared(m: Message, state: FSMContext):
+
+    # Детальное логирование для диагностики
+    logging.info(f"🔍 CHAT_SHARED TRIGGERED: user_id={m.from_user.id}, chat_id={m.chat_shared.chat_id}, request_id={m.chat_shared.request_id}")
+    logging.info(f"🔍 MESSAGE: {m}")
+
     shared = m.chat_shared
     chat_id = shared.chat_id
     user_id = m.from_user.id
 
+    # Логируем все данные из chat_shared
+    logging.info(f"🔍 CHAT_SHARED DETAILS: chat_id={shared.chat_id}, request_id={shared.request_id}, title={getattr(shared, 'title', 'None')}, username={getattr(shared, 'username', 'None')}")
+
     try:
         # Получаем информацию о чате
+        logging.info(f"🔍 TRYING TO GET CHAT INFO: {chat_id}")
         chat = await bot.get_chat(chat_id)
-        
+        logging.info(f"🔍 CHAT INFO RECEIVED: type={chat.type}, title={chat.title}, username={getattr(chat, 'username', 'None')}")
+
         # Проверяем права бота в чате
         try:
             me = await bot.get_me()
@@ -1127,9 +1138,23 @@ async def on_chat_shared(m: Message, state: FSMContext):
             chat_type = "private"
 
     except Exception as e:
-        logging.error(f"Ошибка получения данных чата {chat_id}: {e}")
+        # Детальное логирование ошибки
+        logging.error(f"🚨 ERROR in on_chat_shared: {e}")
+        logging.error(f"🚨 CHAT_ID: {chat_id}, USER_ID: {user_id}")
+        logging.error(f"🚨 TRACEBACK: {traceback.format_exc()}")
+        
+        error_message = f"Не удалось получить данные чата. Убедитесь, что бот добавлен в этот чат и имеет права администратора. ({e})"
+        
+        # Разные сообщения для разных типов ошибок
+        if "chat not found" in str(e).lower():
+            error_message = "❌ Чат не найден. Убедитесь, что бот добавлен в эту группу/канал и имеет права администратора."
+        elif "not enough rights" in str(e).lower():
+            error_message = "❌ Недостаточно прав. Боту нужны права администратора в группе/канале."
+        elif "bot was kicked" in str(e).lower():
+            error_message = "❌ Бот был удален из этого чата. Добавьте бота обратно с правами администратора."
+        
         await m.answer(
-            f"Не удалось получить данные чата. Убедитесь, что бот добавлен в этот чат и имеет права администратора. ({e})",
+            error_message,
             reply_markup=ReplyKeyboardRemove(),
         )
         return
@@ -1326,6 +1351,14 @@ async def dbg_scan(m: types.Message):
         lines.append(f"{mark} {title} (chat_id={chat_id}) bot_admin={bot_admin} user_admin={user_admin}")
 
     await m.answer("\n".join(lines))
+
+@dp.message(Command("test_group_add"))
+async def cmd_test_group_add(m: Message):
+    """Тестовая команда для диагностики добавления групп"""
+    await m.answer(
+        "🔧 Тестирование добавления группы...",
+        reply_markup=chooser_reply_kb()  # Покажем те же кнопки что и в основном интерфейсе
+    )
 
 @dp.message(Command("dbg_gw"))
 async def dbg_gw(m: types.Message):
@@ -3296,6 +3329,18 @@ async def on_my_chat_member(event: ChatMemberUpdated):
 
     logging.info(f"🔁 my_chat_member: user={user_id}, chat={chat.title} ({chat.id}) -> {status}")
 
+# --- Обработчик для любых сообщений для диагностики ---
+@dp.message()
+async def catch_all_messages(m: Message):
+    """Перехватывает все сообщения для диагностики"""
+    # Логируем неперехваченные сообщения
+    logging.info(f"🔍 UNHANDLED MESSAGE: text={m.text}, chat_type={m.chat.type}, user_id={m.from_user.id}")
+    
+    # Если это сообщение с кнопками выбора чата, но не обработано
+    if m.text in [BTN_ADD_CHANNEL, BTN_ADD_GROUP]:
+        logging.info(f"🔍 CHAT_SELECTION_BUTTON_PRESSED: {m.text}")
+        await m.answer(f"Кнопка '{m.text}' нажата, но не обработана. Показываю выбор...")
+        await m.answer("Выберите чат:", reply_markup=chooser_reply_kb())
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
