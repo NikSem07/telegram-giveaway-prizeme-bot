@@ -997,20 +997,20 @@ CHAN_ADMIN_RIGHTS = ChatAdministratorRights(
 
 GROUP_ADMIN_RIGHTS = ChatAdministratorRights(
     is_anonymous=False,
-    can_manage_chat=True,  
-    can_post_messages=True,  
-    can_edit_messages=True,  
-    can_delete_messages=True,  
-    can_invite_users=True,     
-    can_restrict_members=True,  
-    can_promote_members=True,   
-    can_change_info=True,       
-    can_pin_messages=True,      
-    can_manage_topics=True,     
+    can_manage_chat=False,      # УБРАТЬ - нельзя запросить для ботов
+    can_post_messages=True,     # ✅ КРИТИЧЕСКИ ВАЖНО - для публикации
+    can_edit_messages=True,     # ✅ Для редактирования постов
+    can_delete_messages=False,  # УБРАТЬ - обычно не нужно
+    can_invite_users=True,      # ✅ Для приглашения участников
+    can_restrict_members=False, # УБРАТЬ - нельзя запросить
+    can_promote_members=False,  # УБРАТЬ - нельзя запросить
+    can_change_info=False,      # УБРАТЬ - нельзя запросить
+    can_pin_messages=False,     # УБРАТЬ - обычно не нужно
+    can_manage_topics=False,    # УБРАТЬ - для форумов, не нужно
     can_post_stories=False,
     can_edit_stories=False,
     can_delete_stories=False,
-    can_manage_video_chats=True,
+    can_manage_video_chats=False, # УБРАТЬ - не нужно
 )
 
 async def set_bot_commands(bot: Bot):
