@@ -1096,10 +1096,10 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
 async def on_chat_shared(m: Message, state: FSMContext):
     shared = m.chat_shared
     chat_id = shared.chat_id
-    user_id = m.from_user.id  # Тот, кто нажал кнопку выбора чата
+    user_id = m.from_user.id
 
     try:
-        # Пробуем получить информацию о чате
+        # Получаем информацию о чате
         chat = await bot.get_chat(chat_id)
         
         # Проверяем права бота в чате
@@ -1111,17 +1111,20 @@ async def on_chat_shared(m: Message, state: FSMContext):
             logging.warning(f"Не удалось проверить права бота в чате {chat_id}: {e}")
             role = "unknown"
 
-        title = chat.title or getattr(chat, "first_name", None) or "Без названия"
+        title = chat.title or "Без названия"
         username = getattr(chat, "username", None)
         
-        # ОПРЕДЕЛЯЕМ ТИП ЧАТА ПРАВИЛЬНО
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное определение типа чата
         if chat.type == "channel":
             is_private = 0 if username else 1
             chat_type = "channel"
-        else:
-            # Для групп и супергрупп
-            is_private = 1  # Группы всегда считаем приватными для нашей логики
+        elif chat.type in ["group", "supergroup"]:
+            is_private = 1
             chat_type = "group"
+        else:
+            # Для приватных чатов и т.д.
+            is_private = 1
+            chat_type = "private"
 
     except Exception as e:
         logging.error(f"Ошибка получения данных чата {chat_id}: {e}")
@@ -1131,21 +1134,28 @@ async def on_chat_shared(m: Message, state: FSMContext):
         )
         return
 
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем канал/группу ТОЛЬКО для текущего пользователя
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем с правильными параметрами
     async with Session() as s:
         async with s.begin():
             # Проверяем существование записи для ЭТОГО пользователя
             existing = await s.execute(
-                stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
-                (user_id, chat.id)
+                stext("SELECT id FROM organizer_channels WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
+                {"user_id": user_id, "chat_id": chat.id}  # ✅ ИСПРАВЛЕНО: именованные параметры
             )
             existing_row = existing.first()
             
             if existing_row:
                 # Обновляем существующую запись
                 await s.execute(
-                    stext("UPDATE organizer_channels SET title=?, username=?, is_private=?, bot_role=?, status='ok' WHERE owner_user_id=? AND chat_id=?"),
-                    (title, username, int(is_private), role, user_id, chat.id)
+                    stext("UPDATE organizer_channels SET title=:title, username=:username, is_private=:is_private, bot_role=:role, status='ok' WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
+                    {
+                        "title": title, 
+                        "username": username, 
+                        "is_private": int(is_private), 
+                        "role": role, 
+                        "user_id": user_id, 
+                        "chat_id": chat.id
+                    }  # ✅ ИСПРАВЛЕНО: именованные параметры
                 )
                 is_new = False
             else:
@@ -1154,12 +1164,17 @@ async def on_chat_shared(m: Message, state: FSMContext):
                     stext("""
                         INSERT INTO organizer_channels(
                             owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
+                        ) VALUES (:user_id, :chat_id, :username, :title, :is_private, :role, 'ok', :added_at)
                     """),
-                    (
-                        user_id, chat.id, username, title, 
-                        int(is_private), role, datetime.now(timezone.utc)
-                    )
+                    {
+                        "user_id": user_id,
+                        "chat_id": chat.id, 
+                        "username": username, 
+                        "title": title, 
+                        "is_private": int(is_private), 
+                        "role": role,
+                        "added_at": datetime.now(timezone.utc)
+                    }  # ✅ ИСПРАВЛЕНО: именованные параметры
                 )
                 is_new = True
 
@@ -1178,11 +1193,15 @@ async def on_chat_shared(m: Message, state: FSMContext):
     if event_id:
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
-            res = await s.execute(stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
-                                  {"u": gw.owner_user_id})
+            res = await s.execute(
+                stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
+                {"u": gw.owner_user_id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+            )
             channels = [(r[0], r[1]) for r in res.all()]
-            res = await s.execute(stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
-                                  {"g": event_id})
+            res = await s.execute(
+                stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
+                {"g": event_id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+            )
             attached_ids = {r[0] for r in res.fetchall()}
         
         await m.answer(
@@ -1816,6 +1835,7 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
     Возвращает список организаторских каналов/групп пользователя [(id, title)]
     """
     async with Session() as s:
+        # ИСПРАВЛЕНИЕ: используем именованные параметры вместо позиционных
         res = await s.execute(
             stext(
                 """
@@ -1824,13 +1844,13 @@ async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
                 JOIN (
                     SELECT chat_id, MAX(id) AS max_id
                     FROM organizer_channels
-                    WHERE owner_user_id = ? AND status='ok'
+                    WHERE owner_user_id = :user_id AND status='ok'
                     GROUP BY chat_id
                 ) last ON last.max_id = oc.id
                 ORDER BY oc.id DESC
                 """
             ),
-            (user_id,)  # ✅ Фильтруем по конкретному пользователю
+            {"user_id": user_id}  # ✅ ИСПРАВЛЕНО: используем словарь
         )
         rows = res.all()
     return [(r[0], r[1]) for r in rows]
@@ -3226,8 +3246,8 @@ async def on_my_chat_member(event: ChatMemberUpdated):
             if status in ("administrator", "member"):
                 # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи для ЭТОГО пользователя
                 existing = await s.execute(
-                    stext("SELECT id FROM organizer_channels WHERE owner_user_id=? AND chat_id=?"),
-                    (user_id, chat.id)
+                    stext("SELECT id FROM organizer_channels WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
+                    {"user_id": user_id, "chat_id": chat.id}  # ✅ ИСПРАВЛЕНО: именованные параметры
                 )
                 existing_row = existing.first()
                 
@@ -3236,10 +3256,18 @@ async def on_my_chat_member(event: ChatMemberUpdated):
                     await s.execute(
                         stext("""
                             UPDATE organizer_channels 
-                            SET title=?, username=?, is_private=?, bot_role=?, status='ok', added_at=?
-                            WHERE owner_user_id=? AND chat_id=?
+                            SET title=:title, username=:username, is_private=:is_private, bot_role=:role, status='ok', added_at=:added_at
+                            WHERE owner_user_id=:user_id AND chat_id=:chat_id
                         """),
-                        (title, username, int(is_private), status, datetime.now(timezone.utc), user_id, chat.id)
+                        {
+                            "title": title, 
+                            "username": username, 
+                            "is_private": int(is_private), 
+                            "role": status, 
+                            "added_at": datetime.now(timezone.utc),
+                            "user_id": user_id, 
+                            "chat_id": chat.id
+                        }  # ✅ ИСПРАВЛЕНО: именованные параметры
                     )
                 else:
                     # Создаем новую запись для этого пользователя
@@ -3247,9 +3275,17 @@ async def on_my_chat_member(event: ChatMemberUpdated):
                         stext("""
                             INSERT INTO organizer_channels(
                                 owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, 'ok', ?)
+                            ) VALUES (:user_id, :chat_id, :username, :title, :is_private, :role, 'ok', :added_at)
                         """),
-                        (user_id, chat.id, username, title, int(is_private), status, datetime.now(timezone.utc))
+                        {
+                            "user_id": user_id,
+                            "chat_id": chat.id, 
+                            "username": username, 
+                            "title": title, 
+                            "is_private": int(is_private), 
+                            "role": status,
+                            "added_at": datetime.now(timezone.utc)
+                        }  # ✅ ИСПРАВЛЕНО: именованные параметры
                     )
             else:
                 # если бота удалили из чата - помечаем только для этого пользователя
