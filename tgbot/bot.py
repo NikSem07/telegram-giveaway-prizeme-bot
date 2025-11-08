@@ -1817,23 +1817,20 @@ async def show_my_channels(cq: types.CallbackQuery):
 async def get_user_org_channels(user_id: int) -> list[tuple[int, str]]:
     """
     Возвращает список организаторских каналов/групп пользователя [(id, title)]
+    УПРОЩЕННАЯ ВЕРСИЯ: убраны сложные JOIN, работает для каналов и групп
     """
     async with Session() as s:
         res = await s.execute(
             stext(
                 """
-                SELECT oc.id, oc.title
-                FROM organizer_channels oc
-                JOIN (
-                    SELECT chat_id, MAX(id) AS max_id
-                    FROM organizer_channels
-                    WHERE owner_user_id = :user_id AND status='ok'
-                    GROUP BY chat_id
-                ) last ON last.max_id = oc.id
-                ORDER BY oc.id DESC
+                SELECT id, title 
+                FROM organizer_channels 
+                WHERE owner_user_id = :user_id 
+                AND status = 'ok'
+                ORDER BY id DESC
                 """
             ),
-            {"user_id": user_id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+            {"user_id": user_id}
         )
         rows = res.all()
     return [(r[0], r[1]) for r in rows]
