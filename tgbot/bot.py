@@ -653,22 +653,49 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
       при сбое — нативная отправка медиа (fallback);
     - если медиа нет: просто текстовый предпросмотр.
     """
-    # 1) считаем дату и "N дней", собираем текст предпросмотра
-    # 🔄 ИСПРАВЛЕНИЕ: используем время КАК ЕГО ВВЕЛ ПОЛЬЗОВАТЕЛЬ
-    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
-    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: получаем оригинальное время из БД или вычисляем правильно
+    try:
+        # Пробуем получить оригинальное время из базы данных
+        async with session_scope() as s:
+            # Ищем запись о времени создания розыгрыша
+            res = await s.execute(
+                stext("SELECT end_at_utc FROM giveaways WHERE id=:id"),
+                {"id": gw.id}
+            )
+            db_time = res.scalar_one()
+            
+            # Если время в базе хранится как строка, парсим ее
+            if isinstance(db_time, str):
+                if '+' in db_time or 'Z' in db_time:
+                    # Время с timezone info
+                    end_at_utc = datetime.fromisoformat(db_time.replace('Z', '+00:00'))
+                else:
+                    # Время без timezone - считаем UTC
+                    end_at_utc = datetime.strptime(db_time, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=timezone.utc)
+            else:
+                end_at_utc = db_time
+            
+            # Конвертируем в MSK для отображения
+            end_at_msk_dt = end_at_utc.astimezone(MSK_TZ)
+            end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+            
+    except Exception as e:
+        # Fallback: используем текущую логику
+        logging.warning(f"Failed to get original time: {e}")
+        end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+        end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     
-    # 🔄 ВАЖНОЕ ИСПРАВЛЕНИЕ: правильно вычисляем дни
+    # Вычисляем дни
     now_msk = datetime.now(MSK_TZ).date()
     end_at_date = end_at_msk_dt.date()
     days_left = max(0, (end_at_date - now_msk).days)
 
-    # Используем _compose_preview_text для предпросмотра (без коррекции)
+    # Используем _compose_preview_text для предпросмотра
     preview_text = _compose_preview_text(
-        "",                               # заголовок в предпросмотре не используем
+        "",
         gw.winners_count,
         desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,
+        end_at_msk=end_at_msk_str,  # Должно быть 17:51
         days_left=days_left,
     )
 
