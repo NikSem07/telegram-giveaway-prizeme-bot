@@ -3276,14 +3276,17 @@ def kb_finished_giveaway(giveaway_id: int, for_channel: bool = False) -> InlineK
     if for_channel:
         # В КАНАЛАХ - только URL-кнопка на t.me с startapp
         global BOT_USERNAME
-        url = f"https://t.me/{BOT_USERNAME}?startapp={giveaway_id}"
+        # 🔄 ИЗМЕНЕНИЕ: используем специальный префикс для результатов
+        url = f"https://t.me/{BOT_USERNAME}?startapp=results_{giveaway_id}"
         kb.button(text="📊 Результаты", url=url)
     else:
         # В ЛИЧКЕ/ГРУППАХ можно открыть напрямую наш домен как WebApp
-        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={giveaway_id}"
+        # 🔄 ИЗМЕНЕНИЕ: используем специальный префикс для результатов
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{giveaway_id}"
         kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
     
     return kb.as_markup()
+
 
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """

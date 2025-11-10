@@ -601,6 +601,48 @@ async def api_claim(req: Request):
         }, status_code=500)
 
 
+# --- POST /api/check_giveaway_status ---
+@app.post("/api/check_giveaway_status")
+async def api_check_giveaway_status(req: Request):
+    """
+    Проверяет статус розыгрыша без выполнения проверки подписки
+    Используется для определения, нужно ли показывать экран результатов
+    """
+    try:
+        body = await req.json()
+        gid = int(body.get("gid") or 0)
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
+
+    try:
+        with _db() as db:
+            # Получаем информацию о розыгрыше
+            row = db.execute(
+                "SELECT status, end_at_utc FROM giveaways WHERE id=?",
+                (gid,)
+            ).fetchone()
+            
+            if not row:
+                return JSONResponse({"ok": False, "reason": "giveaway_not_found"}, status_code=404)
+            
+            status = row["status"]
+            end_at_utc = row["end_at_utc"]
+            
+            # Проверяем, завершен ли розыгрыш
+            is_completed = status in ("completed", "finished")
+            
+            return JSONResponse({
+                "ok": True,
+                "status": status,
+                "end_at_utc": end_at_utc,
+                "is_completed": is_completed
+            })
+            
+    except Exception as e:
+        print(f"[CHECK_STATUS] Error: {e}")
+        return JSONResponse({"ok": False, "reason": f"db_error: {e}"}, status_code=500)
+
+
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
 @app.get("/miniapp/", response_class=HTMLResponse)
 async def miniapp_index_get() -> HTMLResponse:

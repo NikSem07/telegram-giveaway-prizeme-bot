@@ -13,11 +13,21 @@ const hide = (sel) => $(sel)?.classList.add("hide");
 function getStartParam() {
   try {
     const p = tg.initDataUnsafe?.start_param;
-    if (p) return p;
+    if (p) {
+      // Если start_param начинается с "results_", это запрос результатов
+      if (p.startsWith('results_')) {
+        return p.replace('results_', '');
+      }
+      return p;
+    }
   } catch {}
   try {
     const url = new URL(location.href);
-    return url.searchParams.get("tgWebAppStartParam");
+    const param = url.searchParams.get("tgWebAppStartParam");
+    if (param && param.startsWith('results_')) {
+      return param.replace('results_', '');
+    }
+    return param;
   } catch { return null; }
 }
 
@@ -71,6 +81,22 @@ function updateCountdown(endAtUtc, elementId = 'countdown') {
     }
 }
 
+// Функция для проверки, нужно ли открывать экран результатов
+async function shouldShowResults(gid) {
+  try {
+    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) return false;
+    
+    const statusCheck = await api("/api/check_giveaway_status", { gid, init_data });
+    console.log("[RESULTS] Status check:", statusCheck);
+    
+    return statusCheck.ok && statusCheck.is_completed;
+  } catch (err) {
+    console.error("[RESULTS] Status check error:", err);
+    return false;
+  }
+}
+
 // Основной поток проверки
 async function checkFlow() {
   try {
@@ -81,6 +107,14 @@ async function checkFlow() {
     if (!init_data) throw new Error("No initData");
 
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
+
+    // Проверяем, не завершен ли розыгрыш
+    const shouldShowResultsPage = await shouldShowResults(gid);
+    if (shouldShowResultsPage) {
+      console.log("[MULTI-PAGE] Giveaway completed, redirecting to RESULTS screen");
+      window.location.href = `/miniapp/results?gid=${gid}`;
+      return;
+    }
 
     // 1) Проверяем условия
     const check = await api("/api/check", { gid, init_data });
