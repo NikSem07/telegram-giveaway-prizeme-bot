@@ -28,7 +28,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
-from aiogram.enums import ParseMode
 
 from sqlalchemy import text as _sqltext
 from sqlalchemy import text as stext
@@ -52,41 +51,6 @@ def normalize_datetime(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
-
-# === MARKDOWN V2 SUPPORT ===
-def html_to_markdown_v2(html_text: str) -> str:
-    """
-    Конвертирует простые HTML-теги в MarkdownV2
-    """
-    if not html_text:
-        return ""
-    
-    text = html_text
-    
-    # Заменяем HTML-теги на MarkdownV2
-    text = text.replace('<b>', '*').replace('</b>', '*')
-    text = text.replace('<strong>', '*').replace('</strong>', '*')
-    text = text.replace('<i>', '_').replace('</i>', '_')
-    text = text.replace('<em>', '_').replace('</em>', '_')
-    text = text.replace('<u>', '__').replace('</u>', '__')
-    text = text.replace('<s>', '~').replace('</s>', '~')
-    text = text.replace('<code>', '`').replace('</code>', '`')
-    text = text.replace('<pre>', '```').replace('</pre>', '```')
-    
-    # Обрабатываем ссылки [текст](url)
-    import re
-    text = re.sub(r'<a href="([^"]+)">([^<]+)</a>', r'[\2](\1)', text)
-    
-    # Экранируем специальные символы MarkdownV2
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    result = ''
-    for char in text:
-        if char in escape_chars:
-            result += '\\' + char
-        else:
-            result += char
-    
-    return result
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
@@ -475,16 +439,19 @@ def _compose_preview_text(
 ) -> str:
     """
     Текст «серого блока» предпросмотра.
-    Сохраняет ВСЁ форматирование пользователя (жирный, курсив, ссылки, премиум-емодзи).
+    - title показываем обычным текстом (без <b>), чтобы не навязывать жирный.
+    - desc_html вставляем как есть (пользовательское оформление сохраняется).
+    - дата берётся из введённой пользователем + "(N дней)" по-русски.
     """
     lines = []
     if title:
-        # ⚠️ УБРАТЬ escape() - сохраняем форматирование пользователя
-        lines.append(title)
+        # без <b> — не навязываем жирный
+        lines.append(escape(title))
         lines.append("")
 
     if desc_html:
-        # ⚠️ УЖЕ содержит HTML-разметку пользователя
+        # ВАЖНО: это уже «HTML», не оборачиваем в <b>, не экранируем повторно.
+        # Если хочешь жёстко ограничить теги — сделай лёгкую валидацию выше.
         lines.append(desc_html)
         lines.append("")
 
@@ -510,15 +477,15 @@ def _compose_post_text(
 ) -> str:
     """
     Текст для публикации в посте (с коррекцией времени +3 часа).
-    Сохраняет ВСЁ форматирование пользователя (жирный, курсив, ссылки, премиум-емодзи).
+    Используется только при публикации розыгрыша в каналы.
     """
     lines = []
     if title:
-        lines.append(title)  # ⚠️ УБРАТЬ escape() - сохраняем форматирование
+        lines.append(escape(title))
         lines.append("")
 
     if desc_html:
-        lines.append(desc_html)  # ⚠️ УЖЕ содержит HTML-разметку пользователя
+        lines.append(desc_html)
         lines.append("")
 
     lines.append("Число участников: 0")
@@ -771,15 +738,15 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         # 4) fallback — отдать нативно (фото/гиф/видео) с той же подписью
         try:
             if kind == "photo":
-                await m.answer_photo(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_photo(fid, caption=preview_text)
             elif kind == "animation":
-                await m.answer_animation(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_animation(fid, caption=preview_text)
             elif kind == "video":
-                await m.answer_video(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_video(fid, caption=preview_text)
             else:
-                await m.answer(preview_text, parse_mode="HTML")
+                await m.answer(preview_text)
         except Exception:
-            await m.answer(preview_text, parse_mode="HTML")
+            await m.answer(preview_text)
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -1756,11 +1723,11 @@ async def step_desc(m: Message, state: FSMContext):
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем описание КАК ЕСТЬ (с разметкой)
+    # сохраняем описание
     await state.update_data(desc=text)
 
-    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: показываем предпросмотр БЕЗ escape()
-    preview = f"<b>Предпросмотр описания:</b>\n\n{text}"
+    # показываем предпросмотр + кнопки
+    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
     await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
 
     # переходим в состояние подтверждения
@@ -2571,7 +2538,7 @@ async def preview_add_media(cq: CallbackQuery, state: FSMContext):
 
     await cq.answer()
 
-#--- Обработчик С медиа ---
+#--- Обработчик С мелиа ---
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
     """
@@ -2602,26 +2569,10 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
     # 1) создаём черновик и получаем его id
     async with session_scope() as s:
-        # ⚠️ КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: проверяем что сохраняется в БД
-        logging.info(f"🔍📝 PREVIEW_CONTINUE - ДАННЫЕ ДЛЯ СОХРАНЕНИЯ:")
-        logging.info(f"📝 Заголовок: {repr(title)}")
-        logging.info(f"📝 Описание (длина: {len(desc)}): {repr(desc)}")
-        logging.info(f"📝 Содержит HTML теги: {'<' in desc and '>' in desc}")
-        logging.info(f"📝 Содержит Markdown: {'*' in desc or '_' in desc or '[' in desc}")
-        logging.info(f"📝 Содержит **жирный**: {'**' in desc}")
-        logging.info(f"📝 Содержит *курсив*: {'*' in desc and '**' not in desc}")
-        logging.info(f"📝 Содержит [ссылки]: {'[' in desc and ']' in desc}")
-        
-        # Сохраняем первые 200 символов для детального анализа
-        if len(desc) > 200:
-            logging.info(f"📝 Первые 200 символов: {repr(desc[:200])}")
-        else:
-            logging.info(f"📝 Полный текст: {repr(desc)}")
-        
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
-            public_description=desc,  # Сохраняем как есть (с разметкой)
+            public_description=desc,
             photo_file_id=photo_id,
             end_at_utc=end_at,
             winners_count=winners,
@@ -2630,11 +2581,6 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
         s.add(gw)
         await s.flush()          # чтобы сразу появился gw.id
         new_id = gw.id
-        
-        # ⚠️ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: проверяем что сохранилось в БД
-        logging.info(f"✅📝 СОХРАНЕНО В БД - Giveaway ID: {new_id}")
-        logging.info(f"✅📝 Заголовок в БД: {repr(gw.internal_title)}")
-        logging.info(f"✅📝 Описание в БД (длина: {len(gw.public_description)}): {repr(gw.public_description[:100])}...")
 
     # 2) чистим FSM
     await state.clear()
@@ -2918,11 +2864,10 @@ async def _launch_and_publish(gid: int, message: types.Message):
     days_left = max(0, (end_at_date - now_msk).days)
 
     # ВАЖНО: _compose_preview_text принимает позиционные аргументы: (title, prizes)
-    description_markdown = html_to_markdown_v2(gw.public_description or "")
     preview_text = _compose_post_text(
         "",
         gw.winners_count,
-        desc_html=description_markdown,
+        desc_html=(gw.public_description or ""),
         end_at_msk=end_at_msk_str,        # Оригинальное время (17:51) будет скорректировано
         days_left=days_left,
     )
@@ -2961,12 +2906,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     show_above_text=False,  # медиа снизу, как в нашем дефолтном предпросмотре
                 )
 
-                # Сохраняем результат отправки
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
                 sent_msg = await bot.send_message(
                     chat_id,
                     full_text,
                     link_preview_options=lp,
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                    parse_mode="HTML",
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2974,11 +2919,10 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # Сохраняем результат отправки + ДОБАВЛЯЕМ parse_mode
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
-                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2989,37 +2933,18 @@ async def _launch_and_publish(gid: int, message: types.Message):
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 if kind == "photo" and file_id:
-                    sent_msg = await bot.send_photo(
-                        chat_id, 
-                        file_id, 
-                        caption=preview_text, 
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        reply_markup=kb_public_participate(gid, for_channel=True)
-                    )
+                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
-                    sent_msg = await bot.send_animation(
-                        chat_id, 
-                        file_id, 
-                        caption=preview_text, 
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        reply_markup=kb_public_participate(gid, for_channel=True)
-                    )
+                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "video" and file_id:
-                    sent_msg = await bot.send_video(
-                        chat_id, 
-                        file_id, 
-                        caption=preview_text, 
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        reply_markup=kb_public_participate(gid, for_channel=True)
-                    )
+                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 else:
                     sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
-                        parse_mode=ParseMode.MARKDOWN_V2, 
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
