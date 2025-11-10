@@ -3411,7 +3411,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
     Редактирует пост розыгрыша после завершения с сохранением медиа
-    УЛУЧШЕННАЯ ВЕРСИЯ: правильное сохранение медиа при редактировании
+    УЛУЧШЕННАЯ ВЕРСИЯ: сохранение link-preview с фиолетовой рамкой
     """
     print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
@@ -3476,6 +3476,30 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             has_media = media_file_id is not None
             print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}, has_media: {has_media}")
             
+            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Подготавливаем link-preview URL для медиа
+            preview_url = None
+            if has_media and media_file_id:
+                try:
+                    print(f"🔍 Подготавливаем link-preview URL для медиа...")
+                    # Подбираем имя файла под тип
+                    if media_type == "photo":
+                        suggested = "image.jpg"
+                    elif media_type == "animation":
+                        suggested = "animation.mp4"
+                    elif media_type == "video":
+                        suggested = "video.mp4"
+                    else:
+                        suggested = "file.bin"
+
+                    # Выгружаем из TG в S3 и собираем наш preview_url (как при публикации)
+                    key, s3_url = await file_id_to_public_url_via_s3(bot_instance, media_file_id, suggested)
+                    preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+                    print(f"🔍 Link-preview URL подготовлен: {preview_url}")
+                    
+                except Exception as url_error:
+                    print(f"❌ Ошибка подготовки link-preview URL: {url_error}")
+                    preview_url = None
+            
             # Редактируем посты во всех каналах
             success_count = 0
             for chat_id, message_id in channels:
@@ -3490,9 +3514,76 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с сохранением медиа
-                    if has_media and media_file_id:
-                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, пробуем edit_message_caption с сохранением медиа")
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с link-preview
+                    if has_media and preview_url:
+                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
+                        try:
+                            # Формируем текст с hidden link для link-preview
+                            hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                            full_text_with_preview = f"{new_text}\n\n{hidden_link}"
+                            
+                            # Настройки link-preview (как при публикации)
+                            lp = LinkPreviewOptions(
+                                is_disabled=False,
+                                prefer_large_media=True,
+                                prefer_small_media=False,
+                                show_above_text=False,  # медиа снизу, как в дефолтном предпросмотре
+                            )
+                            
+                            # Пробуем отредактировать через edit_message_text с link-preview
+                            await bot_instance.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=message_id,
+                                text=full_text_with_preview,
+                                parse_mode="HTML",
+                                link_preview_options=lp,
+                                reply_markup=reply_markup
+                            )
+                            print(f"✅ Пост С LINK-PREVIEW отредактирован в чате {chat_id}")
+                            success_count += 1
+                            
+                        except Exception as preview_error:
+                            print(f"❌ Ошибка edit_message_text с link-preview: {preview_error}")
+                            
+                            # 🔄 Fallback: переотправляем весь пост с link-preview
+                            print(f"🔍 Переотправляем пост с link-preview...")
+                            try:
+                                # Удаляем старый пост
+                                try:
+                                    await bot_instance.delete_message(chat_id=chat_id, message_id=message_id)
+                                    print(f"🔍 Старый пост удален")
+                                except Exception as delete_error:
+                                    print(f"⚠️ Не удалось удалить старый пост: {delete_error}")
+                                
+                                # Формируем текст с hidden link для link-preview
+                                hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                                full_text_with_preview = f"{new_text}\n\n{hidden_link}"
+                                
+                                # Настройки link-preview
+                                lp = LinkPreviewOptions(
+                                    is_disabled=False,
+                                    prefer_large_media=True,
+                                    prefer_small_media=False,
+                                    show_above_text=False,
+                                )
+                                
+                                # Отправляем новый пост с link-preview
+                                await bot_instance.send_message(
+                                    chat_id=chat_id,
+                                    text=full_text_with_preview,
+                                    parse_mode="HTML",
+                                    link_preview_options=lp,
+                                    reply_markup=reply_markup
+                                )
+                                
+                                print(f"✅ Пост С LINK-PREVIEW переотправлен в чате {chat_id}")
+                                success_count += 1
+                                
+                            except Exception as resend_error:
+                                print(f"❌ Ошибка переотправки поста с link-preview: {resend_error}")
+                    
+                    elif has_media and not preview_url:
+                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, но нет preview_url, пробуем edit_message_caption")
                         try:
                             # Для постов с медиа редактируем только подпись с reply_markup
                             await bot_instance.edit_message_caption(
@@ -3507,49 +3598,6 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             
                         except Exception as caption_error:
                             print(f"❌ Ошибка edit_message_caption: {caption_error}")
-                            
-                            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если не работает edit_message_caption, 
-                            # переотправляем весь пост с медиа и новым текстом
-                            print(f"🔍 Переотправляем пост с медиа и новым текстом...")
-                            try:
-                                # Удаляем старый пост
-                                try:
-                                    await bot_instance.delete_message(chat_id=chat_id, message_id=message_id)
-                                    print(f"🔍 Старый пост удален")
-                                except Exception as delete_error:
-                                    print(f"⚠️ Не удалось удалить старый пост: {delete_error}")
-                                
-                                # Отправляем новый пост с тем же медиа и новым текстом
-                                if media_type == "photo":
-                                    await bot_instance.send_photo(
-                                        chat_id=chat_id,
-                                        photo=media_file_id,
-                                        caption=new_text,
-                                        parse_mode="HTML",
-                                        reply_markup=reply_markup
-                                    )
-                                elif media_type == "animation":
-                                    await bot_instance.send_animation(
-                                        chat_id=chat_id,
-                                        animation=media_file_id,
-                                        caption=new_text,
-                                        parse_mode="HTML",
-                                        reply_markup=reply_markup
-                                    )
-                                elif media_type == "video":
-                                    await bot_instance.send_video(
-                                        chat_id=chat_id,
-                                        video=media_file_id,
-                                        caption=new_text,
-                                        parse_mode="HTML",
-                                        reply_markup=reply_markup
-                                    )
-                                
-                                print(f"✅ Пост С МЕДИА переотправлен в чате {chat_id}")
-                                success_count += 1
-                                
-                            except Exception as resend_error:
-                                print(f"❌ Ошибка переотправки поста: {resend_error}")
                     
                     else:
                         print(f"🔍 Розыгрыш БЕЗ медиа, используем edit_message_text")
