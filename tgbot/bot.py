@@ -2571,7 +2571,7 @@ async def preview_add_media(cq: CallbackQuery, state: FSMContext):
 
     await cq.answer()
 
-#--- Обработчик С мелиа ---
+#--- Обработчик С медиа ---
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
     """
@@ -2602,13 +2602,26 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
     # 1) создаём черновик и получаем его id
     async with session_scope() as s:
-
-        logging.info(f"📝 Сохраняем описание (длина: {len(desc)}): {desc[:100]}...")
+        # ⚠️ КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: проверяем что сохраняется в БД
+        logging.info(f"🔍📝 PREVIEW_CONTINUE - ДАННЫЕ ДЛЯ СОХРАНЕНИЯ:")
+        logging.info(f"📝 Заголовок: {repr(title)}")
+        logging.info(f"📝 Описание (длина: {len(desc)}): {repr(desc)}")
+        logging.info(f"📝 Содержит HTML теги: {'<' in desc and '>' in desc}")
+        logging.info(f"📝 Содержит Markdown: {'*' in desc or '_' in desc or '[' in desc}")
+        logging.info(f"📝 Содержит **жирный**: {'**' in desc}")
+        logging.info(f"📝 Содержит *курсив*: {'*' in desc and '**' not in desc}")
+        logging.info(f"📝 Содержит [ссылки]: {'[' in desc and ']' in desc}")
+        
+        # Сохраняем первые 200 символов для детального анализа
+        if len(desc) > 200:
+            logging.info(f"📝 Первые 200 символов: {repr(desc[:200])}")
+        else:
+            logging.info(f"📝 Полный текст: {repr(desc)}")
         
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
-            public_description=desc,
+            public_description=desc,  # Сохраняем как есть (с разметкой)
             photo_file_id=photo_id,
             end_at_utc=end_at,
             winners_count=winners,
@@ -2617,6 +2630,11 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
         s.add(gw)
         await s.flush()          # чтобы сразу появился gw.id
         new_id = gw.id
+        
+        # ⚠️ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: проверяем что сохранилось в БД
+        logging.info(f"✅📝 СОХРАНЕНО В БД - Giveaway ID: {new_id}")
+        logging.info(f"✅📝 Заголовок в БД: {repr(gw.internal_title)}")
+        logging.info(f"✅📝 Описание в БД (длина: {len(gw.public_description)}): {repr(gw.public_description[:100])}...")
 
     # 2) чистим FSM
     await state.clear()
