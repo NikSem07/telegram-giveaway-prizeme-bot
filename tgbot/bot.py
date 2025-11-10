@@ -459,7 +459,40 @@ def _compose_preview_text(
     lines.append(f"Количество призов: {max(0, prizes)}")
 
     if end_at_msk:
-        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: корректируем время на +3 часа
+        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
+        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
+    else:
+        lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
+
+    return "\n".join(lines)
+
+
+def _compose_post_text(
+    title: str,
+    prizes: int,
+    *,
+    desc_html: str | None = None,
+    end_at_msk: str | None = None,
+    days_left: int | None = None
+) -> str:
+    """
+    Текст для публикации в посте (с коррекцией времени +3 часа).
+    Используется только при публикации розыгрыша в каналы.
+    """
+    lines = []
+    if title:
+        lines.append(escape(title))
+        lines.append("")
+
+    if desc_html:
+        lines.append(desc_html)
+        lines.append("")
+
+    lines.append("Число участников: 0")
+    lines.append(f"Количество призов: {max(0, prizes)}")
+
+    if end_at_msk:
+        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: корректируем время на +3 часа только для постов
         try:
             # Парсим время из строки "HH:MM DD.MM.YYYY"
             time_part, date_part = end_at_msk.split(' ')
@@ -587,7 +620,7 @@ async def render_text_preview_message(
     desc_html = desc_raw or None
 
     prizes     = int(data.get("winners_count") or 0)
-    end_at_msk = data.get("end_at_msk_str")
+    end_at_msk = data.get("end_at_msk_str")  
     days_left  = data.get("days_left")
 
     txt = _compose_preview_text(
@@ -2803,12 +2836,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
     days_left = max(0, (end_at_date - now_msk).days)
 
     # ВАЖНО: _compose_preview_text принимает позиционные аргументы: (title, prizes)
-    preview_text = _compose_preview_text(
+    preview_text = _compose_post_text(
         "",
         gw.winners_count,
         desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,        # 🔄 ПРАВИЛЬНОЕ ВРЕМЯ
-        days_left=days_left,              # 🔄 ПРАВИЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ
+        end_at_msk=end_at_msk_str,        # Оригинальное время (17:51) будет скорректировано
+        days_left=days_left,
     )
 
     # 6) публикуем в каждом чате — С клавиатурой «Участвовать» и попыткой link-preview
