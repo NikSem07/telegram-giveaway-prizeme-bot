@@ -3189,10 +3189,22 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
     except Exception as e:
         print(f"❌ Ошибка в уведомлениях: {e}")
 
-    # 🔄 ДОБАВЛЕНО: Редактирование постов после завершения
+    # Редактирование постов после завершения
     print(f"🔍 ДИАГНОСТИКА: ДО вызова edit_giveaway_post для {gid}")
     try:
         print(f"📝 Запускаем редактирование постов для {gid}")
+
+        # Детальная диагностика перед редактированием
+        async with session_scope() as s:
+            gw_diag = await s.get(Giveaway, gid)
+            if gw_diag:
+                media_type, media_file_id = unpack_media(gw_diag.photo_file_id)
+                print(f"🔍 ДИАГНОСТИКА РОЗЫГРЫША {gid}:")
+                print(f"🔍 - Название: {gw_diag.internal_title}")
+                print(f"🔍 - Медиа тип: {media_type}")
+                print(f"🔍 - File ID: {media_file_id is not None}")
+                print(f"🔍 - Есть медиа: {media_file_id is not None}")
+
         result = await edit_giveaway_post(gid, bot_instance)
         print(f"✅ Редактирование постов завершено для {gid}, результат: {result}")
     except Exception as e:
@@ -3388,7 +3400,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
     Редактирует пост розыгрыша после завершения с сохранением медиа
-    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное использование edit_message_caption и edit_message_text
+    УЛУЧШЕННАЯ ВЕРСИЯ: правильное определение типа поста и методов редактирования
     """
     print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
@@ -3401,7 +3413,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                 print(f"❌ Розыгрыш {giveaway_id} не найден")
                 return False
             
-            print(f"🔍 Розыгрыш найден: {gw.internal_title}, статус: {gw.status}")
+            print(f"🔍 Розыгрыш найден: '{gw.internal_title}', статус: {gw.status}")
 
             # Получаем количество участников
             print(f"🔍 Ищем количество участников для розыгрыша {giveaway_id}")
@@ -3448,10 +3460,10 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             new_text = _compose_finished_post_text(gw, winners, participants_count)
             print(f"🔍 Сформирован новый текст поста (длина: {len(new_text)} символов)")
             
-            # Определяем тип медиа для розыгрыша
+            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Определяем тип медиа для розыгрыша
             media_type, media_file_id = unpack_media(gw.photo_file_id)
             has_media = media_file_id is not None
-            print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}")
+            print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}, has_media: {has_media}")
             
             # Редактируем посты во всех каналах
             success_count = 0
@@ -3467,40 +3479,87 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с правильной передачей reply_markup
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДИАГНОСТИКА ТИПА ПОСТА
+                    # Пробуем определить тип поста через getChatMember или прямой запрос
+                    try:
+                        # Пытаемся получить информацию о сообщении
+                        chat_msg = await bot_instance.get_chat(chat_id)
+                        print(f"🔍 Информация о чате: {chat_msg.type}")
+                    except Exception as e:
+                        print(f"🔍 Не удалось получить информацию о чате: {e}")
+                    
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с проверкой типа поста
                     if has_media:
-                        print(f"🔍 Редактируем пост С МЕДИА (edit_message_caption)")
-                        # Для постов с медиа редактируем только подпись с reply_markup
-                        await bot_instance.edit_message_caption(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            caption=new_text,
-                            parse_mode="HTML",
-                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру В edit_message_caption
-                        )
+                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, пробуем edit_message_caption")
+                        try:
+                            # Для постов с медиа редактируем только подпись с reply_markup
+                            await bot_instance.edit_message_caption(
+                                chat_id=chat_id,
+                                message_id=message_id,
+                                caption=new_text,
+                                parse_mode="HTML",
+                                reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
+                            )
+                            print(f"✅ Пост С МЕДИА отредактирован в чате {chat_id}")
+                            success_count += 1
+                            
+                        except Exception as caption_error:
+                            print(f"❌ Ошибка edit_message_caption: {caption_error}")
+                            print(f"🔍 Пробуем edit_message_text как fallback...")
+                            
+                            # Fallback: пробуем редактировать как текст
+                            try:
+                                await bot_instance.edit_message_text(
+                                    chat_id=chat_id,
+                                    message_id=message_id,
+                                    text=new_text,
+                                    parse_mode="HTML",
+                                    reply_markup=reply_markup
+                                )
+                                print(f"✅ Пост отредактирован через fallback в чате {chat_id}")
+                                success_count += 1
+                            except Exception as text_error:
+                                print(f"❌ Fallback также не сработал: {text_error}")
+                    
                     else:
-                        print(f"🔍 Редактируем пост БЕЗ МЕДИА (edit_message_text)")
+                        print(f"🔍 Розыгрыш БЕЗ медиа, используем edit_message_text")
                         # Для постов без медиа редактируем весь текст с reply_markup
                         await bot_instance.edit_message_text(
                             chat_id=chat_id,
                             message_id=message_id,
                             text=new_text,
                             parse_mode="HTML",
-                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
+                            reply_markup=reply_markup
                         )
-                    
-                    success_count += 1
-                    print(f"✅ Пост отредактирован в чате {chat_id}")
+                        print(f"✅ Пост БЕЗ МЕДИА отредактирован в чате {chat_id}")
+                        success_count += 1
                     
                 except Exception as e:
                     print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
                     # Детальная диагностика ошибки
-                    if "message to edit not found" in str(e):
+                    error_str = str(e)
+                    if "message to edit not found" in error_str:
                         print(f"⚠️ Сообщение {message_id} не найдено в чате {chat_id}")
-                    elif "can't parse entities" in str(e):
+                    elif "can't parse entities" in error_str:
                         print(f"⚠️ Ошибка парсинга HTML в тексте для чата {chat_id}")
-                    elif "reply_markup" in str(e):
+                    elif "reply_markup" in error_str:
                         print(f"⚠️ Проблема с клавиатурой для чата {chat_id}")
+                    elif "no caption" in error_str:
+                        print(f"⚠️ У поста нет caption (подписи) в чате {chat_id}")
+                        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если у поста с медиа нет caption, пробуем edit_message_text
+                        try:
+                            print(f"🔍 Пробуем edit_message_text для поста без caption...")
+                            await bot_instance.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=message_id,
+                                text=new_text,
+                                parse_mode="HTML",
+                                reply_markup=reply_markup
+                            )
+                            print(f"✅ Пост отредактирован через edit_message_text в чате {chat_id}")
+                            success_count += 1
+                        except Exception as fallback_error:
+                            print(f"❌ Fallback edit_message_text также не сработал: {fallback_error}")
                     else:
                         print(f"⚠️ Неизвестная ошибка для чата {chat_id}: {e}")
             
