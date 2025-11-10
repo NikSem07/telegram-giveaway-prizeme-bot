@@ -279,8 +279,10 @@ function initializeCurrentPage() {
     case '/miniapp/already':
       initializeAlreadyPage();
       break;
+    case '/miniapp/results':  // ← ДОБАВЛЯЕМ НОВЫЙ КЕЙС
+      initializeResultsPage();
+      break;
     default:
-      // Для неизвестных путей - редирект на главную
       window.location.href = '/miniapp/';
   }
 }
@@ -298,3 +300,139 @@ document.addEventListener("visibilitychange", () => {
     window.location.href = '/miniapp/loading';
   }
 });
+
+// Добавляем новую функцию инициализации для экрана результатов
+function initializeResultsPage() {
+  console.log("[MULTI-PAGE] Initializing results page");
+  
+  // Показываем экран загрузки, скрываем остальные
+  hide("#screen-results");
+  hide("#screen-error");
+  show("#screen-loading");
+  
+  // Получаем параметры из URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const gid = urlParams.get('gid');
+  
+  if (!gid) {
+    showError("Не указан идентификатор розыгрыша");
+    return;
+  }
+  
+  // Загружаем результаты
+  loadResults(gid);
+  
+  // Настройка кнопок
+  $("#btn-back").onclick = () => {
+    window.history.back();
+  };
+  
+  $("#btn-retry").onclick = () => {
+    hide("#screen-error");
+    show("#screen-loading");
+    loadResults(gid);
+  };
+}
+
+// Функция загрузки результатов
+async function loadResults(gid) {
+  try {
+    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) {
+      throw new Error("No initData");
+    }
+    
+    console.log("[RESULTS] Loading results for gid:", gid);
+    
+    const results = await api("/api/results", { gid, init_data });
+    console.log("[RESULTS] Results response:", results);
+    
+    if (results.ok) {
+      displayResults(results);
+    } else {
+      throw new Error(results.reason || "Failed to load results");
+    }
+    
+  } catch (err) {
+    console.error("[RESULTS] Error loading results:", err);
+    showError(err.message);
+  }
+}
+
+// Функция отображения результатов
+function displayResults(data) {
+  // Скрываем экран загрузки, показываем экран результатов
+  hide("#screen-loading");
+  show("#screen-results");
+  
+  // Заполняем информацию о розыгрыше
+  $("#giveaway-title").textContent = data.giveaway.title;
+  $("#giveaway-description").textContent = data.giveaway.description || "Описание отсутствует";
+  $("#participants-count").textContent = data.giveaway.participants_count;
+  $("#winners-count").textContent = data.giveaway.winners_count;
+  
+  // Отображаем статус пользователя
+  const userStatusElement = $("#user-status");
+  const winnerStatusElement = $("#winner-status");
+  
+  if (data.user.ticket_code) {
+    $("#user-ticket").style.display = 'block';
+    $("#ticket-code").textContent = data.user.ticket_code;
+  }
+  
+  if (data.user.is_winner) {
+    winnerStatusElement.innerHTML = `
+      <div class="status-message status-winner">
+        🎉 Поздравляем! Вы победитель! 🎉<br>
+        Ваше место: ${data.user.winner_rank}
+      </div>
+    `;
+  } else if (data.user.ticket_code) {
+    winnerStatusElement.innerHTML = `
+      <div class="status-message status-participant">
+        Спасибо за участие! К сожалению, вы не стали победителем в этом розыгрыше.
+      </div>
+    `;
+  } else {
+    winnerStatusElement.innerHTML = `
+      <div class="status-message status-participant">
+        Вы не участвовали в этом розыгрыше.
+      </div>
+    `;
+  }
+  
+  // Отображаем список победителей
+  const winnersListElement = $("#winners-list");
+  winnersListElement.innerHTML = "";
+  
+  if (data.winners && data.winners.length > 0) {
+    data.winners.forEach(winner => {
+      const winnerElement = document.createElement("div");
+      winnerElement.className = `winner-item ${winner.is_current_user ? 'current-user' : ''}`;
+      
+      winnerElement.innerHTML = `
+        <div class="winner-rank">${winner.rank}</div>
+        <div class="winner-info">
+          <div class="winner-ticket">${winner.ticket_code}</div>
+        </div>
+        ${winner.is_current_user ? '<div class="winner-badge">Вы</div>' : ''}
+      `;
+      
+      winnersListElement.appendChild(winnerElement);
+    });
+    
+    $("#winners-section").style.display = 'block';
+    $("#no-winners").style.display = 'none';
+  } else {
+    $("#winners-section").style.display = 'none';
+    $("#no-winners").style.display = 'block';
+  }
+}
+
+// Функция показа ошибки
+function showError(message) {
+  hide("#screen-loading");
+  hide("#screen-results");
+  show("#screen-error");
+  $("#error-message").textContent = message;
+}

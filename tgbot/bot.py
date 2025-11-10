@@ -3702,8 +3702,113 @@ def make_internal_app():
         result = await _internal_claim_ticket(gid, user_id)
         return web.json_response(result)
 
+    async def giveaway_results(request: web.Request):
+        """
+        Получение результатов розыгрыша для Mini App
+        """
+        data = await request.json()
+        gid = str(data.get("gid") or "")
+        user_id = int(data.get("user_id") or 0)
+        
+        if not (gid and user_id):
+            return web.json_response({"ok": False, "error": "bad_params"}, status=400)
+
+        try:
+            giveaway_id = int(gid)
+        except Exception:
+            return web.json_response({"ok": False, "error": "bad_gid"}, status=400)
+
+        # Используем существующую сессию вместо session_scope()
+        async with Session() as s:
+            try:
+                # 1) Получаем информацию о розыгрыше
+                gw = await s.get(Giveaway, giveaway_id)
+                if not gw:
+                    return web.json_response({"ok": False, "error": "not_found"}, status=404)
+
+                # 2) Получаем участников и победителей
+                participants_res = await s.execute(
+                    stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=1"),
+                    {"gid": giveaway_id}
+                )
+                participants_count = participants_res.scalar_one() or 0
+
+                # 3) Получаем список победителей с их билетами
+                winners_res = await s.execute(
+                    stext("""
+                        SELECT w.rank, w.user_id, e.ticket_code, u.username
+                        FROM winners w
+                        LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                        LEFT JOIN users u ON u.user_id = w.user_id
+                        WHERE w.giveaway_id = :gid
+                        ORDER BY w.rank
+                    """),
+                    {"gid": giveaway_id}
+                )
+                winners = winners_res.all()
+
+                # 4) Проверяем, является ли текущий пользователь победителем
+                user_is_winner = False
+                user_winner_rank = None
+                user_ticket = None
+                
+                for winner in winners:
+                    if winner.user_id == user_id:
+                        user_is_winner = True
+                        user_winner_rank = winner.rank
+                        user_ticket = winner.ticket_code
+                        break
+
+                # 5) Получаем билет пользователя (если участвовал)
+                if not user_ticket:
+                    ticket_res = await s.execute(
+                        stext("SELECT ticket_code FROM entries WHERE giveaway_id=:gid AND user_id=:uid"),
+                        {"gid": giveaway_id, "uid": user_id}
+                    )
+                    ticket_row = ticket_res.first()
+                    user_ticket = ticket_row[0] if ticket_row else None
+
+                # 6) Формируем список победителей для отображения
+                winners_list = []
+                for winner in winners:
+                    winners_list.append({
+                        "rank": winner.rank,
+                        "user_id": winner.user_id,
+                        "ticket_code": winner.ticket_code,
+                        "username": winner.username,
+                        "is_current_user": winner.user_id == user_id
+                    })
+
+                response_data = {
+                    "ok": True,
+                    "giveaway": {
+                        "id": giveaway_id,
+                        "title": gw.internal_title,
+                        "description": gw.public_description,
+                        "end_at_utc": gw.end_at_utc.isoformat() if hasattr(gw.end_at_utc, 'isoformat') else str(gw.end_at_utc),
+                        "winners_count": gw.winners_count,
+                        "participants_count": participants_count,
+                        "status": gw.status
+                    },
+                    "user": {
+                        "is_winner": user_is_winner,
+                        "winner_rank": user_winner_rank,
+                        "ticket_code": user_ticket
+                    },
+                    "winners": winners_list
+                }
+
+                return web.json_response(response_data)
+
+            except Exception as e:
+                logging.error(f"Error in giveaway_results: {e}")
+                return web.json_response({"ok": False, "error": "server_error"}, status=500)
+            finally:
+                await s.close()
+
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
+    app.router.add_post("/api/giveaway_results", giveaway_results)
     return app
 
 

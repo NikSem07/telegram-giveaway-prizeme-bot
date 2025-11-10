@@ -106,6 +106,66 @@ def _is_member_local(chat_id: int, user_id: int) -> bool:
         print(f"[WARNING] Local membership check failed: {e}")
         return False
 
+# --- POST /api/results ---
+@app.post("/api/results")
+async def api_results(req: Request):
+    """
+    Прокси для получения результатов розыгрыша из внутреннего API
+    """
+    try:
+        body = await req.json()
+        print(f"[RESULTS] body={body!r}")
+    except Exception:
+        return JSONResponse({"ok": False, "reason": "bad_json"}, status_code=400)
+
+    # Извлекаем user_id из init_data
+    raw_init = (body.get("init_data") or "").strip()
+    try:
+        parsed = dict(parse_qsl(raw_init, keep_blank_values=True))
+        user_json_encoded = parsed.get("user")
+        if not user_json_encoded:
+            return JSONResponse({"ok": False, "reason": "no_user_in_initdata"}, status_code=400)
+            
+        user_json = unquote(user_json_encoded)
+        user = json.loads(user_json)
+        user_id = int(user["id"])
+        print(f"[RESULTS] USER_EXTRACTED: id={user_id}")
+        
+    except Exception as e:
+        print(f"[RESULTS] USER_EXTRACTION_FAILED: {e}")
+        return JSONResponse({"ok": False, "reason": "bad_initdata"}, status_code=400)
+
+    # Получаем gid из параметров
+    try:
+        gid = int(body.get("gid") or 0)
+    except Exception:
+        gid = 0
+    if not gid:
+        return JSONResponse({"ok": False, "reason": "bad_gid"}, status_code=400)
+
+    # Проксируем запрос к внутреннему API
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{BOT_INTERNAL_URL}/api/giveaway_results",
+                json={"gid": gid, "user_id": user_id},
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                result_data = response.json()
+                return JSONResponse(result_data)
+            else:
+                return JSONResponse(
+                    {"ok": False, "reason": f"internal_api_error: {response.status_code}"},
+                    status_code=500
+                )
+                
+    except Exception as e:
+        print(f"[RESULTS] Proxy error: {e}")
+        return JSONResponse({"ok": False, "reason": f"proxy_error: {e}"}, status_code=500)
+
+
 # --- POST /api/check ---
 @app.post("/api/check")
 async def api_check(req: Request):
@@ -641,6 +701,33 @@ async def miniapp_already_head():
         },
     )
 
+# Экран "Результаты"
+@app.get("/miniapp/results", response_class=HTMLResponse)
+async def miniapp_results_get() -> HTMLResponse:
+    results_file = WEBAPP_DIR / "results.html"
+    if results_file.exists():
+        html = results_file.read_text(encoding="utf-8")
+    else:
+        html = "<h1>Страница результатов временно недоступна</h1>"
+    
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+@app.head("/miniapp/results")
+async def miniapp_results_head():
+    return Response(
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
 # Для HEAD просто отдаём заголовки 200 (телу быть не обязательно)
 @app.head("/miniapp/")
 async def miniapp_index_head():
@@ -652,7 +739,6 @@ async def miniapp_index_head():
         },
     )
 
-# 2. Подключаем статику (js/css) из preview-service/webapp/
 #    Директория должна существовать и содержать app.js, styles.css, index.html
 app.mount(
     "/miniapp-static",
