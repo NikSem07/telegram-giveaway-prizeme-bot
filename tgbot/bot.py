@@ -2681,7 +2681,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
     Минимальный рабочий запуск:
       - ставим статус ACTIVE,
       - планируем завершение,
-      - публикуем пост БЕЗ КНОПОК в прикреплённых каналах/группах.
+      - публикуем пост С КНОПКАМИ в прикреплённых каналах/группах и сохраняем message_id.
     """
     # 1) читаем розыгрыш и при необходимости активируем
     async with session_scope() as s:
@@ -2762,6 +2762,10 @@ async def _launch_and_publish(gid: int, message: types.Message):
 
     # 6) публикуем в каждом чате — С клавиатурой «Участвовать» и попыткой link-preview
     kind, file_id = unpack_media(gw.photo_file_id)
+    
+    # 🔄 ДОБАВЛЕНО: сохраняем message_id для каждого чата
+    message_ids = {}  # {chat_id: message_id}
+    
     for chat_id in chat_ids:
         try:
             # --- Пытаемся отправить «фиолетовую рамку» как в предпросмотре ---
@@ -2790,39 +2794,65 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     show_above_text=False,  # медиа снизу, как в нашем дефолтном предпросмотре
                 )
 
-                await bot.send_message(
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                sent_msg = await bot.send_message(
                     chat_id,
                     full_text,
                     link_preview_options=lp,
                     parse_mode="HTML",
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
+                message_ids[chat_id] = sent_msg.message_id
+                logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
+                
             else:
                 # медиа нет — обычный текст + кнопка
-                await bot.send_message(
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
+                message_ids[chat_id] = sent_msg.message_id
+                logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
 
         except Exception as e:
             logging.warning("Link-preview не вышел в чате %s (%s), пробую fallback-медиа...", chat_id, e)
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 if kind == "photo" and file_id:
-                    await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
-                    await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    message_ids[chat_id] = sent_msg.message_id
                 elif kind == "video" and file_id:
-                    await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    message_ids[chat_id] = sent_msg.message_id
                 else:
-                    await bot.send_message(
+                    sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
+                    message_ids[chat_id] = sent_msg.message_id
+                    
+                logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id} (fallback)")
+                
             except Exception as e2:
                 logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e2)
+
+    # 🔄 ДОБАВЛЕНО: Сохраняем message_id в БД
+    if message_ids:
+        async with session_scope() as s:
+            for chat_id, message_id in message_ids.items():
+                await s.execute(
+                    stext("UPDATE giveaway_channels SET message_id = :msg_id WHERE giveaway_id = :gid AND chat_id = :chat_id"),
+                    {"msg_id": message_id, "gid": gid, "chat_id": chat_id}
+                )
+        logging.info(f"💾 Сохранено {len(message_ids)} message_id в БД для розыгрыша {gid}")
+    else:
+        logging.warning(f"⚠️ Не удалось сохранить ни одного message_id для розыгрыша {gid}")
 
     return gw
 
@@ -2915,7 +2945,7 @@ async def user_join(cq:CallbackQuery):
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
 async def finalize_and_draw_job(gid: int, bot_instance: Bot):
-    """УЛЬТРА-ВЕРСИЯ с максимальным логированием"""
+    """УЛЬТРА-ВЕРСИЯ с максимальным логированием и редактированием постов"""
     print(f"🎯🎯🎯 FINALIZE_AND_DRAW_JOB ВЫЗВАНА для розыгрыша {gid}")
     logging.info(f"🎯🎯🎯 FINALIZE_AND_DRAW_JOB ВЫЗВАНА для розыгрыша {gid}")
     
@@ -3045,6 +3075,14 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
         print(f"✅ Уведомления отправлены")
     except Exception as e:
         print(f"❌ Ошибка в уведомлениях: {e}")
+
+    # 🔄 ДОБАВЛЕНО: Редактирование постов после завершения
+    try:
+        print(f"📝 Запускаем редактирование постов для {gid}")
+        await edit_giveaway_post(gid, bot_instance)
+        print(f"✅ Редактирование постов завершено для {gid}")
+    except Exception as e:
+        print(f"❌ Ошибка при редактировании постов: {e}")
 
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {gid}")
     
@@ -3192,6 +3230,108 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
         scheduler.remove_job(f"final_{gid}")
     except Exception:
         pass
+
+
+# --- Функции для редактирования постов ---
+def _compose_finished_post_text(gw: Giveaway, winners: list) -> str:
+    """
+    Формирует текст поста после завершения розыгрыша
+    """
+    end_at_msk = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
+    
+    # Получаем общее количество участников
+    total_participants = len(set([w[1] for w in winners])) if winners else 0
+    
+    lines = [
+        f"<b>{escape(gw.internal_title)}</b>",
+        "",
+        f"Участников: {total_participants}",
+        f"Призовых мест: {gw.winners_count}",
+        f"Дата розыгрыша: {end_at_str} MSK (завершён)",
+        "",
+        "<b>Победители розыгрыша:</b>"
+    ]
+    
+    if winners:
+        for rank, username, ticket_code in winners:
+            display_name = f"@{username}" if username else f"Участник (билет: {ticket_code})"
+            lines.append(f"{rank}. {display_name} - {ticket_code}")
+    else:
+        lines.append("Победители не определены")
+    
+    return "\n".join(lines)
+
+def kb_finished_giveaway(giveaway_id: int) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для завершенного розыгрыша - кнопка "Результаты"
+    """
+    kb = InlineKeyboardBuilder()
+    webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={giveaway_id}"
+    kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
+    return kb.as_markup()
+
+async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
+    """
+    Редактирует пост розыгрыша после завершения
+    """
+    print(f"📝 Редактируем пост для розыгрыша {giveaway_id}")
+    
+    try:
+        async with session_scope() as s:
+            # Получаем данные розыгрыша
+            gw = await s.get(Giveaway, giveaway_id)
+            if not gw:
+                print(f"❌ Розыгрыш {giveaway_id} не найден")
+                return
+            
+            # Получаем победителей
+            winners_res = await s.execute(
+                stext("""
+                    SELECT w.rank, u.username, e.ticket_code 
+                    FROM winners w
+                    LEFT JOIN users u ON u.user_id = w.user_id
+                    LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                    WHERE w.giveaway_id = :gid
+                    ORDER BY w.rank
+                """),
+                {"gid": giveaway_id}
+            )
+            winners = winners_res.all()
+            
+            # Получаем прикрепленные каналы и message_id постов
+            channels_res = await s.execute(
+                stext("SELECT chat_id, message_id FROM giveaway_channels WHERE giveaway_id = :gid AND message_id IS NOT NULL"),
+                {"gid": giveaway_id}
+            )
+            channels = channels_res.all()
+            
+            if not channels:
+                print(f"⚠️ Нет постов для редактирования у розыгрыша {giveaway_id}")
+                return
+            
+            # Формируем новый текст поста
+            new_text = _compose_finished_post_text(gw, winners)
+            
+            # Редактируем посты во всех каналах
+            for chat_id, message_id in channels:
+                try:
+                    # Пробуем отредактировать текст
+                    await bot_instance.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text=new_text,
+                        parse_mode="HTML",
+                        reply_markup=kb_finished_giveaway(giveaway_id)
+                    )
+                    print(f"✅ Пост отредактирован в чате {chat_id}")
+                    
+                except Exception as e:
+                    print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
+                    
+    except Exception as e:
+        print(f"🚨 Критическая ошибка в edit_giveaway_post: {e}")
+
 
 #--- Обработчик членов канала / группы ---
 @dp.my_chat_member()
