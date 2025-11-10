@@ -28,6 +28,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
+from aiogram.enums import ParseMode
 
 from sqlalchemy import text as _sqltext
 from sqlalchemy import text as stext
@@ -2906,12 +2907,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     show_above_text=False,  # медиа снизу, как в нашем дефолтном предпросмотре
                 )
 
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # Сохраняем результат отправки
                 sent_msg = await bot.send_message(
                     chat_id,
                     full_text,
                     link_preview_options=lp,
-                    parse_mode="HTML",
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2919,11 +2920,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки + ДОБАВЛЯЕМ parse_mode
+                # Сохраняем результат отправки + ДОБАВЛЯЕМ parse_mode
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
-                    parse_mode="HTML",
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2938,7 +2939,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2947,7 +2948,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2956,7 +2957,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2964,7 +2965,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
-                        parse_mode="HTML", 
+                        parse_mode=ParseMode.MARKDOWN_V2, 
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
