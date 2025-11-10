@@ -735,15 +735,15 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         # 4) fallback — отдать нативно (фото/гиф/видео) с той же подписью
         try:
             if kind == "photo":
-                await m.answer_photo(fid, caption=preview_text)
+                await m.answer_photo(fid, caption=preview_text, parse_mode="HTML")
             elif kind == "animation":
-                await m.answer_animation(fid, caption=preview_text)
+                await m.answer_animation(fid, caption=preview_text, parse_mode="HTML")
             elif kind == "video":
-                await m.answer_video(fid, caption=preview_text)
+                await m.answer_video(fid, caption=preview_text, parse_mode="HTML")
             else:
-                await m.answer(preview_text)
+                await m.answer(preview_text, parse_mode="HTML")
         except Exception:
-            await m.answer(preview_text)
+            await m.answer(preview_text, parse_mode="HTML")
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -2566,6 +2566,9 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
     # 1) создаём черновик и получаем его id
     async with session_scope() as s:
+
+        logging.info(f"📝 Сохраняем описание (длина: {len(desc)}): {desc[:100]}...")
+        
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
@@ -2916,10 +2919,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки + ДОБАВЛЯЕМ parse_mode
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
+                    parse_mode="HTML",
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2930,18 +2934,37 @@ async def _launch_and_publish(gid: int, message: types.Message):
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 if kind == "photo" and file_id:
-                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_photo(
+                        chat_id, 
+                        file_id, 
+                        caption=preview_text, 
+                        parse_mode="HTML",
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
-                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_animation(
+                        chat_id, 
+                        file_id, 
+                        caption=preview_text, 
+                        parse_mode="HTML",
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "video" and file_id:
-                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_video(
+                        chat_id, 
+                        file_id, 
+                        caption=preview_text, 
+                        parse_mode="HTML",
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 else:
                     sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
+                        parse_mode="HTML", 
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
