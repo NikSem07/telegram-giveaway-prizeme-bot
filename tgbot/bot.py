@@ -255,6 +255,24 @@ def kb_public_participate_disabled() -> InlineKeyboardMarkup:
     kb.button(text="Участвовать", web_app=WebAppInfo(url=webapp_url))
     return kb.as_markup()
 
+def kb_finished_giveaway(gid: int, *, for_channel: bool = False) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для завершенного розыгрыша - кнопка "Результаты"
+    """
+    kb = InlineKeyboardBuilder()
+    
+    if for_channel:
+        # В КАНАЛАХ - только URL кнопка через бота
+        global BOT_USERNAME
+        url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
+        kb.button(text="📊 Результаты", url=url)
+    else:
+        # В ЛИЧКЕ/ГРУППАХ - WebApp кнопка
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{gid}"
+        kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
+    
+    return kb.as_markup()
+
 # Следующие функции
 
 def format_endtime_prompt() -> str:
@@ -441,12 +459,35 @@ def _compose_preview_text(
     lines.append(f"Количество призов: {max(0, prizes)}")
 
     if end_at_msk:
-        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
-        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
+        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: корректируем время на +3 часа
+        try:
+            # Парсим время из строки "HH:MM DD.MM.YYYY"
+            time_part, date_part = end_at_msk.split(' ')
+            hours, minutes = map(int, time_part.split(':'))
+            
+            # Добавляем 3 часа (коррекция UTC+3)
+            corrected_hours = (hours + 3) % 24
+            if corrected_hours < 10:
+                corrected_hours_str = f"0{corrected_hours}"
+            else:
+                corrected_hours_str = str(corrected_hours)
+            
+            corrected_time = f"{corrected_hours_str}:{minutes:02d}"
+            corrected_end_at = f"{corrected_time} {date_part}"
+            
+            tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
+            lines.append(f"Дата розыгрыша: {corrected_end_at}{tail}")
+            
+        except Exception as e:
+            # Если что-то пошло не при коррекции, используем оригинальное время
+            logging.warning(f"Time correction failed for {end_at_msk}: {e}")
+            tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
+            lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
     else:
         lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
 
     return "\n".join(lines)
+
 
 async def render_link_preview_message(
     m: Message,
@@ -3313,10 +3354,10 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             print(f"🔍 Ищем победителей для розыгрыша {giveaway_id}")
             winners_res = await s.execute(
                 stext("""
-                    SELECT w.rank, u.username, e.ticket_code 
+                    SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code 
                     FROM winners w
-                    LEFT JOIN users u ON u.user_id = w.user_id
                     LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                    LEFT JOIN users u ON u.user_id = w.user_id
                     WHERE w.giveaway_id = :gid
                     ORDER BY w.rank
                 """),
