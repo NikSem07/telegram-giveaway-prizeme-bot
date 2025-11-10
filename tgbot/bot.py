@@ -663,12 +663,13 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
     end_at_date = end_at_msk_dt.date()
     days_left = max(0, (end_at_date - now_msk).days)
 
+    # Используем _compose_preview_text для предпросмотра (без коррекции)
     preview_text = _compose_preview_text(
         "",                               # заголовок в предпросмотре не используем
         gw.winners_count,
         desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,        # 🔄 ПРАВИЛЬНОЕ ВРЕМЯ
-        days_left=days_left,              # 🔄 ПРАВИЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
     )
 
     # 2) если медиа нет — просто текст
