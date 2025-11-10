@@ -3265,13 +3265,24 @@ def _compose_finished_post_text(gw: Giveaway, winners: list) -> str:
     
     return "\n".join(lines)
 
-def kb_finished_giveaway(giveaway_id: int) -> InlineKeyboardMarkup:
+def kb_finished_giveaway(giveaway_id: int, for_channel: bool = False) -> InlineKeyboardMarkup:
     """
     Клавиатура для завершенного розыгрыша - кнопка "Результаты"
+    for_channel=True - для каналов (только URL кнопка)
+    for_channel=False - для личных чатов (WebApp кнопка)
     """
     kb = InlineKeyboardBuilder()
-    webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={giveaway_id}"
-    kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
+    
+    if for_channel:
+        # В КАНАЛАХ - только URL-кнопка на t.me с startapp
+        global BOT_USERNAME
+        url = f"https://t.me/{BOT_USERNAME}?startapp={giveaway_id}"
+        kb.button(text="📊 Результаты", url=url)
+    else:
+        # В ЛИЧКЕ/ГРУППАХ можно открыть напрямую наш домен как WebApp
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam={giveaway_id}"
+        kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
+    
     return kb.as_markup()
 
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
@@ -3333,13 +3344,17 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                 try:
                     print(f"🔍 Редактируем пост в чате {chat_id}, message_id {message_id}")
                     
+                    # Определяем тип чата для правильной кнопки
+                    is_channel = str(chat_id).startswith("-100")
+                    print(f"🔍 Тип чата: {'канал' if is_channel else 'группа/личный чат'}")
+                    
                     # Пробуем отредактировать текст
                     await bot_instance.edit_message_text(
                         chat_id=chat_id,
                         message_id=message_id,
                         text=new_text,
                         parse_mode="HTML",
-                        reply_markup=kb_finished_giveaway(giveaway_id)
+                        reply_markup=kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     )
                     success_count += 1
                     print(f"✅ Пост отредактирован в чате {chat_id}")
@@ -3355,7 +3370,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
         import traceback
         print(f"TRACEBACK: {traceback.format_exc()}")
         return False
-
+    
 
 #--- Обработчик членов канала / группы ---
 @dp.my_chat_member()
