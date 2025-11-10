@@ -3364,9 +3364,20 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count: int) -> str:
     """
     Формирует текст поста после завершения розыгрыша с жирным форматированием
+    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени
     """
-    end_at_msk = gw.end_at_utc.astimezone(MSK_TZ)
+    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное преобразование времени UTC → MSK
+    end_at_utc = gw.end_at_utc
+    if end_at_utc.tzinfo is None:
+        end_at_utc = end_at_utc.replace(tzinfo=timezone.utc)
+    
+    end_at_msk = end_at_utc.astimezone(MSK_TZ)
     end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
+    
+    print(f"🔍 ВРЕМЯ В _compose_finished_post_text:")
+    print(f"🔍 - UTC: {end_at_utc}")
+    print(f"🔍 - MSK: {end_at_msk}")
+    print(f"🔍 - Отображаем: {end_at_str}")
     
     # Основной текст с описанием розыгрыша
     lines = [f"<b>{escape(gw.internal_title)}</b>", ""]
@@ -3400,7 +3411,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
     Редактирует пост розыгрыша после завершения с сохранением медиа
-    УЛУЧШЕННАЯ ВЕРСИЯ: правильное определение типа поста и методов редактирования
+    УЛУЧШЕННАЯ ВЕРСИЯ: правильное сохранение медиа при редактировании
     """
     print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
@@ -3460,7 +3471,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             new_text = _compose_finished_post_text(gw, winners, participants_count)
             print(f"🔍 Сформирован новый текст поста (длина: {len(new_text)} символов)")
             
-            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Определяем тип медиа для розыгрыша
+            # Определяем тип медиа для розыгрыша
             media_type, media_file_id = unpack_media(gw.photo_file_id)
             has_media = media_file_id is not None
             print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}, has_media: {has_media}")
@@ -3475,22 +3486,13 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     is_channel = str(chat_id).startswith("-100")
                     print(f"🔍 Тип чата: {'канал' if is_channel else 'группа/личный чат'}")
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем ПРАВИЛЬНУЮ клавиатуру
+                    # Используем ПРАВИЛЬНУЮ клавиатуру
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДИАГНОСТИКА ТИПА ПОСТА
-                    # Пробуем определить тип поста через getChatMember или прямой запрос
-                    try:
-                        # Пытаемся получить информацию о сообщении
-                        chat_msg = await bot_instance.get_chat(chat_id)
-                        print(f"🔍 Информация о чате: {chat_msg.type}")
-                    except Exception as e:
-                        print(f"🔍 Не удалось получить информацию о чате: {e}")
-                    
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с проверкой типа поста
-                    if has_media:
-                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, пробуем edit_message_caption")
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с сохранением медиа
+                    if has_media and media_file_id:
+                        print(f"🔍 Розыгрыш ИМЕЕТ медиа, пробуем edit_message_caption с сохранением медиа")
                         try:
                             # Для постов с медиа редактируем только подпись с reply_markup
                             await bot_instance.edit_message_caption(
@@ -3498,28 +3500,56 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 message_id=message_id,
                                 caption=new_text,
                                 parse_mode="HTML",
-                                reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
+                                reply_markup=reply_markup
                             )
-                            print(f"✅ Пост С МЕДИА отредактирован в чате {chat_id}")
+                            print(f"✅ Пост С МЕДИА отредактирован (caption) в чате {chat_id}")
                             success_count += 1
                             
                         except Exception as caption_error:
                             print(f"❌ Ошибка edit_message_caption: {caption_error}")
-                            print(f"🔍 Пробуем edit_message_text как fallback...")
                             
-                            # Fallback: пробуем редактировать как текст
+                            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если не работает edit_message_caption, 
+                            # переотправляем весь пост с медиа и новым текстом
+                            print(f"🔍 Переотправляем пост с медиа и новым текстом...")
                             try:
-                                await bot_instance.edit_message_text(
-                                    chat_id=chat_id,
-                                    message_id=message_id,
-                                    text=new_text,
-                                    parse_mode="HTML",
-                                    reply_markup=reply_markup
-                                )
-                                print(f"✅ Пост отредактирован через fallback в чате {chat_id}")
+                                # Удаляем старый пост
+                                try:
+                                    await bot_instance.delete_message(chat_id=chat_id, message_id=message_id)
+                                    print(f"🔍 Старый пост удален")
+                                except Exception as delete_error:
+                                    print(f"⚠️ Не удалось удалить старый пост: {delete_error}")
+                                
+                                # Отправляем новый пост с тем же медиа и новым текстом
+                                if media_type == "photo":
+                                    await bot_instance.send_photo(
+                                        chat_id=chat_id,
+                                        photo=media_file_id,
+                                        caption=new_text,
+                                        parse_mode="HTML",
+                                        reply_markup=reply_markup
+                                    )
+                                elif media_type == "animation":
+                                    await bot_instance.send_animation(
+                                        chat_id=chat_id,
+                                        animation=media_file_id,
+                                        caption=new_text,
+                                        parse_mode="HTML",
+                                        reply_markup=reply_markup
+                                    )
+                                elif media_type == "video":
+                                    await bot_instance.send_video(
+                                        chat_id=chat_id,
+                                        video=media_file_id,
+                                        caption=new_text,
+                                        parse_mode="HTML",
+                                        reply_markup=reply_markup
+                                    )
+                                
+                                print(f"✅ Пост С МЕДИА переотправлен в чате {chat_id}")
                                 success_count += 1
-                            except Exception as text_error:
-                                print(f"❌ Fallback также не сработал: {text_error}")
+                                
+                            except Exception as resend_error:
+                                print(f"❌ Ошибка переотправки поста: {resend_error}")
                     
                     else:
                         print(f"🔍 Розыгрыш БЕЗ медиа, используем edit_message_text")
@@ -3536,7 +3566,6 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     
                 except Exception as e:
                     print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
-                    # Детальная диагностика ошибки
                     error_str = str(e)
                     if "message to edit not found" in error_str:
                         print(f"⚠️ Сообщение {message_id} не найдено в чате {chat_id}")
@@ -3546,20 +3575,6 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         print(f"⚠️ Проблема с клавиатурой для чата {chat_id}")
                     elif "no caption" in error_str:
                         print(f"⚠️ У поста нет caption (подписи) в чате {chat_id}")
-                        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Если у поста с медиа нет caption, пробуем edit_message_text
-                        try:
-                            print(f"🔍 Пробуем edit_message_text для поста без caption...")
-                            await bot_instance.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=message_id,
-                                text=new_text,
-                                parse_mode="HTML",
-                                reply_markup=reply_markup
-                            )
-                            print(f"✅ Пост отредактирован через edit_message_text в чате {chat_id}")
-                            success_count += 1
-                        except Exception as fallback_error:
-                            print(f"❌ Fallback edit_message_text также не сработал: {fallback_error}")
                     else:
                         print(f"⚠️ Неизвестная ошибка для чата {chat_id}: {e}")
             
