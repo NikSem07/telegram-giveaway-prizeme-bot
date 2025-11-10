@@ -28,6 +28,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
+from aiogram.enums import ParseMode
 
 from sqlalchemy import text as _sqltext
 from sqlalchemy import text as stext
@@ -54,6 +55,28 @@ def normalize_datetime(dt: datetime) -> datetime:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
+
+# === MARKDOWN V2 SUPPORT ===
+def escape_markdown_v2(text: str) -> str:
+    """Экранирует специальные символы для MarkdownV2"""
+    if not text:
+        return text
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{char}' if char in escape_chars else char for char in text)
+
+def safe_convert_to_markdown(text: str) -> str:
+    """
+    Безопасно подготавливает текст для MarkdownV2
+    """
+    if not text:
+        return text
+    
+    # Если текст уже содержит Markdown-синтаксис, оставляем как есть
+    if any(char in text for char in ['*', '_', '[', ']', '(', ')', '`']):
+        return text
+    
+    # Иначе экранируем специальные символы
+    return escape_markdown_v2(text)
 
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
@@ -578,7 +601,7 @@ async def render_link_preview_message(
                 text=full,
                 link_preview_options=lp,
                 reply_markup=kb_media_preview(media_top),
-                parse_mode="HTML",
+                parse_mode=ParseMode.MARKDOWN_V2,
             )
             return
         except Exception:
@@ -595,7 +618,7 @@ async def render_link_preview_message(
         full,
         link_preview_options=lp,
         reply_markup=kb_media_preview(media_top),
-        parse_mode="HTML",
+        parse_mode=ParseMode.MARKDOWN_V2,
     )
     await state.update_data(media_preview_msg_id=msg.message_id)
 
@@ -635,7 +658,7 @@ async def render_text_preview_message(
         except Exception:
             pass
 
-    msg = await m.answer(txt, reply_markup=kb_preview_no_media(), parse_mode="HTML")
+    msg = await m.answer(txt, reply_markup=kb_preview_no_media(), parse_mode=ParseMode.MARKDOWN_V2)
     await state.update_data(
         media_preview_msg_id=msg.message_id,
         media_url=None,      # критично: помечаем, что медиа нет
@@ -729,21 +752,21 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
             show_above_text=False,  # как в нашем обычном предпросмотре "медиа снизу" по умолчанию
         )
 
-        await m.answer(full_text, link_preview_options=lp, parse_mode="HTML")
+        await m.answer(full_text, link_preview_options=lp, parse_mode=ParseMode.MARKDOWN_V2)
 
     except Exception:
         # 4) fallback — отдать нативно (фото/гиф/видео) с той же подписью
         try:
             if kind == "photo":
-                await m.answer_photo(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_photo(fid, caption=preview_text, parse_mode=ParseMode.MARKDOWN_V2)
             elif kind == "animation":
-                await m.answer_animation(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_animation(fid, caption=preview_text, parse_mode=ParseMode.MARKDOWN_V2)
             elif kind == "video":
-                await m.answer_video(fid, caption=preview_text, parse_mode="HTML")
+                await m.answer_video(fid, caption=preview_text, parse_mode=ParseMode.MARKDOWN_V2)
             else:
-                await m.answer(preview_text, parse_mode="HTML")
+                await m.answer(preview_text, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception:
-            await m.answer(preview_text, parse_mode="HTML")
+            await m.answer(preview_text, parse_mode=ParseMode.MARKDOWN_V2)
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -1065,7 +1088,7 @@ class CreateFlow(StatesGroup):
     ENDAT = State()
 
 # ----------------- BOT -----------------
-bot = Bot(BOT_TOKEN, parse_mode="HTML")
+bot = Bot(BOT_TOKEN, parse_mode=ParseMode.MARKDOWN_V2)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 
@@ -1261,7 +1284,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
     action_text = "подключён" if is_new else "обновлён"
     await m.answer(
         f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
-        parse_mode="HTML",
+        parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=ReplyKeyboardRemove(),
     )
 
@@ -1338,7 +1361,7 @@ async def cmd_start(m: Message, state: FSMContext):
         "<b>/events</b> – мои розыгрыши\n"
         "<b>/subscriptions</b> – подписки"
     )
-    await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
+    await m.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=reply_main_kb())
 
 # ===== Меню "Мои розыгрыши" =====
 def kb_my_events_menu(count_involved: int, count_finished: int, my_active: int, my_draft: int, my_finished: int):
@@ -1647,7 +1670,7 @@ async def create_giveaway_start(message: Message, state: FSMContext):
         "чтобы участники могли легко идентифицировать ваш розыгрыш среди всех "
         "остальных в разделе <b>«Активные розыгрыши»</b>.\n\n"
         "<i>Пример названия:</i> <b>MacBook Pro от канала PrizeMe</b>",
-        parse_mode="HTML"
+        parse_mode=ParseMode.MARKDOWN_V2
     )
     await state.set_state(CreateFlow.TITLE)   # <-- ставим состояние титула
 
@@ -1710,7 +1733,7 @@ async def handle_winners_count(m: Message, state: FSMContext):
 
     # ➜ дальше идём к описанию (как и раньше)
     await state.set_state(CreateFlow.DESC)
-    await m.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
+    await m.answer(DESCRIPTION_PROMPT, parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
@@ -1720,12 +1743,13 @@ async def step_desc(m: Message, state: FSMContext):
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # сохраняем описание
+    # сохраняем описание КАК ЕСТЬ (с разметкой)
     await state.update_data(desc=text)
 
-    # показываем предпросмотр + кнопки
-    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
-    await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
+    # показываем предпросмотр в MarkdownV2
+    preview_text = safe_convert_to_markdown(text)
+    preview = f"*Предпросмотр описания:*\n\n{preview_text}"
+    await m.answer(preview, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_confirm_description())
 
     # переходим в состояние подтверждения
     await state.set_state(CreateFlow.CONFIRM_DESC)
@@ -1743,7 +1767,7 @@ async def desc_edit(cq: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await state.set_state(CreateFlow.DESC)
-    await cq.message.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
+    await cq.message.answer(DESCRIPTION_PROMPT, parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 # --- кнопка «Продолжить» ---
@@ -1755,7 +1779,7 @@ async def desc_continue(cq: CallbackQuery, state: FSMContext):
         pass
     # Сразу просим время окончания (перенос шага раньше медиа)
     await state.set_state(CreateFlow.ENDAT)
-    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+    await cq.message.answer(format_endtime_prompt(), parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:yes")
@@ -1766,7 +1790,7 @@ async def media_yes(cq: CallbackQuery, state: FSMContext):
         pass
     await state.set_state(CreateFlow.MEDIA_UPLOAD)
     await state.update_data(media_top=False)   # <-- медиа изначально «внизу»
-    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_skip_media())
     await cq.answer()
 
 @dp.callback_query(CreateFlow.MEDIA_DECIDE, F.data == "media:no")
@@ -1876,11 +1900,11 @@ async def step_endat(m: Message, state: FSMContext):
             f"🗓 Время окончания установлено: <b>{dt_msk.strftime('%H:%M %d.%m.%Y')}</b>\n"
             f"Осталось: <b>{days_left}</b> дн."
         )
-        await m.answer(confirm_text, parse_mode="HTML")
+        await m.answer(confirm_text, parse_mode=ParseMode.MARKDOWN_V2)
 
         # задаём вопрос про медиа (кнопки Да/Нет)
         await state.set_state(CreateFlow.MEDIA_DECIDE)
-        await m.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
+        await m.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode=ParseMode.MARKDOWN_V2)
         logging.info("[ENDAT] saved and asked MEDIA_DECIDE (days_left=%s)", days_left)
 
     except ValueError:
@@ -1988,7 +2012,7 @@ async def cb_my_channel_info(cq: CallbackQuery):
     kb.button(text="Пропустить", callback_data="mych:dismiss")
     kb.adjust(2)
 
-    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 # ---- Обработчик "Пропустить" ----
@@ -2036,7 +2060,7 @@ async def cb_my_channel_delete(cq: CallbackQuery):
     kb.button(text="Отмена", callback_data="mych:cancel_after_del")
     kb.adjust(2)
 
-    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 # Восстановление
@@ -2063,7 +2087,7 @@ async def cb_my_channel_restore(cq: CallbackQuery):
     kb.button(text="Отмена", callback_data="mych:cancel_after_del")
     kb.adjust(2)
 
-    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 # Кнопка удаления
@@ -2090,7 +2114,7 @@ async def cb_my_channel_cancel(cq: CallbackQuery):
 @dp.callback_query(F.data == "mych:add_channel")
 async def cb_mych_add_channel(cq: CallbackQuery, state: FSMContext):
     # 1) Показать инфо-блок + кнопку «Отмена»
-    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_add_cancel())
     # 2) Выставить системное окно выбора (кнопки под строкой поиска)
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
@@ -2098,7 +2122,7 @@ async def cb_mych_add_channel(cq: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "mych:add_group")
 async def cb_mych_add_group(cq: CallbackQuery, state: FSMContext):
-    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
     await cq.answer()
@@ -2151,7 +2175,7 @@ async def show_involved_giveaways(cq: CallbackQuery):
         text = "Ниже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2164,7 +2188,7 @@ async def show_involved_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:finished")
@@ -2185,7 +2209,7 @@ async def show_finished_participated_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2198,7 +2222,7 @@ async def show_finished_participated_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_active")
@@ -2217,7 +2241,7 @@ async def show_my_active_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2230,7 +2254,7 @@ async def show_my_active_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_drafts")
@@ -2249,7 +2273,7 @@ async def show_my_drafts(cq: CallbackQuery):
         text = "Ниже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2262,7 +2286,7 @@ async def show_my_drafts(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_finished")
@@ -2281,7 +2305,7 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
         text = "Ниже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
         await cq.answer()
         return
 
@@ -2294,7 +2318,7 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN_V2)  # ИЗМЕНЕНО: edit_text
     await cq.answer()
 
 
@@ -2512,7 +2536,7 @@ async def preview_move_down(cq: CallbackQuery, state: FSMContext):
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:change")
 async def preview_change_media(cq: CallbackQuery, state: FSMContext):
     await state.set_state(CreateFlow.MEDIA_UPLOAD)
-    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_skip_media())
     await cq.answer()
 
 #--- Обработчик БЕЗ медиа ---
@@ -2529,7 +2553,7 @@ async def preview_add_media(cq: CallbackQuery, state: FSMContext):
     # Отправляем пользователю инструкцию по загрузке
     await cq.message.answer(
         MEDIA_INSTRUCTION,
-        parse_mode="HTML",
+        parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=kb_skip_media()  # клавиатура с кнопками «Пропустить» / «Отмена»
     )
 
@@ -2568,7 +2592,7 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
     async with session_scope() as s:
 
         logging.info(f"📝 Сохраняем описание (длина: {len(desc)}): {desc[:100]}...")
-        
+
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
@@ -2640,9 +2664,9 @@ async def cb_connect_channels(cq: CallbackQuery):
     kb = build_channels_menu_kb(event_id, channels, attached_ids)
     
     try:
-        await cq.message.edit_text(text_block, reply_markup=kb, parse_mode="HTML")
+        await cq.message.edit_text(text_block, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception:
-        await cq.message.answer(text_block, reply_markup=kb, parse_mode="HTML")
+        await cq.message.answer(text_block, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:attach:"))
@@ -2727,9 +2751,9 @@ async def cb_attach_channel(cq: CallbackQuery):
 
     # пробуем отредактировать текущее сообщение (если можно), иначе шлём новое
     try:
-        await cq.message.edit_text(new_text, reply_markup=new_kb, parse_mode="HTML")
+        await cq.message.edit_text(new_text, reply_markup=new_kb, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception:
-        await cq.message.answer(new_text, reply_markup=new_kb, parse_mode="HTML")
+        await cq.message.answer(new_text, reply_markup=new_kb, parse_mode=ParseMode.MARKDOWN_V2)
 
     await cq.answer("Готово")
 
@@ -2738,7 +2762,7 @@ async def cb_add_channel(cq: CallbackQuery, state: FSMContext):
     _, _, sid = cq.data.split(":")
     await state.update_data(chooser_event_id=int(sid))
 
-    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
     await cq.answer()
@@ -2748,7 +2772,7 @@ async def cb_add_group(cq: CallbackQuery, state: FSMContext):
     _, _, sid = cq.data.split(":")
     await state.update_data(chooser_event_id=int(sid))
 
-    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb_add_cancel())
     INVISIBLE = "\u2060"
     await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
     await cq.answer()
@@ -2777,7 +2801,7 @@ async def cb_start_raffle(cq: CallbackQuery):
     await cq.message.answer(
         build_final_check_text(),
         reply_markup=kb_launch_confirm(gid),
-        parse_mode="HTML"
+        parse_mode=ParseMode.MARKDOWN_V2
     )
 
     await cq.answer()
@@ -2911,7 +2935,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     chat_id,
                     full_text,
                     link_preview_options=lp,
-                    parse_mode="HTML",
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2923,7 +2947,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
-                    parse_mode="HTML",
+                    parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2938,7 +2962,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2947,7 +2971,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2956,7 +2980,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                         chat_id, 
                         file_id, 
                         caption=preview_text, 
-                        parse_mode="HTML",
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=kb_public_participate(gid, for_channel=True)
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -2964,7 +2988,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
-                        parse_mode="HTML", 
+                        parse_mode=ParseMode.MARKDOWN_V2, 
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
@@ -3349,7 +3373,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                         )
                     
                     print(f"📤 Отправляем уведомление пользователю {user_id}")
-                    await bot_instance.send_message(user_id, message_text, parse_mode="HTML")
+                    await bot_instance.send_message(user_id, message_text, parse_mode=ParseMode.MARKDOWN_V2)
                     notified_count += 1
                     print(f"✅ Пользователь {user_id} уведомлен")
                     
@@ -3555,7 +3579,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 chat_id=chat_id,
                                 message_id=message_id,
                                 text=full_text_with_preview,
-                                parse_mode="HTML",
+                                parse_mode=ParseMode.MARKDOWN_V2,
                                 link_preview_options=lp,
                                 reply_markup=reply_markup
                             )
@@ -3591,7 +3615,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 await bot_instance.send_message(
                                     chat_id=chat_id,
                                     text=full_text_with_preview,
-                                    parse_mode="HTML",
+                                    parse_mode=ParseMode.MARKDOWN_V2,
                                     link_preview_options=lp,
                                     reply_markup=reply_markup
                                 )
@@ -3610,7 +3634,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 chat_id=chat_id,
                                 message_id=message_id,
                                 caption=new_text,
-                                parse_mode="HTML",
+                                parse_mode=ParseMode.MARKDOWN_V2,
                                 reply_markup=reply_markup
                             )
                             print(f"✅ Пост С МЕДИА отредактирован (caption) в чате {chat_id}")
@@ -3626,7 +3650,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             chat_id=chat_id,
                             message_id=message_id,
                             text=new_text,
-                            parse_mode="HTML",
+                            parse_mode=ParseMode.MARKDOWN_V2,
                             reply_markup=reply_markup
                         )
                         print(f"✅ Пост БЕЗ МЕДИА отредактирован в чате {chat_id}")
