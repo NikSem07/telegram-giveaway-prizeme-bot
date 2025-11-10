@@ -580,16 +580,21 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
     - если медиа нет: просто текстовый предпросмотр.
     """
     # 1) считаем дату и "N дней", собираем текст предпросмотра
+    # 🔄 ИСПРАВЛЕНИЕ: используем время КАК ЕГО ВВЕЛ ПОЛЬЗОВАТЕЛЬ
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
-    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+    
+    # 🔄 ВАЖНОЕ ИСПРАВЛЕНИЕ: правильно вычисляем дни
+    now_msk = datetime.now(MSK_TZ).date()
+    end_at_date = end_at_msk_dt.date()
+    days_left = max(0, (end_at_date - now_msk).days)
 
     preview_text = _compose_preview_text(
         "",                               # заголовок в предпросмотре не используем
         gw.winners_count,
         desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,
-        days_left=days_left,
+        end_at_msk=end_at_msk_str,        # 🔄 ПРАВИЛЬНОЕ ВРЕМЯ
+        days_left=days_left,              # 🔄 ПРАВИЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ
     )
 
     # 2) если медиа нет — просто текст
@@ -2747,17 +2752,22 @@ async def _launch_and_publish(gid: int, message: types.Message):
         return None
 
     # 5) собираем ТОЛЬКО текст (без кнопок)
+    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем время КАК ЕГО ВВЕЛ ПОЛЬЗОВАТЕЛЬ
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
-    days_left = max(0, (end_at_msk_dt.date() - datetime.now(MSK_TZ).date()).days)
+    
+    # 🔄 ИСПРАВЛЕНИЕ: правильно вычисляем дни
+    now_msk = datetime.now(MSK_TZ).date()
+    end_at_date = end_at_msk_dt.date()
+    days_left = max(0, (end_at_date - now_msk).days)
 
     # ВАЖНО: _compose_preview_text принимает позиционные аргументы: (title, prizes)
     preview_text = _compose_preview_text(
         "",
         gw.winners_count,
         desc_html=(gw.public_description or ""),
-        end_at_msk=end_at_msk_str,
-        days_left=days_left,
+        end_at_msk=end_at_msk_str,        # 🔄 ПРАВИЛЬНОЕ ВРЕМЯ
+        days_left=days_left,              # 🔄 ПРАВИЛЬНОЕ КОЛИЧЕСТВО ДНЕЙ
     )
 
     # 6) публикуем в каждом чате — С клавиатурой «Участвовать» и попыткой link-preview
@@ -2855,6 +2865,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
         logging.warning(f"⚠️ Не удалось сохранить ни одного message_id для розыгрыша {gid}")
 
     return gw
+
 
 #--- Обработчик для запуска розыгрыша ---
 @dp.callback_query(F.data.startswith("launch:do:"))
@@ -3262,35 +3273,14 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
     
     # Добавляем победителей
     if winners:
-        for rank, username, ticket_code in winners:
+        for winner in winners:
+            rank, username, ticket_code = winner
             display_name = f"@{username}" if username else f"Участник"
             lines.append(f"{rank}. {display_name} - {ticket_code}")
     else:
-        lines.append("Победители не определеныЮ так как никто не принял участие.")
+        lines.append("Победители не определены, так как никто не принял участие.")
     
     return "\n".join(lines)
-
-def kb_finished_giveaway(giveaway_id: int, for_channel: bool = False) -> InlineKeyboardMarkup:
-    """
-    Клавиатура для завершенного розыгрыша - кнопка "Результаты"
-    for_channel=True - для каналов (только URL кнопка)
-    for_channel=False - для личных чатов (WebApp кнопка)
-    """
-    kb = InlineKeyboardBuilder()
-    
-    if for_channel:
-        # В КАНАЛАХ - только URL-кнопка на t.me с startapp
-        global BOT_USERNAME
-        # 🔄 ИЗМЕНЕНИЕ: используем специальный префикс для результатов
-        url = f"https://t.me/{BOT_USERNAME}?startapp=results_{giveaway_id}"
-        kb.button(text="📊 Результаты", url=url)
-    else:
-        # В ЛИЧКЕ/ГРУППАХ можно открыть напрямую наш домен как WebApp
-        # 🔄 ИЗМЕНЕНИЕ: используем специальный префикс для результатов
-        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{giveaway_id}"
-        kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
-    
-    return kb.as_markup()
 
 
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
@@ -3370,8 +3360,9 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     is_channel = str(chat_id).startswith("-100")
                     print(f"🔍 Тип чата: {'канал' if is_channel else 'группа/личный чат'}")
                     
-                    # Клавиатура для завершенного розыгрыша
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем ПРАВИЛЬНУЮ клавиатуру
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
+                    print(f"🔍 Клавиатура: {reply_markup}")
                     
                     # РАЗДЕЛЕНИЕ ЛОГИКИ: с медиа vs без медиа
                     if has_media:
@@ -3382,7 +3373,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             message_id=message_id,
                             caption=new_text,
                             parse_mode="HTML",
-                            reply_markup=reply_markup
+                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
                         )
                     else:
                         print(f"🔍 Редактируем пост БЕЗ МЕДИА (полный текст)")
@@ -3392,7 +3383,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             message_id=message_id,
                             text=new_text,
                             parse_mode="HTML",
-                            reply_markup=reply_markup
+                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
                         )
                     
                     success_count += 1
@@ -3405,6 +3396,8 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         print(f"⚠️ Сообщение {message_id} не найдено в чате {chat_id}")
                     elif "can't parse entities" in str(e):
                         print(f"⚠️ Ошибка парсинга HTML в тексте для чата {chat_id}")
+                    elif "reply_markup" in str(e):
+                        print(f"⚠️ Проблема с клавиатурой для чата {chat_id}")
             
             print(f"📊 Итог: успешно отредактировано {success_count} из {len(channels)} постов")
             return success_count > 0
