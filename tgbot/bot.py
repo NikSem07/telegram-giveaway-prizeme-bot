@@ -265,11 +265,11 @@ def kb_finished_giveaway(gid: int, *, for_channel: bool = False) -> InlineKeyboa
         # В КАНАЛАХ - только URL кнопка через бота
         global BOT_USERNAME
         url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
-        kb.button(text="📊 Результаты", url=url)
+        kb.button(text="🎲 Результаты", url=url)
     else:
         # В ЛИЧКЕ/ГРУППАХ - WebApp кнопка
         webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{gid}"
-        kb.button(text="📊 Результаты", web_app=WebAppInfo(url=webapp_url))
+        kb.button(text="🎲 Результаты", web_app=WebAppInfo(url=webapp_url))
     
     return kb.as_markup()
 
@@ -3388,6 +3388,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
     Редактирует пост розыгрыша после завершения с сохранением медиа
+    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное использование edit_message_caption и edit_message_text
     """
     print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
@@ -3466,20 +3467,20 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
-                    # РАЗДЕЛЕНИЕ ЛОГИКИ: с медиа vs без медиа
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с правильной передачей reply_markup
                     if has_media:
-                        print(f"🔍 Редактируем пост С МЕДИА (caption)")
-                        # Для постов с медиа редактируем только подпись
+                        print(f"🔍 Редактируем пост С МЕДИА (edit_message_caption)")
+                        # Для постов с медиа редактируем только подпись с reply_markup
                         await bot_instance.edit_message_caption(
                             chat_id=chat_id,
                             message_id=message_id,
                             caption=new_text,
                             parse_mode="HTML",
-                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру
+                            reply_markup=reply_markup  # 🔄 ВАЖНО: передаем клавиатуру В edit_message_caption
                         )
                     else:
-                        print(f"🔍 Редактируем пост БЕЗ МЕДИА (полный текст)")
-                        # Для постов без медиа редактируем весь текст
+                        print(f"🔍 Редактируем пост БЕЗ МЕДИА (edit_message_text)")
+                        # Для постов без медиа редактируем весь текст с reply_markup
                         await bot_instance.edit_message_text(
                             chat_id=chat_id,
                             message_id=message_id,
@@ -3500,6 +3501,8 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         print(f"⚠️ Ошибка парсинга HTML в тексте для чата {chat_id}")
                     elif "reply_markup" in str(e):
                         print(f"⚠️ Проблема с клавиатурой для чата {chat_id}")
+                    else:
+                        print(f"⚠️ Неизвестная ошибка для чата {chat_id}: {e}")
             
             print(f"📊 Итог: успешно отредактировано {success_count} из {len(channels)} постов")
             return success_count > 0
