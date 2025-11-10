@@ -3236,32 +3236,37 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 
 
 # --- Функции для редактирования постов ---
-def _compose_finished_post_text(gw: Giveaway, winners: list) -> str:
+def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count: int) -> str:
     """
-    Формирует текст поста после завершения розыгрыша
+    Формирует текст поста после завершения розыгрыша с жирным форматированием
     """
     end_at_msk = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
     
-    # Получаем общее количество участников
-    total_participants = len(set([w[1] for w in winners])) if winners else 0
+    # Основной текст с описанием розыгрыша
+    lines = [f"<b>{escape(gw.internal_title)}</b>", ""]
     
-    lines = [
-        f"<b>{escape(gw.internal_title)}</b>",
-        "",
-        f"Участников: {total_participants}",
-        f"Призовых мест: {gw.winners_count}",
-        f"Дата розыгрыша: {end_at_str} MSK (завершён)",
+    # Добавляем описание розыгрыша если оно есть
+    if gw.public_description and gw.public_description.strip():
+        lines.append(f"{gw.public_description}")
+        lines.append("")
+    
+    # Ключевые параметры с жирным форматированием
+    lines.extend([
+        f"Участников: <b>{participants_count}</b>",
+        f"Призовых мест: <b>{gw.winners_count}</b>", 
+        f"Дата розыгрыша: <b>{end_at_str} MSK (завершён)</b>",
         "",
         "<b>Победители розыгрыша:</b>"
-    ]
+    ])
     
+    # Добавляем победителей
     if winners:
         for rank, username, ticket_code in winners:
-            display_name = f"@{username}" if username else f"Участник (билет: {ticket_code})"
+            display_name = f"@{username}" if username else f"Участник"
             lines.append(f"{rank}. {display_name} - {ticket_code}")
     else:
-        lines.append("Победители не определены")
+        lines.append("Победители не определеныЮ так как никто не принял участие.")
     
     return "\n".join(lines)
 
@@ -3290,7 +3295,7 @@ def kb_finished_giveaway(giveaway_id: int, for_channel: bool = False) -> InlineK
 
 async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
-    Редактирует пост розыгрыша после завершения
+    Редактирует пост розыгрыша после завершения с сохранением медиа
     """
     print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
@@ -3304,6 +3309,15 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                 return False
             
             print(f"🔍 Розыгрыш найден: {gw.internal_title}, статус: {gw.status}")
+
+            # Получаем количество участников
+            print(f"🔍 Ищем количество участников для розыгрыша {giveaway_id}")
+            participants_res = await s.execute(
+                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=1"),
+                {"gid": giveaway_id}
+            )
+            participants_count = participants_res.scalar_one() or 0
+            print(f"🔍 Участников в финале: {participants_count}")
 
             # Получаем победителей
             print(f"🔍 Ищем победителей для розыгрыша {giveaway_id}")
@@ -3337,9 +3351,14 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                 print(f"⚠️ Нет постов для редактирования у розыгрыша {giveaway_id}")
                 return False
             
-            # Формируем новый текст поста
-            new_text = _compose_finished_post_text(gw, winners)
+            # Формируем новый текст поста с жирным форматированием
+            new_text = _compose_finished_post_text(gw, winners, participants_count)
             print(f"🔍 Сформирован новый текст поста (длина: {len(new_text)} символов)")
+            
+            # Определяем тип медиа для розыгрыша
+            media_type, media_file_id = unpack_media(gw.photo_file_id)
+            has_media = media_file_id is not None
+            print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}")
             
             # Редактируем посты во всех каналах
             success_count = 0
@@ -3351,19 +3370,41 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     is_channel = str(chat_id).startswith("-100")
                     print(f"🔍 Тип чата: {'канал' if is_channel else 'группа/личный чат'}")
                     
-                    # Пробуем отредактировать текст
-                    await bot_instance.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=new_text,
-                        parse_mode="HTML",
-                        reply_markup=kb_finished_giveaway(giveaway_id, for_channel=is_channel)
-                    )
+                    # Клавиатура для завершенного розыгрыша
+                    reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
+                    
+                    # РАЗДЕЛЕНИЕ ЛОГИКИ: с медиа vs без медиа
+                    if has_media:
+                        print(f"🔍 Редактируем пост С МЕДИА (caption)")
+                        # Для постов с медиа редактируем только подпись
+                        await bot_instance.edit_message_caption(
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            caption=new_text,
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    else:
+                        print(f"🔍 Редактируем пост БЕЗ МЕДИА (полный текст)")
+                        # Для постов без медиа редактируем весь текст
+                        await bot_instance.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            text=new_text,
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    
                     success_count += 1
                     print(f"✅ Пост отредактирован в чате {chat_id}")
                     
                 except Exception as e:
                     print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
+                    # Детальная диагностика ошибки
+                    if "message to edit not found" in str(e):
+                        print(f"⚠️ Сообщение {message_id} не найдено в чате {chat_id}")
+                    elif "can't parse entities" in str(e):
+                        print(f"⚠️ Ошибка парсинга HTML в тексте для чата {chat_id}")
             
             print(f"📊 Итог: успешно отредактировано {success_count} из {len(channels)} постов")
             return success_count > 0
