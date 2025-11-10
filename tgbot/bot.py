@@ -3077,12 +3077,15 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
         print(f"❌ Ошибка в уведомлениях: {e}")
 
     # 🔄 ДОБАВЛЕНО: Редактирование постов после завершения
+    print(f"🔍 ДИАГНОСТИКА: ДО вызова edit_giveaway_post для {gid}")
     try:
         print(f"📝 Запускаем редактирование постов для {gid}")
-        await edit_giveaway_post(gid, bot_instance)
-        print(f"✅ Редактирование постов завершено для {gid}")
+        result = await edit_giveaway_post(gid, bot_instance)
+        print(f"✅ Редактирование постов завершено для {gid}, результат: {result}")
     except Exception as e:
-        print(f"❌ Ошибка при редактировании постов: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА при редактировании постов: {e}")
+        import traceback
+        print(f"TRACEBACK: {traceback.format_exc()}")
 
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {gid}")
     
@@ -3275,17 +3278,21 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
     """
     Редактирует пост розыгрыша после завершения
     """
-    print(f"📝 Редактируем пост для розыгрыша {giveaway_id}")
+    print(f"🔍 edit_giveaway_post ВХОД: giveaway_id={giveaway_id}")
     
     try:
         async with session_scope() as s:
             # Получаем данные розыгрыша
+            print(f"🔍 Ищем розыгрыш {giveaway_id} в БД")
             gw = await s.get(Giveaway, giveaway_id)
             if not gw:
                 print(f"❌ Розыгрыш {giveaway_id} не найден")
-                return
+                return False
             
+            print(f"🔍 Розыгрыш найден: {gw.internal_title}, статус: {gw.status}")
+
             # Получаем победителей
+            print(f"🔍 Ищем победителей для розыгрыша {giveaway_id}")
             winners_res = await s.execute(
                 stext("""
                     SELECT w.rank, u.username, e.ticket_code 
@@ -3298,24 +3305,34 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                 {"gid": giveaway_id}
             )
             winners = winners_res.all()
-            
+            print(f"🔍 Найдено победителей: {len(winners)}")
+
             # Получаем прикрепленные каналы и message_id постов
+            print(f"🔍 Ищем посты для редактирования (chat_id + message_id)")
             channels_res = await s.execute(
                 stext("SELECT chat_id, message_id FROM giveaway_channels WHERE giveaway_id = :gid AND message_id IS NOT NULL"),
                 {"gid": giveaway_id}
             )
             channels = channels_res.all()
             
+            print(f"🔍 Найдено каналов с постами: {len(channels)}")
+            for chat_id, message_id in channels:
+                print(f"   - Чат {chat_id}, message_id {message_id}")
+            
             if not channels:
                 print(f"⚠️ Нет постов для редактирования у розыгрыша {giveaway_id}")
-                return
+                return False
             
             # Формируем новый текст поста
             new_text = _compose_finished_post_text(gw, winners)
+            print(f"🔍 Сформирован новый текст поста (длина: {len(new_text)} символов)")
             
             # Редактируем посты во всех каналах
+            success_count = 0
             for chat_id, message_id in channels:
                 try:
+                    print(f"🔍 Редактируем пост в чате {chat_id}, message_id {message_id}")
+                    
                     # Пробуем отредактировать текст
                     await bot_instance.edit_message_text(
                         chat_id=chat_id,
@@ -3324,13 +3341,20 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         parse_mode="HTML",
                         reply_markup=kb_finished_giveaway(giveaway_id)
                     )
+                    success_count += 1
                     print(f"✅ Пост отредактирован в чате {chat_id}")
                     
                 except Exception as e:
                     print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
+            
+            print(f"📊 Итог: успешно отредактировано {success_count} из {len(channels)} постов")
+            return success_count > 0
                     
     except Exception as e:
         print(f"🚨 Критическая ошибка в edit_giveaway_post: {e}")
+        import traceback
+        print(f"TRACEBACK: {traceback.format_exc()}")
+        return False
 
 
 #--- Обработчик членов канала / группы ---
