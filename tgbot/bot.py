@@ -53,6 +53,41 @@ def normalize_datetime(dt: datetime) -> datetime:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
+# === MARKDOWN V2 SUPPORT ===
+def html_to_markdown_v2(html_text: str) -> str:
+    """
+    Конвертирует простые HTML-теги в MarkdownV2
+    """
+    if not html_text:
+        return ""
+    
+    text = html_text
+    
+    # Заменяем HTML-теги на MarkdownV2
+    text = text.replace('<b>', '*').replace('</b>', '*')
+    text = text.replace('<strong>', '*').replace('</strong>', '*')
+    text = text.replace('<i>', '_').replace('</i>', '_')
+    text = text.replace('<em>', '_').replace('</em>', '_')
+    text = text.replace('<u>', '__').replace('</u>', '__')
+    text = text.replace('<s>', '~').replace('</s>', '~')
+    text = text.replace('<code>', '`').replace('</code>', '`')
+    text = text.replace('<pre>', '```').replace('</pre>', '```')
+    
+    # Обрабатываем ссылки [текст](url)
+    import re
+    text = re.sub(r'<a href="([^"]+)">([^<]+)</a>', r'[\2](\1)', text)
+    
+    # Экранируем специальные символы MarkdownV2
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    result = ''
+    for char in text:
+        if char in escape_chars:
+            result += '\\' + char
+        else:
+            result += char
+    
+    return result
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
 
@@ -1721,11 +1756,11 @@ async def step_desc(m: Message, state: FSMContext):
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # сохраняем описание
+    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем описание КАК ЕСТЬ (с разметкой)
     await state.update_data(desc=text)
 
-    # показываем предпросмотр + кнопки
-    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
+    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: показываем предпросмотр БЕЗ escape()
+    preview = f"<b>Предпросмотр описания:</b>\n\n{text}"
     await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
 
     # переходим в состояние подтверждения
@@ -2865,10 +2900,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
     days_left = max(0, (end_at_date - now_msk).days)
 
     # ВАЖНО: _compose_preview_text принимает позиционные аргументы: (title, prizes)
+    description_markdown = html_to_markdown_v2(gw.public_description or "")
     preview_text = _compose_post_text(
         "",
         gw.winners_count,
-        desc_html=(gw.public_description or ""),
+        desc_html=description_markdown,
         end_at_msk=end_at_msk_str,        # Оригинальное время (17:51) будет скорректировано
         days_left=days_left,
     )
