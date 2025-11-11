@@ -3549,9 +3549,9 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count: int) -> str:
     """
     Формирует текст поста после завершения розыгрыша с жирным форматированием
-    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени
+    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени БЕЗ НАЗВАНИЯ РОЗЫГРЫША
     """
-    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное преобразование времени UTC → MSK
+    # Правильное преобразование времени UTC → MSK
     end_at_utc = gw.end_at_utc
     if end_at_utc.tzinfo is None:
         end_at_utc = end_at_utc.replace(tzinfo=timezone.utc)
@@ -3563,9 +3563,8 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
     print(f"🔍 - UTC: {end_at_utc}")
     print(f"🔍 - MSK: {end_at_msk}")
     print(f"🔍 - Отображаем: {end_at_str}")
-    
-    # Основной текст с описанием розыгрыша
-    lines = [f"<b>{escape(gw.internal_title)}</b>", ""]
+
+    lines = []
     
     # Добавляем описание розыгрыша если оно есть
     if gw.public_description and gw.public_description.strip():
