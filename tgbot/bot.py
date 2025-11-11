@@ -146,75 +146,6 @@ def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     # Простое обрезание
     return html_text[:max_length] + "..."
 
-# --- Система для премиум эмодзи ---
-class PremiumEmojiSystem:
-    """
-    Система для работы с премиум эмодзи
-    Пока только сохраняет информацию, в будущем можно монетизировать
-    """
-    
-    @staticmethod
-    async def extract_premium_emoji_info(message: Message) -> dict:
-        """
-        УЛУЧШЕННАЯ ВЕРСИЯ: извлекает ВСЕ entities включая премиум эмодзи
-        """
-        entities = []
-        has_premium_emoji = False
-        
-        if message.entities:
-            for entity in message.entities:
-                entity_data = {
-                    'type': entity.type,
-                    'offset': entity.offset,
-                    'length': entity.length
-                }
-                
-                if entity.type == "custom_emoji":
-                    entity_data['custom_emoji_id'] = entity.custom_emoji_id
-                    has_premium_emoji = True
-                elif entity.type == "text_link":
-                    entity_data['url'] = entity.url
-                elif entity.type == "text_mention":
-                    entity_data['user_id'] = entity.user.id
-                
-                entities.append(entity_data)
-        
-        return {
-            'has_premium_emoji': has_premium_emoji,
-            'entities': entities,
-            'original_text': message.text or "",
-            'html_text': message.html_text or message.text or ""
-        }
-    
-    @staticmethod
-    async def check_user_premium_access(user_id: int) -> bool:
-        """
-        Проверяет есть ли у пользователя доступ к премиум эмодзи
-        Сейчас возвращает True для всех, в будущем можно добавить монетизацию
-        """
-        # TODO: В будущем добавить проверку подписки/платежей
-        return True
-    
-    @staticmethod
-    async def process_description_with_premium_emoji(message: Message, user_id: int) -> str:
-        """
-        Обрабатывает описание с премиум эмодзи
-        Пока просто возвращает html_text, в будущем можно добавить специальную обработку
-        """
-        has_access = await PremiumEmojiSystem.check_user_premium_access(user_id)
-        emoji_info = await PremiumEmojiSystem.extract_premium_emoji_info(message)
-        
-        if emoji_info['has_premium_emoji'] and not has_access:
-            # Пользователь пытается использовать премиум эмодзи без доступа
-            # В будущем можно вернуть текст без премиум эмодзи или показать ошибку
-            return message.html_text or message.text or ""
-        
-        # Пользователь имеет доступ или нет премиум эмодзи
-        return message.html_text or message.text or ""
-
-# Создаем экземпляр системы премиум
-premium_emoji_system = PremiumEmojiSystem()
-
 # --- Функция очистки текста от пользовательских ссылок ---
 class TextPreviewCleaner:
     """
@@ -1748,36 +1679,6 @@ async def cmd_test_finalize(m: Message):
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
-@dp.message(Command("check_emoji"))
-async def cmd_check_emoji(m: Message):
-    """Проверяет сохраненные премиум эмодзи"""
-    async with session_scope() as s:
-        # Последний розыгрыш пользователя
-        res = await s.execute(
-            stext("SELECT id, internal_title FROM giveaways WHERE owner_user_id=:u ORDER BY id DESC LIMIT 1"),
-            {"u": m.from_user.id}
-        )
-        gw = res.first()
-        
-        if not gw:
-            await m.answer("У вас нет розыгрышей")
-            return
-            
-        gid, title = gw
-        
-        # Проверяем сохраненные эмодзи
-        res = await s.execute(
-            stext("SELECT entity_type, custom_emoji_id FROM giveaway_entities WHERE giveaway_id=:gid"),
-            {"gid": gid}
-        )
-        emojis = res.all()
-        
-        if emojis:
-            emoji_list = "\n".join([f"• {e[0]}: {e[1]}" for e in emojis])
-            await m.answer(f"🎯 В розыгрыше '{title}' сохранены эмодзи:\n{emoji_list}")
-        else:
-            await m.answer(f"ℹ️ В розыгрыше '{title}' нет сохраненных премиум эмодзи")
-
 async def show_my_giveaways_menu(m: Message | CallbackQuery):
     """УНИВЕРСАЛЬНАЯ ВЕРСИЯ: работает с Message и CallbackQuery"""
     if isinstance(m, CallbackQuery):
@@ -1928,23 +1829,17 @@ async def handle_winners_count(m: Message, state: FSMContext):
 # --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
-    # СОХРАНЯЕМ СУЩЕСТВУЮЩУЮ ЛОГИКУ для обычного форматирования
+    # УПРОЩЕННАЯ ВЕРСИЯ: используем только html_text как раньше
     html_text = m.html_text
     
     if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # ДОПОЛНИТЕЛЬНО сохраняем entities ТОЛЬКО для премиум эмодзи
-    emoji_info = await premium_emoji_system.extract_premium_emoji_info(m)
-    
-    await state.update_data(
-        desc=html_text,  # ← ОСНОВНОЙ ТЕКСТ (как сейчас)
-        desc_entities=emoji_info['entities'],  # ← ДОПОЛНИТЕЛЬНО только для премиум эмодзи
-        has_premium_emoji=emoji_info['has_premium_emoji']
-    )
+    # Сохраняем описание как HTML
+    await state.update_data(desc=html_text)
 
-    # Показываем предпросмотр СУЩЕСТВУЮЩИМ способом
+    # Показываем предпросмотр с отключенным превью ссылок
     preview = f"<b>Предпросмотр описания:</b>\n\n{html_text}"
     await m.answer(
         preview, 
@@ -2842,35 +2737,15 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
-            public_description=desc,  # ← ОСТАВЛЯЕМ html_text как есть
+            public_description=desc,  # ← Просто html_text как раньше
             photo_file_id=photo_id,
             end_at_utc=end_at,
             winners_count=winners,
             status=GiveawayStatus.DRAFT
         )
         s.add(gw)
-        await s.flush()          # чтобы сразу появился gw.id
+        await s.flush()
         new_id = gw.id
-
-        # 🔄 ДОПОЛНИТЕЛЬНО: сохраняем премиум эмодзи если они есть
-        if desc_entities:
-            for entity in desc_entities:
-                if entity.get('type') == 'custom_emoji':  # ← ТОЛЬКО премиум эмодзи!
-                    await s.execute(
-                        stext("""
-                            INSERT INTO giveaway_entities 
-                            (giveaway_id, entity_type, offset_pos, length, custom_emoji_id)
-                            VALUES (:gid, :type, :offset, :length, :emoji_id)
-                        """),
-                        {
-                            "gid": new_id,
-                            "type": entity['type'],
-                            "offset": entity['offset'],
-                            "length": entity['length'], 
-                            "emoji_id": entity['custom_emoji_id']
-                        }
-                    )
-            print(f"💾 Сохранено {len([e for e in desc_entities if e.get('type') == 'custom_emoji'])} премиум эмодзи для розыгрыша {new_id}")
 
     # 2) чистим FSM
     await state.clear()
