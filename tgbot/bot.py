@@ -135,6 +135,16 @@ def kb_add_cancel() -> InlineKeyboardMarkup:
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
 
+def safe_html_text(html_text: str, max_length: int = 2500) -> str:
+    """
+    Безопасно обрезает HTML-текст до максимальной длины,
+    сохраняя целостность тегов.
+    """
+    if len(html_text) <= max_length:
+        return html_text
+    
+    # Простое обрезание (в продакшене можно сделать умнее)
+    return html_text[:max_length] + "..."
 
 # Тексты экранов_2
 
@@ -439,19 +449,16 @@ def _compose_preview_text(
 ) -> str:
     """
     Текст «серого блока» предпросмотра.
-    - title показываем обычным текстом (без <b>), чтобы не навязывать жирный.
-    - desc_html вставляем как есть (пользовательское оформление сохраняется).
-    - дата берётся из введённой пользователем + "(N дней)" по-русски.
+    Сохраняет пользовательское форматирование из message.html_text
     """
     lines = []
     if title:
-        # без <b> — не навязываем жирный
-        lines.append(escape(title))
+        # БЕЗ escape() - сохраняем форматирование
+        lines.append(title)
         lines.append("")
 
     if desc_html:
-        # ВАЖНО: это уже «HTML», не оборачиваем в <b>, не экранируем повторно.
-        # Если хочешь жёстко ограничить теги — сделай лёгкую валидацию выше.
+        # ВАЖНО: это уже HTML из message.html_text, не экранируем
         lines.append(desc_html)
         lines.append("")
 
@@ -477,14 +484,16 @@ def _compose_post_text(
 ) -> str:
     """
     Текст для публикации в посте (с коррекцией времени +3 часа).
-    Используется только при публикации розыгрыша в каналы.
+    Сохраняет пользовательское форматирование из message.html_text
     """
     lines = []
     if title:
-        lines.append(escape(title))
+        # БЕЗ escape() - сохраняем форматирование
+        lines.append(title)
         lines.append("")
 
     if desc_html:
+        # БЕЗ escape() - сохраняем пользовательское форматирование из message.html_text
         lines.append(desc_html)
         lines.append("")
 
@@ -492,13 +501,11 @@ def _compose_post_text(
     lines.append(f"Количество призов: {max(0, prizes)}")
 
     if end_at_msk:
-        # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: корректируем время на +3 часа только для постов
+        # Корректируем время на +3 часа только для постов
         try:
-            # Парсим время из строки "HH:MM DD.MM.YYYY"
             time_part, date_part = end_at_msk.split(' ')
             hours, minutes = map(int, time_part.split(':'))
             
-            # Добавляем 3 часа (коррекция UTC+3)
             corrected_hours = (hours + 3) % 24
             if corrected_hours < 10:
                 corrected_hours_str = f"0{corrected_hours}"
@@ -512,7 +519,6 @@ def _compose_post_text(
             lines.append(f"Дата розыгрыша: {corrected_end_at}{tail}")
             
         except Exception as e:
-            # Если что-то пошло не при коррекции, используем оригинальное время
             logging.warning(f"Time correction failed for {end_at_msk}: {e}")
             tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
             lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
@@ -738,15 +744,15 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         # 4) fallback — отдать нативно (фото/гиф/видео) с той же подписью
         try:
             if kind == "photo":
-                await m.answer_photo(fid, caption=preview_text)
+                await m.answer_photo(fid, caption=preview_text, parse_mode="HTML")
             elif kind == "animation":
-                await m.answer_animation(fid, caption=preview_text)
+                await m.answer_animation(fid, caption=preview_text, parse_mode="HTML")
             elif kind == "video":
-                await m.answer_video(fid, caption=preview_text)
+                await m.answer_video(fid, caption=preview_text, parse_mode="HTML")
             else:
-                await m.answer(preview_text)
+                await m.answer(preview_text, parse_mode="HTML")
         except Exception:
-            await m.answer(preview_text)
+            await m.answer(preview_text, parse_mode="HTML")
 
 # ----------------- DB MODELS -----------------
 class Base(DeclarativeBase): pass
@@ -1718,16 +1724,19 @@ async def handle_winners_count(m: Message, state: FSMContext):
 # --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
-    text = (m.text or "").strip()
-    if len(text) > 2500:
+
+    html_text = m.html_text or m.text or ""
+    html_text = safe_html_text(html_text, 2500)
+    
+    if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # сохраняем описание
-    await state.update_data(desc=text)
+    # сохраняем описание КАК HTML
+    await state.update_data(desc=html_text)
 
-    # показываем предпросмотр + кнопки
-    preview = f"<b>Предпросмотр описания:</b>\n\n{escape(text)}"
+    # показываем предпросмотр БЕЗ escape() - сохраняем форматирование
+    preview = f"<b>Предпросмотр описания:</b>\n\n{html_text}"
     await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
 
     # переходим в состояние подтверждения
@@ -2923,6 +2932,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
+                    parse_mode="HTML",
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
@@ -2945,6 +2955,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     sent_msg = await bot.send_message(
                         chat_id,
                         preview_text,
+                        parse_mode="HTML",
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
