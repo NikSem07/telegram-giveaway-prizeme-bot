@@ -210,14 +210,13 @@ premium_emoji_system = PremiumEmojiSystem()
 # --- Функция очистки текста от пользовательских ссылок ---
 class TextPreviewCleaner:
     """
-    Система для очистки текста от пользовательских ссылок-превью
-    но сохранения наших медиа-превью
+    УЛУЧШЕННАЯ СИСТЕМА: разделяет превью медиа (работает) и пользовательских ссылок (отключается)
     """
-    
     @staticmethod
     def contains_user_links(html_text: str) -> bool:
         """
         Проверяет есть ли в тексте пользовательские ссылки (не наши медиа)
+        Теперь работает корректно с HTML-разметкой
         """
         import re
         
@@ -225,11 +224,11 @@ class TextPreviewCleaner:
         our_media_patterns = [
             f"{MEDIA_BASE_URL}/uploads/",
             f"{S3_ENDPOINT}/{S3_BUCKET}/",
-            r"https?://[^/]+/uploads/\d{4}/\d{2}/\d{2}/[a-f0-9]+\.\w+",  # наш uploads паттерн
+            r"https?://[^/]+/uploads/\d{4}/\d{2}/\d{2}/[a-f0-9-]+\.\w+",  # наш uploads паттерн
         ]
         
-        # Ищем все ссылки в HTML
-        link_pattern = r'<a href="([^"]+)">[^<]+</a>'
+        # Ищем все ссылки в HTML (теперь корректно обрабатываем HTML-теги)
+        link_pattern = r'<a\s+[^>]*href="([^"]+)"[^>]*>'
         links = re.findall(link_pattern, html_text)
         
         if not links:
@@ -250,17 +249,24 @@ class TextPreviewCleaner:
         return False  # Все ссылки - наши медиа
     
     @staticmethod
-    def clean_text_preview(html_text: str) -> tuple[str, bool]:
+    def clean_text_preview(html_text: str, has_media: bool = False) -> tuple[str, bool]:
         """
-        Очищает текст от пользовательских ссылок-превью
+        УЛУЧШЕННАЯ ВЕРСИЯ: учитывает наличие медиа в розыгрыше
         Возвращает (очищенный_текст, нужно_ли_отключить_превью)
+        
+        КРИТИЧЕСКОЕ ПРАВИЛО:
+        - ЕСТЬ медиа: НИКОГДА не отключаем превью (чтобы работала фиолетовая рамка)
+        - НЕТ медиа: отключаем превью только если есть пользовательские ссылки
         """
-        if TextPreviewCleaner.contains_user_links(html_text):
-            # Есть пользовательские ссылки - отключаем превью
-            return html_text, True
-        else:
-            # Нет пользовательских ссылок или это наши медиа - не отключаем
+        if has_media:
+            # ЕСТЬ МЕДИА - НИКОГДА не отключаем превью, чтобы работала фиолетовая рамка
             return html_text, False
+        else:
+            # НЕТ МЕДИА - отключаем превью только если есть пользовательские ссылки
+            if TextPreviewCleaner.contains_user_links(html_text):
+                return html_text, True
+            else:
+                return html_text, False
 
 # Создаем экземпляр
 text_preview_cleaner = TextPreviewCleaner()
@@ -686,7 +692,7 @@ async def render_link_preview_message(
 
     if not media:
         # ЕСЛИ НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
-        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt)
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt, has_media=False)
         send_kwargs = {
             "text": cleaned_text,
             "parse_mode": "HTML"
@@ -767,7 +773,8 @@ async def render_text_preview_message(
     )
 
     # ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
-    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt)
+    has_media = bool(data.get("media_url"))
+    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt, has_media)
 
     # если до этого уже рисовали предпросмотр — аккуратно удалим
     prev_id = data.get("media_preview_msg_id")
@@ -852,7 +859,8 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
     kind, fid = unpack_media(gw.photo_file_id)
     if not fid:
         # ЕСЛИ НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
-        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+        has_media = bool(fid)  # fid из unpack_media(gw.photo_file_id)
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media)
         send_kwargs = {
             "text": cleaned_text,
             "parse_mode": "HTML"
@@ -1877,14 +1885,24 @@ async def handle_winners_count(m: Message, state: FSMContext):
 # --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
-    # Используем систему премиум эмодзи для обработки текста
-    html_text = await premium_emoji_system.process_description_with_premium_emoji(m, m.from_user.id)
+    # УЛУЧШЕННАЯ ОБРАБОТКА: сохраняем оригинальные entities для премиум эмодзи
+    emoji_info = await premium_emoji_system.extract_premium_emoji_info(m)
+    
+    # Сохраняем полную информацию о форматировании
+    await state.update_data(
+        desc_entities=emoji_info['entities'],  # Сохраняем entities для будущего использования
+        desc_original_text=emoji_info['original_text'],  # Оригинальный текст
+        desc_html_text=emoji_info['html_text']  # HTML версия
+    )
+    
+    # Используем HTML-версию для отображения (сохраняет премиум эмодзи)
+    html_text = emoji_info['html_text']
     
     if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # Сохраняем описание КАК HTML
+    # Сохраняем описание КАК HTML с сохраненными entities
     await state.update_data(desc=html_text)
 
     # Показываем предпросмотр с отключенным превью ссылок
@@ -2723,6 +2741,7 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
     owner_id = data.get("owner")
     title    = (data.get("title") or "").strip()
     desc     = (data.get("desc")  or "").strip()
+    desc_entities = data.get("desc_entities", [])
     winners  = int(data.get("winners_count") or 1)
     end_at   = data.get("end_at_utc")
     photo_id = data.get("photo")  # pack_media(..) | None
@@ -3088,7 +3107,8 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 # медиа нет — обычный текст + кнопка
                 # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
                 # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
-                cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+                has_media = bool(file_id)
+                cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media)
                 send_kwargs = {
                     "chat_id": chat_id,
                     "text": cleaned_text,
@@ -3118,7 +3138,8 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     message_ids[chat_id] = sent_msg.message_id
                 else:
                     # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
-                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+                    has_media = bool(file_id)
+                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media)
                     send_kwargs = {
                         "chat_id": chat_id,
                         "text": cleaned_text,
@@ -3698,7 +3719,8 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
                     # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
-                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(new_text)
+                    has_media = bool(media_file_id)
+                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(new_text, has_media)
                     
                     # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с link-preview
                     if has_media and preview_url:
