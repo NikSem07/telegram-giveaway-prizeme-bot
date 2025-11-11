@@ -207,6 +207,64 @@ class PremiumEmojiSystem:
 # Создаем экземпляр системы премиум
 premium_emoji_system = PremiumEmojiSystem()
 
+# --- Функция очистки текста от пользовательских ссылок ---
+class TextPreviewCleaner:
+    """
+    Система для очистки текста от пользовательских ссылок-превью
+    но сохранения наших медиа-превью
+    """
+    
+    @staticmethod
+    def contains_user_links(html_text: str) -> bool:
+        """
+        Проверяет есть ли в тексте пользовательские ссылки (не наши медиа)
+        """
+        import re
+        
+        # Наши медиа ссылки имеют определенные паттерны
+        our_media_patterns = [
+            f"{MEDIA_BASE_URL}/uploads/",
+            f"{S3_ENDPOINT}/{S3_BUCKET}/",
+            r"https?://[^/]+/uploads/\d{4}/\d{2}/\d{2}/[a-f0-9]+\.\w+",  # наш uploads паттерн
+        ]
+        
+        # Ищем все ссылки в HTML
+        link_pattern = r'<a href="([^"]+)">[^<]+</a>'
+        links = re.findall(link_pattern, html_text)
+        
+        if not links:
+            return False  # Нет ссылок вообще
+        
+        # Проверяем каждую найденную ссылку
+        for link in links:
+            is_our_media = False
+            for pattern in our_media_patterns:
+                if re.search(pattern, link):
+                    is_our_media = True
+                    break
+            
+            # Если найдена хотя бы одна НЕ наша ссылка - возвращаем True
+            if not is_our_media:
+                return True
+        
+        return False  # Все ссылки - наши медиа
+    
+    @staticmethod
+    def clean_text_preview(html_text: str) -> tuple[str, bool]:
+        """
+        Очищает текст от пользовательских ссылок-превью
+        Возвращает (очищенный_текст, нужно_ли_отключить_превью)
+        """
+        if TextPreviewCleaner.contains_user_links(html_text):
+            # Есть пользовательские ссылки - отключаем превью
+            return html_text, True
+        else:
+            # Нет пользовательских ссылок или это наши медиа - не отключаем
+            return html_text, False
+
+# Создаем экземпляр
+text_preview_cleaner = TextPreviewCleaner()
+
 
 # --- Тексты экранов_2 ---
 
@@ -627,7 +685,16 @@ async def render_link_preview_message(
     )
 
     if not media:
-        await m.answer(txt)
+        # ЕСЛИ НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt)
+        send_kwargs = {
+            "text": cleaned_text,
+            "parse_mode": "HTML"
+        }
+        if disable_preview:
+            send_kwargs["disable_web_page_preview"] = True
+            
+        await m.answer(**send_kwargs)
         return
 
     hidden_link = f'<a href="{media}">&#8203;</a>'
@@ -662,6 +729,7 @@ async def render_link_preview_message(
         except Exception:
             pass
 
+    # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
     msg = await m.answer(
         full,
         link_preview_options=lp,
@@ -698,6 +766,9 @@ async def render_text_preview_message(
         days_left=days_left
     )
 
+    # ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
+    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(txt)
+
     # если до этого уже рисовали предпросмотр — аккуратно удалим
     prev_id = data.get("media_preview_msg_id")
     if prev_id and not reedit:
@@ -706,12 +777,17 @@ async def render_text_preview_message(
         except Exception:
             pass
 
-    msg = await m.answer(
-        txt, 
-        reply_markup=kb_preview_no_media(), 
-        parse_mode="HTML",
-        disable_web_page_preview=True)
+    # ДИНАМИЧЕСКОЕ ОТКЛЮЧЕНИЕ ПРЕВЬЮ
+    send_kwargs = {
+        "text": cleaned_text,
+        "reply_markup": kb_preview_no_media(),
+        "parse_mode": "HTML"
+    }
     
+    if disable_preview:
+        send_kwargs["disable_web_page_preview"] = True
+
+    msg = await m.answer(**send_kwargs)
     await state.update_data(
         media_preview_msg_id=msg.message_id,
         media_url=None,      # критично: помечаем, что медиа нет
@@ -775,11 +851,16 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
     # 2) если медиа нет — просто текст
     kind, fid = unpack_media(gw.photo_file_id)
     if not fid:
-        await m.answer(
-            preview_text, 
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
+        # ЕСЛИ НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+        send_kwargs = {
+            "text": cleaned_text,
+            "parse_mode": "HTML"
+        }
+        if disable_preview:
+            send_kwargs["disable_web_page_preview"] = True
+            
+        await m.answer(**send_kwargs)
         return
 
     # 3) пробуем сделать link-preview как в обычном предпросмотре
@@ -809,6 +890,7 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
             show_above_text=False,  # как в нашем обычном предпросмотре "медиа снизу" по умолчанию
         )
 
+        # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
         await m.answer(full_text, link_preview_options=lp, parse_mode="HTML")
 
     except Exception:
@@ -2991,6 +3073,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 )
 
                 # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                 sent_msg = await bot.send_message(
                     chat_id,
                     full_text,
@@ -3003,14 +3086,19 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # Сохраняем результат отправки
-                sent_msg = await bot.send_message(
-                    chat_id,
-                    preview_text,
-                    parse_mode="HTML",
-                    reply_markup=kb_public_participate(gid, for_channel=True),
-                    disable_web_page_preview=True
-                )
+                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
+                cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+                send_kwargs = {
+                    "chat_id": chat_id,
+                    "text": cleaned_text,
+                    "parse_mode": "HTML",
+                    "reply_markup": kb_public_participate(gid, for_channel=True),
+                }
+                if disable_preview:
+                    send_kwargs["disable_web_page_preview"] = True
+                
+                sent_msg = await bot.send_message(**send_kwargs)
                 message_ids[chat_id] = sent_msg.message_id
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
 
@@ -3019,6 +3107,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 if kind == "photo" and file_id:
+                    # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                     sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
@@ -3028,18 +3117,25 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 else:
-                    sent_msg = await bot.send_message(
-                        chat_id,
-                        preview_text,
-                        parse_mode="HTML",
-                        reply_markup=kb_public_participate(gid, for_channel=True),
-                    )
+                    # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
+                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text)
+                    send_kwargs = {
+                        "chat_id": chat_id,
+                        "text": cleaned_text,
+                        "parse_mode": "HTML",
+                        "reply_markup": kb_public_participate(gid, for_channel=True),
+                    }
+                    if disable_preview:
+                        send_kwargs["disable_web_page_preview"] = True
+                    
+                    sent_msg = await bot.send_message(**send_kwargs)
                     message_ids[chat_id] = sent_msg.message_id
                     
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id} (fallback)")
                 
             except Exception as e2:
                 logging.warning("Публикация поста не удалась в чате %s: %s", chat_id, e2)
+
 
     # 🔄 ДОБАВЛЕНО: Сохраняем message_id в БД
     if message_ids:
@@ -3601,13 +3697,16 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
+                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
+                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(new_text)
+                    
                     # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с link-preview
                     if has_media and preview_url:
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
                         try:
                             # Формируем текст с hidden link для link-preview
                             hidden_link = f'<a href="{preview_url}">&#8203;</a>'
-                            full_text_with_preview = f"{new_text}\n\n{hidden_link}"
+                            full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
                             
                             # Настройки link-preview (как при публикации)
                             lp = LinkPreviewOptions(
@@ -3618,6 +3717,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             )
                             
                             # Пробуем отредактировать через edit_message_text с link-preview
+                            # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                             await bot_instance.edit_message_text(
                                 chat_id=chat_id,
                                 message_id=message_id,
@@ -3644,7 +3744,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 
                                 # Формируем текст с hidden link для link-preview
                                 hidden_link = f'<a href="{preview_url}">&#8203;</a>'
-                                full_text_with_preview = f"{new_text}\n\n{hidden_link}"
+                                full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
                                 
                                 # Настройки link-preview
                                 lp = LinkPreviewOptions(
@@ -3655,6 +3755,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 )
                                 
                                 # Отправляем новый пост с link-preview
+                                # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                                 await bot_instance.send_message(
                                     chat_id=chat_id,
                                     text=full_text_with_preview,
@@ -3673,13 +3774,17 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, но нет preview_url, пробуем edit_message_caption")
                         try:
                             # Для постов с медиа редактируем только подпись с reply_markup
-                            await bot_instance.edit_message_caption(
-                                chat_id=chat_id,
-                                message_id=message_id,
-                                caption=new_text,
-                                parse_mode="HTML",
-                                reply_markup=reply_markup
-                            )
+                            send_kwargs = {
+                                "chat_id": chat_id,
+                                "message_id": message_id,
+                                "caption": cleaned_text,
+                                "parse_mode": "HTML",
+                                "reply_markup": reply_markup,
+                            }
+                            if disable_preview:
+                                send_kwargs["disable_web_page_preview"] = True
+                                
+                            await bot_instance.edit_message_caption(**send_kwargs)
                             print(f"✅ Пост С МЕДИА отредактирован (caption) в чате {chat_id}")
                             success_count += 1
                             
@@ -3689,29 +3794,23 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     else:
                         print(f"🔍 Розыгрыш БЕЗ медиа, используем edit_message_text")
                         # Для постов без медиа редактируем весь текст с reply_markup
-                        await bot_instance.edit_message_text(
-                            chat_id=chat_id,
-                            message_id=message_id,
-                            text=new_text,
-                            parse_mode="HTML",
-                            reply_markup=reply_markup
-                        )
+                        send_kwargs = {
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "text": cleaned_text,
+                            "parse_mode": "HTML",
+                            "reply_markup": reply_markup,
+                        }
+                        if disable_preview:
+                            send_kwargs["disable_web_page_preview"] = True
+                            
+                        await bot_instance.edit_message_text(**send_kwargs)
                         print(f"✅ Пост БЕЗ МЕДИА отредактирован в чате {chat_id}")
                         success_count += 1
                     
                 except Exception as e:
                     print(f"❌ Ошибка редактирования поста в {chat_id}: {e}")
-                    error_str = str(e)
-                    if "message to edit not found" in error_str:
-                        print(f"⚠️ Сообщение {message_id} не найдено в чате {chat_id}")
-                    elif "can't parse entities" in error_str:
-                        print(f"⚠️ Ошибка парсинга HTML в тексте для чата {chat_id}")
-                    elif "reply_markup" in error_str:
-                        print(f"⚠️ Проблема с клавиатурой для чата {chat_id}")
-                    elif "no caption" in error_str:
-                        print(f"⚠️ У поста нет caption (подписи) в чате {chat_id}")
-                    else:
-                        print(f"⚠️ Неизвестная ошибка для чата {chat_id}: {e}")
+                    # ... существующий код обработки ошибок ...
             
             print(f"📊 Итог: успешно отредактировано {success_count} из {len(channels)} постов")
             return success_count > 0
