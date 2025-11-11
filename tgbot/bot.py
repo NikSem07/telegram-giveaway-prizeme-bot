@@ -877,7 +877,6 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         return
 
     # 3) пробуем сделать link-preview как в обычном предпросмотре
-    #    (повторная выгрузка в S3 допустима; если не получится — fallback)
     try:
         # подбираем имя файла под тип
         if kind == "photo":
@@ -892,15 +891,16 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         key, s3_url = await file_id_to_public_url_via_s3(m.bot, fid, suggested)
         preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-        # скрытая ссылка + опции link preview (медиа показываем СНИЗУ — как в дефолте предпросмотра)
-        hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+        # 🔄 УСИЛЕННЫЙ LINK-PREVIEW (как в render_link_preview_message)
+        hidden_link = f'<a href="{preview_url}"> </a>'  # Пробел вместо невидимого символа
         full_text = f"{preview_text}\n\n{hidden_link}"
 
         lp = LinkPreviewOptions(
             is_disabled=False,
             prefer_large_media=True,
             prefer_small_media=False,
-            show_above_text=False,  # как в нашем обычном предпросмотре "медиа снизу" по умолчанию
+            show_above_text=False,
+            url=preview_url  # 🔄 ЯВНО указываем URL
         )
 
         # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
@@ -2610,6 +2610,9 @@ async def cmd_events(m: Message):
     await show_event_card(m.chat.id, row[0])
 
 async def show_event_card(chat_id:int, giveaway_id:int):
+    """
+    Показывает карточку розыгрыша с УСИЛЕННЫМ link-preview если есть медиа
+    """
     async with session_scope() as s:
         gw = await s.get(Giveaway, giveaway_id)
 
@@ -2619,6 +2622,50 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 
     kind, fid = unpack_media(gw.photo_file_id)
 
+    # 🔄 УСИЛЕННЫЙ LINK-PREVIEW для карточки
+    if fid:
+        try:
+            # Пытаемся использовать link-preview для единообразия
+            if kind == "photo":
+                suggested = "image.jpg"
+            elif kind == "animation":
+                suggested = "animation.mp4" 
+            elif kind == "video":
+                suggested = "video.mp4"
+            else:
+                suggested = "file.bin"
+
+            key, s3_url = await file_id_to_public_url_via_s3(bot, fid, suggested)
+            preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+
+            # 🔄 УСИЛЕННЫЙ LINK-PREVIEW
+            hidden_link = f'<a href="{preview_url}"> </a>'
+            full_text = f"{cap}\n\n{hidden_link}"
+
+            lp = LinkPreviewOptions(
+                is_disabled=False,
+                prefer_large_media=True,
+                prefer_small_media=False,
+                show_above_text=False,
+                url=preview_url  # 🔄 ЯВНО указываем URL
+            )
+
+            # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
+            await bot.send_message(
+                chat_id, 
+                full_text, 
+                link_preview_options=lp,
+                parse_mode="HTML",
+                reply_markup=kb_event_actions(giveaway_id, gw.status)
+            )
+            return
+            
+        except Exception as e:
+            print(f"⚠️ Link-preview не сработал для карточки: {e}")
+            # Fallback к обычному способу
+            pass
+
+    # Fallback: оригинальный код (нативная отправка медиа)
     if kind == "photo" and fid:
         await bot.send_photo(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
     elif kind == "animation" and fid:
@@ -3086,17 +3133,18 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id, suggested)
                 preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-                hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                hidden_link = f'<a href="{preview_url}"> </a>' 
                 full_text = f"{preview_text}\n\n{hidden_link}"
 
                 lp = LinkPreviewOptions(
                     is_disabled=False,
                     prefer_large_media=True,
                     prefer_small_media=False,
-                    show_above_text=False,  # медиа снизу, как в нашем дефолтном предпросмотре
+                    show_above_text=False,
+                    url=preview_url
                 )
 
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # Сохраняем результат отправки
                 # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                 sent_msg = await bot.send_message(
                     chat_id,
@@ -3732,7 +3780,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
                         try:
                             # Формируем текст с hidden link для link-preview
-                            hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                            hidden_link = f'<a href="{preview_url}"> </a>'  # Пробел вместо невидимого символа
                             full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
                             
                             # Настройки link-preview (как при публикации)
@@ -3740,7 +3788,8 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 is_disabled=False,
                                 prefer_large_media=True,
                                 prefer_small_media=False,
-                                show_above_text=False,  # медиа снизу, как в дефолтном предпросмотре
+                                show_above_text=False,
+                                url=preview_url
                             )
                             
                             # Пробуем отредактировать через edit_message_text с link-preview
