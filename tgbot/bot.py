@@ -131,22 +131,84 @@ def kb_add_cancel() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # ---- Другое ----
-
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
 
+# --- Функция безопасного HTML ---
 def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     """
     Безопасно обрезает HTML-текст до максимальной длины,
-    сохраняя целостность тегов.
+    сохраняя целостность тегов и премиум эмодзи.
     """
     if len(html_text) <= max_length:
         return html_text
     
-    # Простое обрезание (в продакшене можно сделать умнее)
+    # Простое обрезание
     return html_text[:max_length] + "..."
 
-# Тексты экранов_2
+# --- Система для премиум эмодзи ---
+class PremiumEmojiSystem:
+    """
+    Система для работы с премиум эмодзи
+    Пока только сохраняет информацию, в будущем можно монетизировать
+    """
+    
+    @staticmethod
+    async def extract_premium_emoji_info(message: Message) -> dict:
+        """
+        Извлекает информацию о премиум эмодзи из сообщения
+        Возвращает словарь с entities для будущего использования
+        """
+        premium_entities = []
+        
+        if message.entities:
+            for entity in message.entities:
+                if entity.type == "custom_emoji":
+                    premium_entities.append({
+                        'type': 'custom_emoji',
+                        'offset': entity.offset,
+                        'length': entity.length,
+                        'custom_emoji_id': entity.custom_emoji_id
+                    })
+        
+        return {
+            'has_premium_emoji': len(premium_entities) > 0,
+            'entities': premium_entities,
+            'original_text': message.text,
+            'html_text': message.html_text
+        }
+    
+    @staticmethod
+    async def check_user_premium_access(user_id: int) -> bool:
+        """
+        Проверяет есть ли у пользователя доступ к премиум эмодзи
+        Сейчас возвращает True для всех, в будущем можно добавить монетизацию
+        """
+        # TODO: В будущем добавить проверку подписки/платежей
+        return True
+    
+    @staticmethod
+    async def process_description_with_premium_emoji(message: Message, user_id: int) -> str:
+        """
+        Обрабатывает описание с премиум эмодзи
+        Пока просто возвращает html_text, в будущем можно добавить специальную обработку
+        """
+        has_access = await PremiumEmojiSystem.check_user_premium_access(user_id)
+        emoji_info = await PremiumEmojiSystem.extract_premium_emoji_info(message)
+        
+        if emoji_info['has_premium_emoji'] and not has_access:
+            # Пользователь пытается использовать премиум эмодзи без доступа
+            # В будущем можно вернуть текст без премиум эмодзи или показать ошибку
+            return message.html_text or message.text or ""
+        
+        # Пользователь имеет доступ или нет премиум эмодзи
+        return message.html_text or message.text or ""
+
+# Создаем экземпляр системы премиум
+premium_emoji_system = PremiumEmojiSystem()
+
+
+# --- Тексты экранов_2 ---
 
 def build_connect_invite_kb(event_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
@@ -644,7 +706,12 @@ async def render_text_preview_message(
         except Exception:
             pass
 
-    msg = await m.answer(txt, reply_markup=kb_preview_no_media(), parse_mode="HTML")
+    msg = await m.answer(
+        txt, 
+        reply_markup=kb_preview_no_media(), 
+        parse_mode="HTML",
+        disable_web_page_preview=True)
+    
     await state.update_data(
         media_preview_msg_id=msg.message_id,
         media_url=None,      # критично: помечаем, что медиа нет
@@ -708,7 +775,11 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
     # 2) если медиа нет — просто текст
     kind, fid = unpack_media(gw.photo_file_id)
     if not fid:
-        await m.answer(preview_text)
+        await m.answer(
+            preview_text, 
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
         return
 
     # 3) пробуем сделать link-preview как в обычном предпросмотре
@@ -1724,20 +1795,24 @@ async def handle_winners_count(m: Message, state: FSMContext):
 # --- пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
-
-    html_text = m.html_text or m.text or ""
-    html_text = safe_html_text(html_text, 2500)
+    # Используем систему премиум эмодзи для обработки текста
+    html_text = await premium_emoji_system.process_description_with_premium_emoji(m, m.from_user.id)
     
     if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # сохраняем описание КАК HTML
+    # Сохраняем описание КАК HTML
     await state.update_data(desc=html_text)
 
-    # показываем предпросмотр БЕЗ escape() - сохраняем форматирование
+    # Показываем предпросмотр с отключенным превью ссылок
     preview = f"<b>Предпросмотр описания:</b>\n\n{html_text}"
-    await m.answer(preview, parse_mode="HTML", reply_markup=kb_confirm_description())
+    await m.answer(
+        preview, 
+        parse_mode="HTML", 
+        reply_markup=kb_confirm_description(),
+        disable_web_page_preview=True  # ← ОТКЛЮЧАЕМ ПРЕВЬЮ ССЫЛОК ТОЛЬКО ЗДЕСЬ!
+    )
 
     # переходим в состояние подтверждения
     await state.set_state(CreateFlow.CONFIRM_DESC)
@@ -2928,12 +3003,13 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
+                # Сохраняем результат отправки
                 sent_msg = await bot.send_message(
                     chat_id,
                     preview_text,
                     parse_mode="HTML",
                     reply_markup=kb_public_participate(gid, for_channel=True),
+                    disable_web_page_preview=True
                 )
                 message_ids[chat_id] = sent_msg.message_id
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
