@@ -703,14 +703,19 @@ async def render_link_preview_message(
         await m.answer(**send_kwargs)
         return
 
-    hidden_link = f'<a href="{media}">&#8203;</a>'
-    full = f"{hidden_link}\n\n{txt}" if media_top else f"{txt}\n\n{hidden_link}"
+    hidden_link = f'<a href="{media}"> </a>'
+
+    if media_top:
+        full = f"{hidden_link}\n\n{txt}"
+    else:
+        full = f"{txt}\n\n{hidden_link}"
 
     lp = LinkPreviewOptions(
         is_disabled=False,
         prefer_large_media=True,
-        prefer_small_media=False,
+        prefer_small_media=False, 
         show_above_text=media_top,
+        url=media  # 🔄 ЯВНО указываем URL для превью
     )
 
     old_id = data.get("media_preview_msg_id")
