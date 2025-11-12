@@ -285,8 +285,7 @@ def build_channels_menu_kb(
     )
 
     # Отдельными строками, в заданном порядке
-    kb.row(InlineKeyboardButton(text="Настройки розыгрыша", callback_data=f"raffle:settings_disabled:{event_id}"))
-    kb.row(InlineKeyboardButton(text="Запустить розыгрыш", callback_data=f"raffle:start:{event_id}"))
+    kb.row(InlineKeyboardButton(text="Продолжить", callback_data=f"raffle:start:{event_id}"))
 
     return kb.as_markup()
 
@@ -305,9 +304,39 @@ def build_final_check_text() -> str:
 def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Запустить розыгрыш", callback_data=f"launch:do:{gid}")
-    kb.button(text="Настройки розыгрыша", callback_data=f"raffle:settings_disabled:{gid}")
+    kb.button(text="Настройки розыгрыша", callback_data=f"raffle:settings_menu:{gid}")  # 🔄 ИЗМЕНЕНИЕ: callback_data
+    kb.button(text="Дополнительные механики", callback_data=f"raffle:mechanics_disabled:{gid}")  # 🔄 НОВАЯ КНОПКА
     kb.adjust(1)
     return kb.as_markup()
+
+# --- Клавиатура меню настроек розыгрыша ---
+def kb_settings_menu(gid: int, giveaway_title: str) -> InlineKeyboardMarkup:
+
+    kb = InlineKeyboardBuilder()
+    
+    # Первая строка: две кнопки рядом
+    kb.row(
+        InlineKeyboardButton(text="Название", callback_data=f"settings:name_disabled:{gid}"),
+        InlineKeyboardButton(text="Описание", callback_data=f"settings:desc_disabled:{gid}")
+    )
+    
+    # Вторая строка: две кнопки рядом  
+    kb.row(
+        InlineKeyboardButton(text="Дата окончания", callback_data=f"settings:date_disabled:{gid}"),
+        InlineKeyboardButton(text="Медиа", callback_data=f"settings:media_disabled:{gid}")
+    )
+    
+    # Третья строка: одна кнопка
+    kb.row(InlineKeyboardButton(text="Количество победителей", callback_data=f"settings:winners_disabled:{gid}"))
+    
+    # Четвертая строка: одна кнопка (красная/опасная)
+    kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{gid}"))
+    
+    # Пятая строка: кнопка назад
+    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"settings:back:{gid}"))
+    
+    return kb.as_markup()
+
 
 # Клавиатура под постом в канале: открываем WebApp по нашему домену, а не по t.me/startapp
 
@@ -2921,20 +2950,33 @@ async def cb_add_group(cq: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data.startswith("raffle:start:"))
 async def cb_start_raffle(cq: CallbackQuery):
     """
-    Ничего пока не запускаем — показываем два блока:
-      1) предпросмотр (точь-в-точь как при обычном предпросмотре, с link-preview или без медиа);
-      2) финальный текст с кнопками «Запустить розыгрыш» / «Настройки розыгрыша».
+    Проверяем есть ли подключенные каналы перед показом предпросмотра.
+    Если нет - показываем pop-up предупреждение.
     """
     _, _, sid = cq.data.split(":")
     gid = int(sid)
 
-    # достаём розыгрыш
+    # Проверяем есть ли подключенные каналы/группы
     async with session_scope() as s:
+        # достаём розыгрыш
         gw = await s.get(Giveaway, gid)
         if not gw:
             await cq.answer("Розыгрыш не найден.", show_alert=True)
             return
 
+        # проверяем количество подключенных каналов
+        res = await s.execute(
+            stext("SELECT COUNT(*) FROM giveaway_channels WHERE giveaway_id=:g"),
+            {"g": gid}
+        )
+        channels_count = res.scalar_one() or 0
+
+    # Если нет подключенных каналов - показываем pop-up предупреждение
+    if channels_count == 0:
+        await cq.answer("⚠️ Для запуска розыгрыша необходимо подключить хотя бы 1 канал / группу", show_alert=True)
+        return
+
+    # Если каналы есть - продолжаем как обычно
     # 1) предпросмотр тем же способом, что и ранее
     await _send_launch_preview_message(cq.message, gw)
 
@@ -3181,11 +3223,69 @@ async def cb_launch_do(cq: CallbackQuery):
     "https://t.me/prizeme_official_news"
 )
 
-#--- Что=-то другое (узнать потом) ---
+#--- Обработчик настройки розыгрыша ---
 
-@dp.callback_query(F.data.startswith("raffle:settings_disabled:"))
-async def cb_settings_disabled(cq: CallbackQuery):
-    await cq.answer("Раздел «Настройки розыгрыша» скоро появится ✅", show_alert=True)
+@dp.callback_query(F.data.startswith("raffle:settings_menu:"))
+async def cb_settings_menu(cq: CallbackQuery):
+    """
+    Показывает меню настроек розыгрыша вместо pop-up
+    """
+    _, _, sid = cq.data.split(":")
+    gid = int(sid)
+    
+    # Получаем название розыгрыша
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+    
+    # Показываем меню настроек
+    text = f"Что вы хотите настроить в розыгрыше <b>{gw.internal_title}</b>"
+    await cq.message.answer(text, reply_markup=kb_settings_menu(gid, gw.internal_title), parse_mode="HTML")
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("raffle:mechanics_disabled:"))
+async def cb_mechanics_disabled(cq: CallbackQuery):
+    """
+    Pop-up для кнопки "Дополнительные механики"
+    """
+    await cq.answer("В разработке", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:name_disabled:"))
+async def cb_settings_name_disabled(cq: CallbackQuery):
+    await cq.answer("Настройка названия скоро будет доступна", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:desc_disabled:"))
+async def cb_settings_desc_disabled(cq: CallbackQuery):
+    await cq.answer("Настройка описания скоро будет доступна", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:date_disabled:"))
+async def cb_settings_date_disabled(cq: CallbackQuery):
+    await cq.answer("Настройка даты окончания скоро будет доступна", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:media_disabled:"))
+async def cb_settings_media_disabled(cq: CallbackQuery):
+    await cq.answer("Настройка медиа скоро будет доступна", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:winners_disabled:"))
+async def cb_settings_winners_disabled(cq: CallbackQuery):
+    await cq.answer("Настройка количества победителей скоро будет доступна", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:delete_draft:"))
+async def cb_settings_delete_draft(cq: CallbackQuery):
+    await cq.answer("Удаление черновика скоро будет доступно", show_alert=True)
+
+@dp.callback_query(F.data.startswith("settings:back:"))
+async def cb_settings_back(cq: CallbackQuery):
+    """
+    Возврат из меню настроек (просто удаляем сообщение с меню)
+    """
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await cq.answer()
 
 
 @dp.callback_query(F.data.startswith("raffle:noop:"))
