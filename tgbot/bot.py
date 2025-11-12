@@ -2678,53 +2678,6 @@ async def cmd_subs(m:Message):
                    "затем перешлите сюда любой пост канала или отправьте @username канала.")
 
 
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-@dp.callback_query(F.data.startswith("ev:"))
-async def event_cb(cq:CallbackQuery):
-    _, action, sid = cq.data.split(":")
-    gid = int(sid)
-    if action=="channels":
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),{"u":gw.owner_user_id})
-            channels = res.all()
-            if not channels:
-                await cq.message.answer("Нет каналов. Сначала подключите через пересылку поста или @username."); return
-            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
-            for cid, title, chat_id in channels:
-                await s.execute(stext("INSERT INTO giveaway_channels(giveaway_id,channel_id,chat_id,title) VALUES(:g,:c,:chat,:t)"),
-                                {"g":gid,"c":cid,"chat":chat_id,"t":title})
-        await cq.message.answer("Каналы привязаны. Теперь можно запускать.")
-        await show_event_card(cq.message.chat.id, gid)
-
-    elif action=="launch":
-        gw = await _launch_and_publish(gid, cq.message)
-        if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True)
-            return
-        await cq.message.answer("Розыгрыш запущен.")
-        await show_event_card(cq.message.chat.id, gid)
-
-    elif action=="delete":
-        # Старый обработчик удаления - оставляем для совместимости, но он не должен вызываться для черновиков
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            if gw.status != GiveawayStatus.DRAFT:
-                await cq.answer("Удалять можно только черновик.", show_alert=True); return
-            await s.execute(stext("DELETE FROM giveaways WHERE id=:gid"),{"gid":gid})
-            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
-        await cq.message.answer("Черновик удалён.")
-
-    elif action=="status":
-        await show_stats(cq.message.chat.id, gid)
-
-    elif action=="cancel":
-        await cancel_giveaway(gid, cq.from_user.id, reason=None)
-        await cq.message.answer("Розыгрыш отменён.")
-        await show_event_card(cq.message.chat.id, gid)
-
-
 # --- ОБРАБОТЧИКИ ДЛЯ ЧЕРНОВИКОВ ---
 
 @dp.callback_query(F.data.startswith("ev:add_channels:"))
@@ -2823,6 +2776,52 @@ async def draft_back(cq: CallbackQuery):
         except Exception:
             pass
     await cq.answer()
+
+#--- Что-то другое ---
+
+@dp.callback_query(F.data.startswith("ev:"))
+async def event_cb(cq:CallbackQuery):
+    _, action, sid = cq.data.split(":")
+    gid = int(sid)
+    if action=="channels":
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, gid)
+            res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),{"u":gw.owner_user_id})
+            channels = res.all()
+            if not channels:
+                await cq.message.answer("Нет каналов. Сначала подключите через пересылку поста или @username."); return
+            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
+            for cid, title, chat_id in channels:
+                await s.execute(stext("INSERT INTO giveaway_channels(giveaway_id,channel_id,chat_id,title) VALUES(:g,:c,:chat,:t)"),
+                                {"g":gid,"c":cid,"chat":chat_id,"t":title})
+        await cq.message.answer("Каналы привязаны. Теперь можно запускать.")
+        await show_event_card(cq.message.chat.id, gid)
+
+    elif action=="launch":
+        gw = await _launch_and_publish(gid, cq.message)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+        await cq.message.answer("Розыгрыш запущен.")
+        await show_event_card(cq.message.chat.id, gid)
+
+    elif action=="delete":
+        # Старый обработчик удаления - оставляем для совместимости, но он не должен вызываться для черновиков
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, gid)
+            if gw.status != GiveawayStatus.DRAFT:
+                await cq.answer("Удалять можно только черновик.", show_alert=True); return
+            await s.execute(stext("DELETE FROM giveaways WHERE id=:gid"),{"gid":gid})
+            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
+        await cq.message.answer("Черновик удалён.")
+
+    elif action=="status":
+        await show_stats(cq.message.chat.id, gid)
+
+    elif action=="cancel":
+        await cancel_giveaway(gid, cq.from_user.id, reason=None)
+        await cq.message.answer("Розыгрыш отменён.")
+        await show_event_card(cq.message.chat.id, gid)
 
 
 # ===== Карточка-превью медиа =====
