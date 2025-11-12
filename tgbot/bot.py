@@ -1453,6 +1453,9 @@ def kb_event_actions(gid:int, status:str):
 
 # --- Новая клавиатура для черновиков розыгрышей ---
 def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
+    """
+    Новая клавиатура для черновиков розыгрышей
+    """
     kb = InlineKeyboardBuilder()
     
     # 1 ряд: "Добавить канал / группу"
@@ -1464,11 +1467,12 @@ def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
     # 3 ряд: "Удалить черновик"
     kb.button(text="🗑️ Удалить черновик", callback_data=f"ev:delete_draft:{gid}")
     
-    # 4 ряд: "Назад"
-    kb.button(text="⬅️ Назад", callback_data="mev:my_drafts")
+    # 4 ряд: "Назад" - просто удаляет сообщение с черновиком
+    kb.button(text="⬅️ Назад", callback_data="draft:back")
     
     kb.adjust(1)  # Все кнопки в один столбец
     return kb.as_markup()
+
 
 def kb_participate(gid:int, allow:bool, cancelled:bool=False):
     kb = InlineKeyboardBuilder()
@@ -2417,7 +2421,17 @@ async def show_my_drafts(cq: CallbackQuery):
         text = "Ниже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
         kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        
+        # 🔄 ИСПРАВЛЕНИЕ: используем try/except чтобы избежать ошибки "message is not modified"
+        try:
+            await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        except Exception:
+            # Если редактирование не удалось (сообщение уже имеет тот же контент), просто обновляем клавиатуру
+            try:
+                await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
+            except Exception:
+                pass
+                
         await cq.answer()
         return
 
@@ -2430,8 +2444,18 @@ async def show_my_drafts(cq: CallbackQuery):
     kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    # 🔄 ИСПРАВЛЕНИЕ: используем try/except чтобы избежать ошибки "message is not modified"
+    try:
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    except Exception:
+        # Если редактирование не удалось (сообщение уже имеет тот же контент), просто обновляем клавиатуру
+        try:
+            await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
+        except Exception:
+            pass
+    
     await cq.answer()
+
 
 @dp.callback_query(F.data == "mev:my_finished")
 async def show_my_finished_giveaways(cq: CallbackQuery):
@@ -2700,6 +2724,9 @@ async def event_cb(cq:CallbackQuery):
         await cq.message.answer("Розыгрыш отменён.")
         await show_event_card(cq.message.chat.id, gid)
 
+
+# --- ОБРАБОТЧИКИ ДЛЯ ЧЕРНОВИКОВ ---
+
 @dp.callback_query(F.data.startswith("ev:add_channels:"))
 async def ev_add_channels(cq: CallbackQuery):
     """Обработчик кнопки 'Добавить канал / группу' в черновике"""
@@ -2783,6 +2810,19 @@ async def ev_cancel_delete(cq: CallbackQuery):
     except:
         pass
     await cq.answer("Удаление отменено")
+
+@dp.callback_query(F.data == "draft:back")
+async def draft_back(cq: CallbackQuery):
+    """Обработчик кнопки 'Назад' в черновике - просто удаляет сообщение"""
+    try:
+        await cq.message.delete()
+    except Exception:
+        # Если не удалось удалить, просто убираем кнопки
+        try:
+            await cq.message.edit_reply_markup()
+        except Exception:
+            pass
+    await cq.answer()
 
 
 # ===== Карточка-превью медиа =====
