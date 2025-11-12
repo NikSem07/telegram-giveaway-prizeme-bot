@@ -285,7 +285,7 @@ def build_channels_menu_kb(
     )
 
     # Отдельными строками, в заданном порядке
-    kb.row(InlineKeyboardButton(text="Продолжить", callback_data=f"raffle:start:{event_id}"))
+    kb.row(InlineKeyboardButton(text="➡️ Продолжить", callback_data=f"raffle:start:{event_id}"))
 
     return kb.as_markup()
 
@@ -1130,7 +1130,7 @@ def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
         kb.button(text="Показывать медиа снизу", callback_data="preview:move:down")
     else:
         kb.button(text="Показывать медиа сверху", callback_data="preview:move:up")
-    kb.button(text="Продолжить", callback_data="preview:continue")
+    kb.button(text="➡️ Продолжить", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -1138,7 +1138,7 @@ def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
 def kb_preview_no_media() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Добавить изображение/gif/видео", callback_data="preview:add_media")
-    kb.button(text="Продолжить", callback_data="preview:continue")
+    kb.button(text="➡️ Продолжить", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -1448,7 +1448,26 @@ def kb_event_actions(gid:int, status:str):
         kb.button(text="Статус", callback_data=f"ev:status:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
         kb.button(text="Отчёт", callback_data=f"ev:status:{gid}")
-    kb.button(text="Назад", callback_data="my_events")
+    kb.button(text="⬅️ Назад", callback_data="my_events")
+    return kb.as_markup()
+
+# --- Новая клавиатура для черновиков розыгрышей ---
+def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    
+    # 1 ряд: "Добавить канал / группу"
+    kb.button(text="Добавить канал / группу", callback_data=f"ev:add_channels:{gid}")
+    
+    # 2 ряд: "Настройки розыгрыша" 
+    kb.button(text="Настройки розыгрыша", callback_data=f"ev:settings:{gid}")
+    
+    # 3 ряд: "Удалить черновик"
+    kb.button(text="🗑️ Удалить черновик", callback_data=f"ev:delete_draft:{gid}")
+    
+    # 4 ряд: "Назад"
+    kb.button(text="⬅️ Назад", callback_data="mev:my_drafts")
+    
+    kb.adjust(1)  # Все кнопки в один столбец
     return kb.as_markup()
 
 def kb_participate(gid:int, allow:bool, cancelled:bool=False):
@@ -2544,27 +2563,12 @@ async def view_my_finished_giveaway(cq: CallbackQuery):
     await cq.answer()
 
 
-# --- Что-то другое ---
+# --- Обработчик с кнопками в меню ---
 
 @dp.message(Command("giveaways"))
 async def cmd_events(m: Message):
-    async with session_scope() as s:
-        res = await s.execute(
-            text("SELECT id, internal_title, status FROM giveaways "
-                 "WHERE owner_user_id=:u ORDER BY id DESC"),
-            {"u": m.from_user.id}
-        )
-        row = res.first()
-
-    if not row:
-        await m.answer(
-            "У вас пока нет розыгрышей. Вы можете создать новый розыгрыш и он появится здесь.",
-            reply_markup=reply_main_kb()
-        )
-        return  # <- ВНУТРИ if
-
-    # сюда попадём только если row есть
-    await show_event_card(m.chat.id, row[0])
+    """Команда /giveaways - точная копия кнопки 'Мои розыгрыши'"""
+    await show_my_giveaways_menu(m)
 
 async def show_event_card(chat_id:int, giveaway_id:int):
     """
@@ -2608,12 +2612,18 @@ async def show_event_card(chat_id:int, giveaway_id:int):
             )
 
             # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
+            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем новую клавиатуру для черновиков
+            if gw.status == GiveawayStatus.DRAFT:
+                reply_markup = kb_draft_actions(giveaway_id)
+            else:
+                reply_markup = kb_event_actions(giveaway_id, gw.status)
+                
             await bot.send_message(
                 chat_id, 
                 full_text, 
                 link_preview_options=lp,
                 parse_mode="HTML",
-                reply_markup=kb_event_actions(giveaway_id, gw.status)
+                reply_markup=reply_markup
             )
             return
             
@@ -2623,14 +2633,20 @@ async def show_event_card(chat_id:int, giveaway_id:int):
             pass
 
     # Fallback: оригинальный код (нативная отправка медиа)
-    if kind == "photo" and fid:
-        await bot.send_photo(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
-    elif kind == "animation" and fid:
-        await bot.send_animation(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
-    elif kind == "video" and fid:
-        await bot.send_video(chat_id, fid, caption=cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
+    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем новую клавиатуру для черновиков
+    if gw.status == GiveawayStatus.DRAFT:
+        reply_markup = kb_draft_actions(giveaway_id)
     else:
-        await bot.send_message(chat_id, cap, reply_markup=kb_event_actions(giveaway_id, gw.status))
+        reply_markup = kb_event_actions(giveaway_id, gw.status)
+    
+    if kind == "photo" and fid:
+        await bot.send_photo(chat_id, fid, caption=cap, reply_markup=reply_markup)
+    elif kind == "animation" and fid:
+        await bot.send_animation(chat_id, fid, caption=cap, reply_markup=reply_markup)
+    elif kind == "video" and fid:
+        await bot.send_video(chat_id, fid, caption=cap, reply_markup=reply_markup)
+    else:
+        await bot.send_message(chat_id, cap, reply_markup=reply_markup)
 
 @dp.message(Command("subscriptions"))
 async def cmd_subs(m:Message):
@@ -2667,6 +2683,7 @@ async def event_cb(cq:CallbackQuery):
         await show_event_card(cq.message.chat.id, gid)
 
     elif action=="delete":
+        # Старый обработчик удаления - оставляем для совместимости, но он не должен вызываться для черновиков
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if gw.status != GiveawayStatus.DRAFT:
@@ -2682,6 +2699,91 @@ async def event_cb(cq:CallbackQuery):
         await cancel_giveaway(gid, cq.from_user.id, reason=None)
         await cq.message.answer("Розыгрыш отменён.")
         await show_event_card(cq.message.chat.id, gid)
+
+@dp.callback_query(F.data.startswith("ev:add_channels:"))
+async def ev_add_channels(cq: CallbackQuery):
+    """Обработчик кнопки 'Добавить канал / группу' в черновике"""
+    gid = int(cq.data.split(":")[2])
+    
+    # Показываем стандартный экран подключения каналов
+    await cb_connect_channels(cq)
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("ev:settings:"))
+async def ev_settings(cq: CallbackQuery):
+    """Обработчик кнопки 'Настройки розыгрыша' в черновике"""
+    gid = int(cq.data.split(":")[2])
+    
+    # Показываем меню настроек
+    await cb_settings_menu(cq)
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("ev:delete_draft:"))
+async def ev_delete_draft(cq: CallbackQuery):
+    """Обработчик кнопки 'Удалить черновик' - показывает диалог подтверждения"""
+    gid = int(cq.data.split(":")[2])
+    
+    # Получаем название розыгрыша для сообщения
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.DRAFT:
+            await cq.answer("Можно удалять только черновики.", show_alert=True)
+            return
+    
+    # Показываем диалог подтверждения удаления
+    text = f"Вы действительно хотите удалить черновик с розыгрышем <b>{gw.internal_title}</b>?"
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да", callback_data=f"ev:confirm_delete:{gid}")
+    kb.button(text="❌ Нет", callback_data=f"ev:cancel_delete:{gid}")
+    kb.adjust(2)
+    
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("ev:confirm_delete:"))
+async def ev_confirm_delete(cq: CallbackQuery):
+    """Подтверждение удаления черновика"""
+    gid = int(cq.data.split(":")[2])
+    
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.DRAFT:
+            await cq.answer("Можно удалять только черновики.", show_alert=True)
+            return
+        
+        title = gw.internal_title
+        
+        # Удаляем розыгрыш и связанные данные
+        await s.execute(stext("DELETE FROM giveaways WHERE id=:gid"), {"gid": gid})
+        await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"), {"gid": gid})
+    
+    # Показываем сообщение об успешном удалении
+    text = f"Черновик розыгрыша <b>{title}</b> успешно удалён"
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="↩️ Вернуться к черновикам", callback_data="mev:my_drafts")
+    kb.adjust(1)
+    
+    # Удаляем сообщение с диалогом подтверждения
+    try:
+        await cq.message.delete()
+    except:
+        pass
+    
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("ev:cancel_delete:"))
+async def ev_cancel_delete(cq: CallbackQuery):
+    """Отмена удаления черновика"""
+    # Просто удаляем сообщение с диалогом подтверждения
+    try:
+        await cq.message.delete()
+    except:
+        pass
+    await cq.answer("Удаление отменено")
+
 
 # ===== Карточка-превью медиа =====
 
