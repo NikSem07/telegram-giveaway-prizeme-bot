@@ -307,9 +307,7 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
 
 # --- Клавиатура меню настроек розыгрыша ---
 def kb_settings_menu(gid: int, giveaway_title: str, context: str = "settings") -> InlineKeyboardMarkup:
-    """
-    context: "settings" для черновика, "launch" для финального предзапуска
-    """
+
     kb = InlineKeyboardBuilder()
     
     # Первая строка: две кнопки рядом
@@ -327,11 +325,7 @@ def kb_settings_menu(gid: int, giveaway_title: str, context: str = "settings") -
     # Третья строка: одна кнопка
     kb.row(InlineKeyboardButton(text="Количество победителей", callback_data=f"settings:winners:{gid}:{context}"))
     
-    # Четвертая строка: одна кнопка (красная/опасная) - ТОЛЬКО для черновиков
-    if context == "settings":
-        kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{context}:{gid}"))
-    
-    # Пятая строка: кнопка назад
+    # Четвертая строка: кнопка назад (теперь 4-я строка вместо 5-й)
     back_callback = f"settings:back:{gid}:{context}"
     kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback))
     
@@ -3955,11 +3949,6 @@ async def cb_settings_winners(cq: CallbackQuery, state: FSMContext):
     )
     await cq.answer()
 
-# --- Кнопка удаления (не убирать) ---
-@dp.callback_query(F.data.startswith("settings:delete_draft:"))
-async def cb_settings_delete_draft(cq: CallbackQuery):
-    await cq.answer("Удаление черновика скоро будет доступно", show_alert=True)
-
 #--- Кнопка "назад" ---
 @dp.callback_query(F.data.startswith("settings:back:"))
 async def cb_settings_back(cq: CallbackQuery):
@@ -3971,30 +3960,6 @@ async def cb_settings_back(cq: CallbackQuery):
     except Exception:
         pass
     await cq.answer()
-
-@dp.callback_query(F.data.startswith("settings:delete_draft:"))
-async def cb_settings_delete_draft(cq: CallbackQuery):
-    """Обработчик кнопки 'Удалить черновик' в меню настроек"""
-    gid = int(cq.data.split(":")[3])  # settings:delete_draft:context:gid
-    
-    # Получаем название розыгрыша для сообщения
-    async with session_scope() as s:
-        gw = await s.get(Giveaway, gid)
-        if not gw or gw.status != GiveawayStatus.DRAFT:
-            await cq.answer("Можно удалять только черновики.", show_alert=True)
-            return
-    
-    # Показываем диалог подтверждения удаления
-    text = f"Вы действительно хотите удалить черновик с розыгрышем <b>{gw.internal_title}</b>?"
-    
-    kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Да, удалить", callback_data=f"ev:confirm_delete:{gid}")
-    kb.button(text="❌ Нет, отменить", callback_data=f"ev:cancel_delete:{gid}")
-    kb.adjust(2)
-    
-    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    await cq.answer()
-
 
 @dp.callback_query(F.data.startswith("raffle:noop:"))
 async def cb_noop(cq: CallbackQuery):
