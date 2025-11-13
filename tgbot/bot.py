@@ -329,7 +329,7 @@ def kb_settings_menu(gid: int, giveaway_title: str, context: str = "settings") -
     
     # Четвертая строка: одна кнопка (красная/опасная) - ТОЛЬКО для черновиков
     if context == "settings":
-        kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{gid}"))
+        kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{context}:{gid}"))
     
     # Пятая строка: кнопка назад
     back_callback = f"settings:back:{gid}:{context}"
@@ -2069,6 +2069,89 @@ async def step_endat(m: Message, state: FSMContext):
         logging.exception("[ENDAT] unexpected error: %s", e)
         await m.answer("Что-то пошло не так при сохранении времени. Попробуйте ещё раз.")
 
+# --- СПЕЦИАЛЬНЫЕ ОБРАБОТЧИКИ МЕДИА ДЛЯ РЕДАКТИРОВАНИЯ ---
+
+@dp.message(EditFlow.EDIT_MEDIA, F.photo)
+async def edit_media_photo(m: Message, state: FSMContext):
+    """Обработчик фото при редактировании (специальный для EditFlow)"""
+    logging.info("EDIT_MEDIA_PHOTO: state=EditFlow.EDIT_MEDIA")
+    fid = m.photo[-1].file_id
+    await state.update_data(
+        new_value=pack_media("photo", fid), 
+        display_value="Новое изображение"
+    )
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "✅ Новое изображение принято",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+@dp.message(EditFlow.EDIT_MEDIA, F.animation)
+async def edit_media_animation(m: Message, state: FSMContext):
+    """Обработчик анимации при редактировании (специальный для EditFlow)"""
+    logging.info("EDIT_MEDIA_ANIMATION: state=EditFlow.EDIT_MEDIA")
+    anim = m.animation
+    if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
+        
+    await state.update_data(
+        new_value=pack_media("animation", anim.file_id), 
+        display_value="Новая GIF-анимация"
+    )
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "✅ Новая GIF-анимация принята",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+@dp.message(EditFlow.EDIT_MEDIA, F.video)
+async def edit_media_video(m: Message, state: FSMContext):
+    """Обработчик видео при редактировании (специальный для EditFlow)"""
+    logging.info("EDIT_MEDIA_VIDEO: state=EditFlow.EDIT_MEDIA")
+    v = m.video
+    if v.mime_type and v.mime_type != "video/mp4":
+        await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media())
+        return
+    if v.file_size and v.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
+        
+    await state.update_data(
+        new_value=pack_media("video", v.file_id), 
+        display_value="Новое видео"
+    )
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "✅ Новое видео принято",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+
 #--- ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ НАСТРОЕК РОЗЫГРЫША ---
 
 # Обработчик для редактирования названия
@@ -2348,16 +2431,50 @@ async def edit_apply(cq: CallbackQuery, state: FSMContext):
     gid = data.get("editing_giveaway_id")
     setting_type = data.get("setting_type")
     new_value = data.get("new_value")
-    return_context = data.get("return_context")
+    return_context = data.get("return_context", "settings")  # по умолчанию черновик
     
     # Сохраняем изменения в БД
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
+        
         if setting_type == "title":
             gw.internal_title = new_value
         elif setting_type == "desc":
             gw.public_description = new_value
-        # ... для остальных типов
+        elif setting_type == "endat":
+            # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем время и обновляем планировщик
+            gw.end_at_utc = new_value
+            
+            # Если розыгрыш активен - обновляем планировщик
+            if gw.status == GiveawayStatus.ACTIVE:
+                try:
+                    # Удаляем старый job
+                    scheduler.remove_job(f"final_{gid}")
+                    
+                    # Создаем новый job с новым временем
+                    scheduler.add_job(
+                        func=finalize_and_draw_job,
+                        trigger=DateTrigger(run_date=new_value),
+                        args=[gid, bot],
+                        id=f"final_{gid}",
+                        replace_existing=True,
+                    )
+                    logging.info(f"🔄 Обновлен планировщик для розыгрыша {gid}, новое время: {new_value}")
+                except Exception as e:
+                    logging.error(f"❌ Ошибка обновления планировщика для {gid}: {e}")
+                    
+        elif setting_type == "winners":
+            gw.winners_count = new_value
+        elif setting_type == "media":
+            if new_value == "skip":
+                # Пропустить - не изменять медиа
+                pass
+            elif new_value is None:
+                # Удалить медиа
+                gw.photo_file_id = None
+            else:
+                # Новое медиа
+                gw.photo_file_id = new_value
         
         s.add(gw)
     
@@ -2368,7 +2485,7 @@ async def edit_apply(cq: CallbackQuery, state: FSMContext):
         # Возврат к карточке черновика
         await show_event_card(cq.message.chat.id, gid)
     else:
-        # Возврат к финальному предпросмотру
+        # Возврат к финальному предпросмотру (контекст запуска)
         await _send_launch_preview_message(cq.message, gw)
         await cq.message.answer(
             build_final_check_text(),
@@ -2376,7 +2493,7 @@ async def edit_apply(cq: CallbackQuery, state: FSMContext):
             parse_mode="HTML"
         )
     
-    await cq.answer()
+    await cq.answer("✅ Изменения применены")
 
 @dp.callback_query(EditFlow.CONFIRM_EDIT, F.data == "edit:fix")
 async def edit_fix(cq: CallbackQuery, state: FSMContext):
@@ -3838,7 +3955,6 @@ async def cb_settings_winners(cq: CallbackQuery, state: FSMContext):
     )
     await cq.answer()
 
-
 # --- Кнопка удаления (не убирать) ---
 @dp.callback_query(F.data.startswith("settings:delete_draft:"))
 async def cb_settings_delete_draft(cq: CallbackQuery):
@@ -3854,6 +3970,29 @@ async def cb_settings_back(cq: CallbackQuery):
         await cq.message.delete()
     except Exception:
         pass
+    await cq.answer()
+
+@dp.callback_query(F.data.startswith("settings:delete_draft:"))
+async def cb_settings_delete_draft(cq: CallbackQuery):
+    """Обработчик кнопки 'Удалить черновик' в меню настроек"""
+    gid = int(cq.data.split(":")[3])  # settings:delete_draft:context:gid
+    
+    # Получаем название розыгрыша для сообщения
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.DRAFT:
+            await cq.answer("Можно удалять только черновики.", show_alert=True)
+            return
+    
+    # Показываем диалог подтверждения удаления
+    text = f"Вы действительно хотите удалить черновик с розыгрышем <b>{gw.internal_title}</b>?"
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да, удалить", callback_data=f"ev:confirm_delete:{gid}")
+    kb.button(text="❌ Нет, отменить", callback_data=f"ev:cancel_delete:{gid}")
+    kb.adjust(2)
+    
+    await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 
