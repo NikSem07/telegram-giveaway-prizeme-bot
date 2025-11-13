@@ -44,10 +44,6 @@ from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
 
 def normalize_datetime(dt: datetime) -> datetime:
-    """
-    Нормализует datetime к timezone-aware в UTC.
-    Если naive - считаем что это UTC.
-    """
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
@@ -84,9 +80,9 @@ BOT_USERNAME: str | None = None
 CB_PREVIEW_CONTINUE = "preview:continue"
 CB_TO_CHANNELS_MENU = "draft:to_channels"
 CB_OPEN_CHANNELS    = "channels:open"
-CB_CHANNEL_ADD      = "channels:add"          # уже используется у тебя? оставь свой
-CB_CHANNEL_START    = "raffle:start"          # заглушка на будущее
-CB_CHANNEL_SETTINGS = "raffle:settings"       # пока неактивна
+CB_CHANNEL_ADD      = "channels:add"
+CB_CHANNEL_START    = "raffle:start"
+CB_CHANNEL_SETTINGS = "raffle:settings"
 
 MSK_TZ = ZoneInfo("Europe/Moscow")
 
@@ -310,30 +306,34 @@ def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 # --- Клавиатура меню настроек розыгрыша ---
-def kb_settings_menu(gid: int, giveaway_title: str) -> InlineKeyboardMarkup:
-
+def kb_settings_menu(gid: int, giveaway_title: str, context: str = "settings") -> InlineKeyboardMarkup:
+    """
+    context: "settings" для черновика, "launch" для финального предзапуска
+    """
     kb = InlineKeyboardBuilder()
     
     # Первая строка: две кнопки рядом
     kb.row(
-        InlineKeyboardButton(text="Название", callback_data=f"settings:name_disabled:{gid}"),
-        InlineKeyboardButton(text="Описание", callback_data=f"settings:desc_disabled:{gid}")
+        InlineKeyboardButton(text="Название", callback_data=f"settings:name:{gid}:{context}"),
+        InlineKeyboardButton(text="Описание", callback_data=f"settings:desc:{gid}:{context}")
     )
     
     # Вторая строка: две кнопки рядом  
     kb.row(
-        InlineKeyboardButton(text="Дата окончания", callback_data=f"settings:date_disabled:{gid}"),
-        InlineKeyboardButton(text="Медиа", callback_data=f"settings:media_disabled:{gid}")
+        InlineKeyboardButton(text="Дата окончания", callback_data=f"settings:date:{gid}:{context}"),
+        InlineKeyboardButton(text="Медиа", callback_data=f"settings:media:{gid}:{context}")
     )
     
     # Третья строка: одна кнопка
-    kb.row(InlineKeyboardButton(text="Количество победителей", callback_data=f"settings:winners_disabled:{gid}"))
+    kb.row(InlineKeyboardButton(text="Количество победителей", callback_data=f"settings:winners:{gid}:{context}"))
     
-    # Четвертая строка: одна кнопка (красная/опасная)
-    kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{gid}"))
+    # Четвертая строка: одна кнопка (красная/опасная) - ТОЛЬКО для черновиков
+    if context == "settings":
+        kb.row(InlineKeyboardButton(text="🗑️ Удалить черновик", callback_data=f"settings:delete_draft:{gid}"))
     
     # Пятая строка: кнопка назад
-    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"settings:back:{gid}"))
+    back_callback = f"settings:back:{gid}:{context}"
+    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback))
     
     return kb.as_markup()
 
@@ -1194,8 +1194,6 @@ async def save_shared_chat(
         return res.scalar() is not None
 
 # ----------------- FSM -----------------
-from aiogram.fsm.state import StatesGroup, State
-
 class CreateFlow(StatesGroup):
     TITLE = State()
     WINNERS = State()
@@ -1206,6 +1204,16 @@ class CreateFlow(StatesGroup):
     MEDIA_PREVIEW = State()
     PHOTO = State()          # больше не используется, но пусть останется если где-то ссылаешься
     ENDAT = State()
+
+# --- Состояния для редактирования существующего розыгрыша ---
+class EditFlow(StatesGroup):
+    WAITING_SETTING_TYPE = State()  # Ожидаем выбора типа настройки
+    EDIT_TITLE = State()           # Редактирование названия
+    EDIT_DESC = State()            # Редактирование описания  
+    EDIT_ENDAT = State()           # Редактирование даты окончания
+    EDIT_MEDIA = State()           # Редактирование медиа
+    EDIT_WINNERS = State()         # Редактирование кол-ва победителей
+    CONFIRM_EDIT = State()         # Подтверждение изменений
 
 # ----------------- BOT -----------------
 bot = Bot(BOT_TOKEN, parse_mode="HTML")
@@ -2061,6 +2069,353 @@ async def step_endat(m: Message, state: FSMContext):
         logging.exception("[ENDAT] unexpected error: %s", e)
         await m.answer("Что-то пошло не так при сохранении времени. Попробуйте ещё раз.")
 
+#--- ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ НАСТРОЕК РОЗЫГРЫША ---
+
+# Обработчик для редактирования названия
+@dp.message(EditFlow.EDIT_TITLE)
+async def handle_edit_title(m: Message, state: FSMContext):
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    
+    new_title = (m.text or "").strip()
+    if not new_title:
+        await m.answer("Введите название розыгрыша:")
+        return
+    if len(new_title) > 50:
+        await m.answer("Название не должно превышать 50 символов. Попробуйте снова.")
+        return
+
+    # Сохраняем новое значение
+    await state.update_data(new_value=new_title, display_value=new_title)
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    # Показываем подтверждение
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        f"Название розыгрыша изменено на: <b>{new_title}</b>",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+# Обработчик для редактирования описания
+@dp.message(EditFlow.EDIT_DESC)
+async def handle_edit_desc(m: Message, state: FSMContext):
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    
+    new_desc = m.html_text
+    if len(new_desc) > 2500:
+        await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
+        return
+
+    await state.update_data(new_value=new_desc, display_value=new_desc[:100] + "..." if len(new_desc) > 100 else new_desc)
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix") 
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    preview_text = new_desc[:100] + ("..." if len(new_desc) > 100 else "")
+    await m.answer(
+        f"Описание розыгрыша изменено на: <b>{preview_text}</b>",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+# Обработчик для редактирования даты окончания
+@dp.message(EditFlow.EDIT_ENDAT)
+async def handle_edit_endat(m: Message, state: FSMContext):
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    
+    txt = (m.text or "").strip()
+    logging.info("[EDIT_ENDAT] got=%r", txt)
+    
+    try:
+        # ожидаем "HH:MM DD.MM.YYYY" по МСК
+        dt_msk = datetime.strptime(txt, "%H:%M %d.%m.%Y")
+        # в БД храним UTC
+        dt_utc = dt_msk.replace(tzinfo=MSK_TZ).astimezone(timezone.utc)
+        dt_utc = normalize_datetime(dt_utc)
+
+        # дедлайн не раньше чем через 5 минут
+        if dt_utc <= datetime.now(timezone.utc) + timedelta(minutes=5):
+            await m.answer("Дедлайн должен быть минимум через 5 минут. Введите ещё раз:")
+            return
+
+        # сколько дней осталось (по календарным датам МСК)
+        now_msk = datetime.now(MSK_TZ).date()
+        days_left = (dt_msk.date() - now_msk).days
+        if days_left < 0:
+            days_left = 0
+
+        # сохраняем
+        display_value = dt_msk.strftime("%H:%M %d.%m.%Y")
+        await state.update_data(
+            new_value=dt_utc,
+            display_value=display_value,
+            end_at_msk_str=display_value,
+            days_left=days_left
+        )
+        await state.set_state(EditFlow.CONFIRM_EDIT)
+        
+        kb = InlineKeyboardBuilder()
+        kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+        kb.button(text="✏️ Исправить", callback_data="edit:fix")
+        kb.button(text="❌ Отмена", callback_data="edit:cancel")
+        kb.adjust(1)
+        
+        await m.answer(
+            f"Дата окончания изменена на: <b>{display_value}</b>",
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML"
+        )
+
+    except ValueError:
+        await m.answer("Неверный формат. Пример: 13:58 06.10.2025")
+    except Exception as e:
+        logging.exception("[EDIT_ENDAT] unexpected error: %s", e)
+        await m.answer("Что-то пошло не так при сохранении времени. Попробуйте ещё раз.")
+
+# Обработчик для редактирования количества победителей
+@dp.message(EditFlow.EDIT_WINNERS)
+async def handle_edit_winners(m: Message, state: FSMContext):
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    
+    raw = (m.text or "").strip()
+    if not raw.isdigit():
+        await m.answer("Нужно целое число от 1 до 50. Введите ещё раз:")
+        return
+
+    winners = int(raw)
+    if not (1 <= winners <= 50):
+        await m.answer("Число должно быть от 1 до 50. Введите ещё раз:")
+        return
+
+    await state.update_data(new_value=winners, display_value=str(winners))
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        f"Количество победителей изменено на: <b>{winners}</b>",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+# Обработчик для решения о медиа (Да/Нет)
+@dp.callback_query(EditFlow.EDIT_MEDIA, F.data == "media:yes")
+async def edit_media_yes(cq: CallbackQuery, state: FSMContext):
+    """Пользователь хочет добавить медиа"""
+    try:
+        await cq.message.edit_reply_markup()
+    except Exception:
+        pass
+    
+    await cq.message.answer(MEDIA_INSTRUCTION, parse_mode="HTML", reply_markup=kb_skip_media())
+    await cq.answer()
+
+@dp.callback_query(EditFlow.EDIT_MEDIA, F.data == "media:no")
+async def edit_media_no(cq: CallbackQuery, state: FSMContext):
+    """Пользователь не хочет медиа - очищаем существующее"""
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    
+    # Сохраняем None как новое значение медиа
+    await state.update_data(new_value=None, display_value="Медиа удалено")
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await cq.message.answer(
+        "Медиафайл удалён из розыгрыша",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+# Обработчики для загрузки медиа
+@dp.message(EditFlow.EDIT_MEDIA, F.photo)
+async def edit_got_photo(m: Message, state: FSMContext):
+    """Обработчик фото при редактировании"""
+    fid = m.photo[-1].file_id
+    await state.update_data(new_value=pack_media("photo", fid), display_value="Новое изображение")
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "Новое изображение принято",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+@dp.message(EditFlow.EDIT_MEDIA, F.animation)
+async def edit_got_animation(m: Message, state: FSMContext):
+    """Обработчик анимации при редактировании"""
+    anim = m.animation
+    if anim.file_size and anim.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
+        
+    await state.update_data(new_value=pack_media("animation", anim.file_id), display_value="Новая GIF-анимация")
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "Новая GIF-анимация принята",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+@dp.message(EditFlow.EDIT_MEDIA, F.video)
+async def edit_got_video(m: Message, state: FSMContext):
+    """Обработчик видео при редактировании"""
+    v = m.video
+    if v.mime_type and v.mime_type != "video/mp4":
+        await m.answer("⚠️ Видео должно быть MP4.", reply_markup=kb_skip_media())
+        return
+    if v.file_size and v.file_size > MAX_VIDEO_BYTES:
+        await m.answer("⚠️ Слишком большой файл (до 5 МБ).", reply_markup=kb_skip_media())
+        return
+        
+    await state.update_data(new_value=pack_media("video", v.file_id), display_value="Новое видео")
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await m.answer(
+        "Новое видео принято",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(EditFlow.EDIT_MEDIA, F.data == "media:skip")
+async def edit_media_skip(cq: CallbackQuery, state: FSMContext):
+    """Пропустить изменение медиа - оставить как есть"""
+    await state.update_data(new_value="skip", display_value="Медиа не изменено")
+    await state.set_state(EditFlow.CONFIRM_EDIT)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Применить изменения", callback_data="edit:apply")
+    kb.button(text="✏️ Исправить", callback_data="edit:fix")
+    kb.button(text="❌ Отмена", callback_data="edit:cancel")
+    kb.adjust(1)
+    
+    await cq.message.answer(
+        "Медиафайл остаётся без изменений",
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+
+# --- ОБРАБОТЧИКИ ПОДТВЕРЖДЕНИЯ ИЗМЕНЕНИЙ ---
+
+@dp.callback_query(EditFlow.CONFIRM_EDIT, F.data == "edit:apply")
+async def edit_apply(cq: CallbackQuery, state: FSMContext):
+    """Применить изменения"""
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    setting_type = data.get("setting_type")
+    new_value = data.get("new_value")
+    return_context = data.get("return_context")
+    
+    # Сохраняем изменения в БД
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if setting_type == "title":
+            gw.internal_title = new_value
+        elif setting_type == "desc":
+            gw.public_description = new_value
+        # ... для остальных типов
+        
+        s.add(gw)
+    
+    await state.clear()
+    
+    # Возврат в соответствующий контекст
+    if return_context == "settings":
+        # Возврат к карточке черновика
+        await show_event_card(cq.message.chat.id, gid)
+    else:
+        # Возврат к финальному предпросмотру
+        await _send_launch_preview_message(cq.message, gw)
+        await cq.message.answer(
+            build_final_check_text(),
+            reply_markup=kb_launch_confirm(gid),
+            parse_mode="HTML"
+        )
+    
+    await cq.answer()
+
+@dp.callback_query(EditFlow.CONFIRM_EDIT, F.data == "edit:fix")
+async def edit_fix(cq: CallbackQuery, state: FSMContext):
+    """Исправить - вернуться к вводу"""
+    data = await state.get_data()
+    setting_type = data.get("setting_type")
+    
+    # Возвращаемся к соответствующему состоянию ввода
+    if setting_type == "title":
+        await state.set_state(EditFlow.EDIT_TITLE)
+        await cq.message.answer("Введите новое название розыгрыша:")
+    elif setting_type == "desc":
+        await state.set_state(EditFlow.EDIT_DESC)
+        await cq.message.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
+    # ... для остальных типов
+    
+    await cq.answer()
+
+@dp.callback_query(EditFlow.CONFIRM_EDIT, F.data == "edit:cancel")
+async def edit_cancel(cq: CallbackQuery, state: FSMContext):
+    """Отмена редактирования"""
+    data = await state.get_data()
+    gid = data.get("editing_giveaway_id")
+    return_context = data.get("return_context")
+    
+    await state.clear()
+    
+    # Возвращаемся в меню настроек
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        await cq.message.answer(
+            f"Что вы хотите настроить в розыгрыше <b>{gw.internal_title}</b>",
+            reply_markup=kb_settings_menu(gid, gw.internal_title, return_context),
+            parse_mode="HTML"
+        )
+    
+    await cq.answer()
+
+
 # ===== Раздел "Мои каналы" =====
 
 def kb_my_channels(rows: list[tuple[int, str]]) -> InlineKeyboardMarkup:
@@ -2694,8 +3049,15 @@ async def ev_settings(cq: CallbackQuery):
     """Обработчик кнопки 'Настройки розыгрыша' в черновике"""
     gid = int(cq.data.split(":")[2])
     
-    # Показываем меню настроек
-    await cb_settings_menu(cq)
+    # Показываем меню настроек с контекстом "settings" (черновик)
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+    
+    text = f"Что вы хотите настроить в розыгрыше <b>{gw.internal_title}</b>"
+    await cq.message.answer(text, reply_markup=kb_settings_menu(gid, gw.internal_title, "settings"), parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("ev:delete_draft:"))
@@ -3368,22 +3730,19 @@ async def cb_launch_do(cq: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("raffle:settings_menu:"))
 async def cb_settings_menu(cq: CallbackQuery):
-    """
-    Показывает меню настроек розыгрыша вместо pop-up
-    """
+    """Показывает меню настроек розыгрыша для КОНТЕКСТА ЗАПУСКА"""
     _, _, sid = cq.data.split(":")
     gid = int(sid)
     
-    # Получаем название розыгрыша
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if not gw:
             await cq.answer("Розыгрыш не найден.", show_alert=True)
             return
     
-    # Показываем меню настроек
+    # Показываем меню настроек с контекстом "launch"
     text = f"Что вы хотите настроить в розыгрыше <b>{gw.internal_title}</b>"
-    await cq.message.answer(text, reply_markup=kb_settings_menu(gid, gw.internal_title), parse_mode="HTML")
+    await cq.message.answer(text, reply_markup=kb_settings_menu(gid, gw.internal_title, "launch"), parse_mode="HTML")
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:mechanics_disabled:"))
@@ -3393,30 +3752,99 @@ async def cb_mechanics_disabled(cq: CallbackQuery):
     """
     await cq.answer("В разработке", show_alert=True)
 
-@dp.callback_query(F.data.startswith("settings:name_disabled:"))
-async def cb_settings_name_disabled(cq: CallbackQuery):
-    await cq.answer("Настройка названия скоро будет доступна", show_alert=True)
+#--- Обработчики настройки черновика и розыгрышей ---
 
-@dp.callback_query(F.data.startswith("settings:desc_disabled:"))
-async def cb_settings_desc_disabled(cq: CallbackQuery):
-    await cq.answer("Настройка описания скоро будет доступна", show_alert=True)
+@dp.callback_query(F.data.startswith("settings:name:"))
+async def cb_settings_name(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Название' в настройках"""
+    gid = int(cq.data.split(":")[2])
+    
+    # Сохраняем контекст для возврата
+    await state.update_data(
+        editing_giveaway_id=gid,
+        setting_type="title",
+        return_context="settings"  # или "launch" в зависимости от контекста
+    )
+    
+    await state.set_state(EditFlow.EDIT_TITLE)
+    await cq.message.answer(
+        "Введите новое название розыгрыша:\n\n"
+        "Максимум — <b>50 символов</b>.\n\n"
+        "<i>Пример названия:</i> <b>MacBook Pro от канала PrizeMe</b>",
+        parse_mode="HTML"
+    )
+    await cq.answer()
 
-@dp.callback_query(F.data.startswith("settings:date_disabled:"))
-async def cb_settings_date_disabled(cq: CallbackQuery):
-    await cq.answer("Настройка даты окончания скоро будет доступна", show_alert=True)
+@dp.callback_query(F.data.startswith("settings:desc:"))
+async def cb_settings_desc(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Описание' в настройках"""
+    gid = int(cq.data.split(":")[2])
+    
+    await state.update_data(
+        editing_giveaway_id=gid,
+        setting_type="desc", 
+        return_context="settings"
+    )
+    
+    await state.set_state(EditFlow.EDIT_DESC)
+    await cq.message.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
+    await cq.answer()
 
-@dp.callback_query(F.data.startswith("settings:media_disabled:"))
-async def cb_settings_media_disabled(cq: CallbackQuery):
-    await cq.answer("Настройка медиа скоро будет доступна", show_alert=True)
+@dp.callback_query(F.data.startswith("settings:date:"))
+async def cb_settings_date(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Дата окончания' в настройках"""
+    gid = int(cq.data.split(":")[2])
+    
+    await state.update_data(
+        editing_giveaway_id=gid,
+        setting_type="endat",
+        return_context="settings"  
+    )
+    
+    await state.set_state(EditFlow.EDIT_ENDAT)
+    await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
+    await cq.answer()
 
-@dp.callback_query(F.data.startswith("settings:winners_disabled:"))
-async def cb_settings_winners_disabled(cq: CallbackQuery):
-    await cq.answer("Настройка количества победителей скоро будет доступна", show_alert=True)
+@dp.callback_query(F.data.startswith("settings:media:"))
+async def cb_settings_media(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Медиа' в настройках"""
+    gid = int(cq.data.split(":")[2])
+    
+    await state.update_data(
+        editing_giveaway_id=gid,
+        setting_type="media",
+        return_context="settings"
+    )
+    
+    await state.set_state(EditFlow.EDIT_MEDIA)
+    await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
+    await cq.answer()
 
+@dp.callback_query(F.data.startswith("settings:winners:"))
+async def cb_settings_winners(cq: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Количество победителей' в настройках"""
+    gid = int(cq.data.split(":")[2])
+    
+    await state.update_data(
+        editing_giveaway_id=gid,
+        setting_type="winners",
+        return_context="settings"
+    )
+    
+    await state.set_state(EditFlow.EDIT_WINNERS)
+    await cq.message.answer(
+        "Укажите новое количество победителей в этом розыгрыше от 1 до 50 "
+        "(введите только число, не указывая других символов):"
+    )
+    await cq.answer()
+
+
+# --- Кнопка удаления (не убирать) ---
 @dp.callback_query(F.data.startswith("settings:delete_draft:"))
 async def cb_settings_delete_draft(cq: CallbackQuery):
     await cq.answer("Удаление черновика скоро будет доступно", show_alert=True)
 
+#--- Кнопка "назад" ---
 @dp.callback_query(F.data.startswith("settings:back:"))
 async def cb_settings_back(cq: CallbackQuery):
     """
