@@ -3006,22 +3006,41 @@ async def back_to_events_main(cq: CallbackQuery):
         await cq.answer()
 
 
-# --- Заглушки для просмотра конкретных розыгрышей ---
+# --- Обработчики для просмотра конкретных розыгрышей ---
 
 @dp.callback_query(F.data.startswith("mev:view_involved:"))
 async def view_involved_giveaway(cq: CallbackQuery):
-    """Просмотр розыгрыша, в котором участвует пользователь"""
+    """Просмотр АКТИВНОГО розыгрыша, в котором участвует пользователь"""
     gid = int(cq.data.split(":")[2])
-    # TODO: Реализовать просмотр розыгрыша для участника
-    await cq.answer(f"Просмотр розыгрыша {gid} (участник) - функционал в разработке", show_alert=True)
+    
+    # Получаем данные розыгрыша
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.ACTIVE:
+            await cq.answer("Розыгрыш не найден или не активен.", show_alert=True)
+            return
+    
+    # Показываем пост розыгрыша с кнопкой "Участвовать" (как в канале)
+    await show_participant_giveaway_post(cq.message, gid, "active")
+    await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_finished_part:"))
 async def view_finished_participated_giveaway(cq: CallbackQuery):
-    """Просмотр завершенного розыгрыша, в котором участвовал пользователь"""
+    """Просмотр ЗАВЕРШЕННОГО розыгрыша, в котором участвовал пользователь"""
     gid = int(cq.data.split(":")[2])
-    # TODO: Реализовать просмотр завершенного розыгрыша для участника
-    await cq.answer(f"Просмотр завершенного розыгрыша {gid} (участник) - функционал в разработке", show_alert=True)
+    
+    # Получаем данные розыгрыша
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.FINISHED:
+            await cq.answer("Розыгрыш не найден или не завершен.", show_alert=True)
+            return
+    
+    # Показываем пост розыгрыша с кнопкой "Результаты" (завершенная версия)
+    await show_participant_giveaway_post(cq.message, gid, "finished")
+    await cq.answer()
 
+# --- Заглушки в "Мои розыгрыши" ---
 @dp.callback_query(F.data.startswith("mev:view_my_active:"))
 async def view_my_active_giveaway(cq: CallbackQuery):
     """Просмотр активного розыгрыша организатора - ОБНОВЛЕННАЯ ВЕРСИЯ"""
@@ -4693,6 +4712,177 @@ async def catch_all_messages(m: Message):
         logging.info(f"🔍 CHAT_SELECTION_BUTTON_PRESSED: {m.text}")
         await m.answer(f"Кнопка '{m.text}' нажата, но не обработана. Показываю выбор...")
         await m.answer("Выберите чат:", reply_markup=chooser_reply_kb())
+
+# --- Функции показа постов в "Мои розыгрыши" ---
+async def show_participant_giveaway_post(message: Message, giveaway_id: int, giveaway_type: str):
+    """
+    Показывает пост розыгрыша для участника
+    giveaway_type: "active" - активный, "finished" - завершенный
+    """
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await message.answer("Розыгрыш не найден.")
+            return
+
+    # Формируем текст поста
+    if giveaway_type == "active":
+        # Для активного розыгрыша - текст как при публикации
+        end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+        end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+        
+        # Вычисляем дни
+        now_msk = datetime.now(MSK_TZ).date()
+        end_at_date = end_at_msk_dt.date()
+        days_left = max(0, (end_at_date - now_msk).days)
+
+        post_text = _compose_post_text(
+            "",
+            gw.winners_count,
+            desc_html=(gw.public_description or ""),
+            end_at_msk=end_at_msk_str,
+            days_left=days_left,
+        )
+        
+        # Клавиатура для активного розыгрыша
+        reply_markup = kb_public_participate(giveaway_id, for_channel=False)
+        
+    else:  # finished
+        # Для завершенного розыгрыша - текст как после редактирования
+        # Получаем количество участников и победителей
+        async with session_scope() as s:
+            participants_res = await s.execute(
+                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=1"),
+                {"gid": giveaway_id}
+            )
+            participants_count = participants_res.scalar_one() or 0
+
+            winners_res = await s.execute(
+                stext("""
+                    SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code 
+                    FROM winners w
+                    LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                    LEFT JOIN users u ON u.user_id = w.user_id
+                    WHERE w.giveaway_id = :gid
+                    ORDER BY w.rank
+                """),
+                {"gid": giveaway_id}
+            )
+            winners = winners_res.all()
+
+        # Формируем текст завершенного поста
+        post_text = _compose_finished_post_text(gw, winners, participants_count)
+        
+        # Клавиатура для завершенного розыгрыша
+        reply_markup = kb_finished_giveaway(giveaway_id, for_channel=False)
+
+    # Добавляем кнопку "Назад"
+    reply_markup = add_back_button(reply_markup, "mev:back_to_involved" if giveaway_type == "active" else "mev:back_to_finished")
+
+    # Определяем тип медиа
+    kind, fid = unpack_media(gw.photo_file_id)
+
+    # Пытаемся отправить с link-preview (как в каналах)
+    if fid:
+        try:
+            # Подготавливаем link-preview URL
+            if kind == "photo":
+                suggested = "image.jpg"
+            elif kind == "animation":
+                suggested = "animation.mp4"
+            elif kind == "video":
+                suggested = "video.mp4"
+            else:
+                suggested = "file.bin"
+
+            key, s3_url = await file_id_to_public_url_via_s3(bot, fid, suggested)
+            preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+
+            # Формируем текст с hidden link
+            hidden_link = f'<a href="{preview_url}"> </a>'
+            full_text = f"{post_text}\n\n{hidden_link}"
+
+            lp = LinkPreviewOptions(
+                is_disabled=False,
+                prefer_large_media=True,
+                prefer_small_media=False,
+                show_above_text=False,
+                url=preview_url
+            )
+
+            # Отправляем с link-preview
+            await message.answer(
+                full_text,
+                link_preview_options=lp,
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+            return
+
+        except Exception as e:
+            print(f"⚠️ Link-preview не сработал: {e}")
+            # Fallback к обычному способу
+
+    # Fallback: отправляем нативно
+    if kind == "photo" and fid:
+        await message.answer_photo(fid, caption=post_text, reply_markup=reply_markup, parse_mode="HTML")
+    elif kind == "animation" and fid:
+        await message.answer_animation(fid, caption=post_text, reply_markup=reply_markup, parse_mode="HTML")
+    elif kind == "video" and fid:
+        await message.answer_video(fid, caption=post_text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        # Для постов без медиа - проверяем пользовательские ссылки
+        has_media = bool(fid)
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(post_text, has_media)
+        
+        send_kwargs = {
+            "text": cleaned_text,
+            "parse_mode": "HTML",
+            "reply_markup": reply_markup
+        }
+        if disable_preview:
+            send_kwargs["disable_web_page_preview"] = True
+            
+        await message.answer(**send_kwargs)
+
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПКИ "НАЗАД" в "Мои розыгрыши" ---
+
+def add_back_button(existing_markup: InlineKeyboardMarkup, back_callback: str) -> InlineKeyboardMarkup:
+    """
+    Добавляет кнопку "Назад" к существующей клавиатуре
+    """
+    # Создаем новый билдер
+    kb = InlineKeyboardBuilder()
+    
+    # Копируем существующие кнопки
+    for row in existing_markup.inline_keyboard:
+        kb.row(*row)
+    
+    # Добавляем кнопку "Назад"
+    kb.button(text="⬅️ Назад", callback_data=back_callback)
+    
+    return kb.as_markup()
+
+# --- ОБРАБОТЧИКИ КНОПОК "НАЗАД" в "Мои розыгрыши" ---
+
+@dp.callback_query(F.data == "mev:back_to_involved")
+async def back_to_involved_list(cq: CallbackQuery):
+    """Возврат к списку активных розыгрышей участника"""
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await show_involved_giveaways(cq)
+
+@dp.callback_query(F.data == "mev:back_to_finished")
+async def back_to_finished_list(cq: CallbackQuery):
+    """Возврат к списку завершенных розыгрышей участника"""
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await show_finished_participated_giveaways(cq)
+
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
