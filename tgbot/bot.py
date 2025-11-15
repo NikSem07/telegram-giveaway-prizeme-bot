@@ -1554,6 +1554,7 @@ def kb_participant_menu(count_involved: int, count_finished: int) -> InlineKeybo
     return kb.as_markup()
 
 async def show_participant_menu(cq: CallbackQuery):
+    """Показывает меню 'Я - участник'"""
     uid = cq.from_user.id
     
     # Получаем актуальные данные для счетчиков
@@ -1584,6 +1585,7 @@ async def show_participant_menu(cq: CallbackQuery):
     await cq.answer()
 
 
+
 # --- Меню "Я - создатель" - розыгрыши где пользователь создатель ---
 def kb_creator_menu(my_active: int, my_draft: int, my_finished: int) -> InlineKeyboardMarkup:
 
@@ -1598,7 +1600,7 @@ def kb_creator_menu(my_active: int, my_draft: int, my_finished: int) -> InlineKe
     return kb.as_markup()
 
 async def show_creator_menu(cq: CallbackQuery):
-
+    """Показывает меню 'Я - создатель'"""
     uid = cq.from_user.id
     
     # Получаем актуальные данные для счетчиков
@@ -3316,18 +3318,76 @@ async def ev_confirm_delete(cq: CallbackQuery):
 
 @dp.callback_query(F.data == "mev:as_participant")
 async def show_as_participant(cq: CallbackQuery):
-    """Показывает меню 'Я - участник'"""
-    await show_participant_menu(cq)
+    """Показывает меню 'Я - участник' - ОБНОВЛЕННАЯ ВЕРСИЯ"""
+    uid = cq.from_user.id
+    
+    # Получаем актуальные данные для счетчиков
+    async with session_scope() as s:
+        # в которых участвую — уникальные активные розыгрыши, где у пользователя есть entries
+        res = await s.execute(stext(
+            "SELECT COUNT(DISTINCT g.id) "
+            "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
+            "WHERE e.user_id=:u AND g.status='active'"
+        ), {"u": uid})
+        count_involved = res.scalar_one() or 0
+
+        # завершённые вообще (по системе) где пользователь участвовал
+        res = await s.execute(stext(
+            "SELECT COUNT(DISTINCT g.id) "
+            "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
+            "WHERE e.user_id=:u AND g.status='finished'"
+        ), {"u": uid})
+        count_finished = res.scalar_one() or 0
+
+    text = "👤 <b>Я - участник</b>\n\nРозыгрыши, где вы принимаете участие:"
+    
+    await cq.message.edit_text(
+        text,
+        reply_markup=kb_participant_menu(count_involved, count_finished),
+        parse_mode="HTML"
+    )
+    await cq.answer()
 
 @dp.callback_query(F.data == "mev:as_creator")
 async def show_as_creator(cq: CallbackQuery):
-    """Показывает меню 'Я - создатель'"""
-    await show_creator_menu(cq)
+    """Показывает меню 'Я - создатель' - ОБНОВЛЕННАЯ ВЕРСИЯ"""
+    uid = cq.from_user.id
+    
+    # Получаем актуальные данные для счетчиков
+    async with session_scope() as s:
+        # мои активные, черновики и завершённые
+        res = await s.execute(stext(
+            "SELECT "
+            "SUM(CASE WHEN status='active' THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) "
+            "FROM giveaways WHERE owner_user_id=:u"
+        ), {"u": uid})
+        row = res.first()
+        my_active = int(row[0] or 0)
+        my_draft = int(row[1] or 0)
+        my_finished = int(row[2] or 0)
+
+    text = "👑 <b>Я - создатель</b>\n\nРозыгрыши, которые вы создали:"
+    
+    await cq.message.edit_text(
+        text,
+        reply_markup=kb_creator_menu(my_active, my_draft, my_finished),
+        parse_mode="HTML"
+    )
+    await cq.answer()
 
 @dp.callback_query(F.data == "mev:back_to_main")
 async def back_to_main_menu(cq: CallbackQuery):
-    """Возврат в главное меню 'Мои розыгрыши'"""
-    await show_my_giveaways_menu(cq)
+    """Возврат в главное меню 'Мои розыгрыши' - ОБНОВЛЕННАЯ ВЕРСИЯ"""
+    text = "🎯 <b>Мои розыгрыши</b>\n\nВыберите роль для просмотра розыгрышей:"
+
+    await cq.message.edit_text(
+        text, 
+        reply_markup=kb_my_events_menu(),
+        parse_mode="HTML"
+    )
+    await cq.answer()
 
 # --- ДРУГОЕ ---
 
