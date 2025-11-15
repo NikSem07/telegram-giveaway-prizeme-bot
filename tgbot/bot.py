@@ -4744,8 +4744,9 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             days_left=days_left,
         )
         
-        # Клавиатура для активного розыгрыша
-        reply_markup = kb_public_participate(giveaway_id, for_channel=False)
+        # 🔄 ИСПРАВЛЕНИЕ: Используем ТОЧНО ТАКУЮ ЖЕ клавиатуру как в каналах
+        # В каналах используется URL кнопка с startapp параметром
+        reply_markup = kb_public_participate(giveaway_id, for_channel=True)
         
     else:  # finished
         # Для завершенного розыгрыша - текст как после редактирования
@@ -4773,8 +4774,9 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
         # Формируем текст завершенного поста
         post_text = _compose_finished_post_text(gw, winners, participants_count)
         
-        # Клавиатура для завершенного розыгрыша
-        reply_markup = kb_finished_giveaway(giveaway_id, for_channel=False)
+        # 🔄 ИСПРАВЛЕНИЕ: Используем ТОЧНО ТАКУЮ ЖЕ клавиатуру как в каналах
+        # В каналах используется URL кнопка с startapp параметром
+        reply_markup = kb_finished_giveaway(giveaway_id, for_channel=True)
 
     # Добавляем кнопку "Назад"
     reply_markup = add_back_button(reply_markup, "mev:back_to_involved" if giveaway_type == "active" else "mev:back_to_finished")
