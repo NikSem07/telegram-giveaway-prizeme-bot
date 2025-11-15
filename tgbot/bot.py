@@ -2839,24 +2839,25 @@ async def show_involved_giveaways(cq: CallbackQuery):
         giveaways = res.all()
 
     if not giveaways:
-        text = "Ниже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент.\n\nПока пусто."
+        text = "👤 <b>Я - участник</b>\n\nНиже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
-        kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        kb.button(text="⬅️ Назад", callback_data="mev:back_to_participant")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
         await cq.answer()
         return
 
-    text = "Ниже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент."
+    text = "👤 <b>Я - участник</b>\n\nНиже собраны все активные розыгрыши, в которых <b>вы принимаете участие</b> и которые актуальны в данный момент."
     kb = InlineKeyboardBuilder()
     
     for gid, title in giveaways:
         kb.button(text=title, callback_data=f"mev:view_involved:{gid}")
     
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_participant")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await cq.answer()
+
 
 @dp.callback_query(F.data == "mev:finished")
 async def show_finished_participated_giveaways(cq: CallbackQuery):
@@ -2873,24 +2874,25 @@ async def show_finished_participated_giveaways(cq: CallbackQuery):
         giveaways = res.all()
 
     if not giveaways:
-        text = "Ниже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие.\n\nПока пусто."
+        text = "👤 <b>Я - участник</b>\n\nНиже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
-        kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        kb.button(text="⬅️ Назад", callback_data="mev:back_to_participant")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
         await cq.answer()
         return
 
-    text = "Ниже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие."
+    text = "👤 <b>Я - участник</b>\n\nНиже указаны все <b>завершённые розыгрыши</b>, в которых вы ранее принимали участие."
     kb = InlineKeyboardBuilder()
     
     for gid, title in giveaways:
         kb.button(text=title, callback_data=f"mev:view_finished_part:{gid}")
     
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_participant")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await cq.answer()
+
 
 @dp.callback_query(F.data == "mev:my_active")
 async def show_my_active_giveaways(cq: CallbackQuery):
@@ -2905,23 +2907,38 @@ async def show_my_active_giveaways(cq: CallbackQuery):
         giveaways = res.all()
 
     if not giveaways:
-        text = "Ниже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
+        text = "👑 <b>Я - создатель</b>\n\nНиже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
-        kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
+        
+        try:
+            await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        except Exception:
+            try:
+                await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
+            except Exception:
+                pass
+                
         await cq.answer()
         return
 
-    text = "Ниже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им."
+    text = "👑 <b>Я - создатель</b>\n\nНиже указаны все <b>активные розыгрыши</b>, которые вы создали и уже запустили.\n\n\nВыберите из списка ниже розыгрыш для управления им."
     kb = InlineKeyboardBuilder()
     
     for gid, title in giveaways:
         kb.button(text=title, callback_data=f"mev:view_my_active:{gid}")
     
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    try:
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
+        except Exception:
+            pass
+    
     await cq.answer()
 
 @dp.callback_query(F.data == "mev:my_drafts")
@@ -2937,15 +2954,13 @@ async def show_my_drafts(cq: CallbackQuery):
         giveaways = res.all()
 
     if not giveaways:
-        text = "Ниже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
+        text = "👑 <b>Я - создатель</b>\n\nНиже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
-        kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+        kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
         
-        # 🔄 ИСПРАВЛЕНИЕ: используем try/except чтобы избежать ошибки "message is not modified"
         try:
             await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
         except Exception:
-            # Если редактирование не удалось (сообщение уже имеет тот же контент), просто обновляем клавиатуру
             try:
                 await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
             except Exception:
@@ -2954,20 +2969,18 @@ async def show_my_drafts(cq: CallbackQuery):
         await cq.answer()
         return
 
-    text = "Ниже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им."
+    text = "👑 <b>Я - создатель</b>\n\nНиже указаны все розыгрыши, которые вы создали, но <b>не запустили</b>.\n\n\nВыберите из списка ниже розыгрыш для управления им."
     kb = InlineKeyboardBuilder()
     
     for gid, title in giveaways:
         kb.button(text=title, callback_data=f"mev:view_my_draft:{gid}")
     
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
     kb.adjust(1)
     
-    # 🔄 ИСПРАВЛЕНИЕ: используем try/except чтобы избежать ошибки "message is not modified"
     try:
         await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     except Exception:
-        # Если редактирование не удалось (сообщение уже имеет тот же контент), просто обновляем клавиатуру
         try:
             await cq.message.edit_reply_markup(reply_markup=kb.as_markup())
         except Exception:
@@ -2989,23 +3002,23 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
         giveaways = res.all()
 
     if not giveaways:
-        text = "Ниже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали.\n\nПока пусто."
+        text = "👑 <b>Я - создатель</b>\n\nНиже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали.\n\nПока пусто."
         kb = InlineKeyboardBuilder()
-        kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+        kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
         await cq.answer()
         return
 
-    text = "Ниже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали."
+    text = "👑 <b>Я - создатель</b>\n\nНиже указаны все <b>завершённые розыгрыши</b>, которые вы ранее запускали."
     kb = InlineKeyboardBuilder()
     
     for gid, title in giveaways:
         kb.button(text=title, callback_data=f"mev:view_my_finished:{gid}")
     
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_main")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
     kb.adjust(1)
     
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")  # ИЗМЕНЕНО: edit_text
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 
@@ -4941,22 +4954,23 @@ def add_back_button(existing_markup: InlineKeyboardMarkup, back_callback: str) -
 
 @dp.callback_query(F.data == "mev:back_to_involved")
 async def back_to_involved_list(cq: CallbackQuery):
-    """Возврат к списку активных розыгрышей участника"""
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
-    await show_participant_menu(cq)
+    """Возврат из просмотра розыгрыша к списку 'В которых участвую'"""
+    await show_involved_giveaways(cq)
 
 @dp.callback_query(F.data == "mev:back_to_finished")
 async def back_to_finished_list(cq: CallbackQuery):
-    """Возврат к списку завершенных розыгрышей участника"""
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
+    """Возврат из просмотра розыгрыша к списку 'Завершённые розыгрыши'"""
+    await show_finished_participated_giveaways(cq)
+
+@dp.callback_query(F.data == "mev:back_to_participant")
+async def back_to_participant_menu(cq: CallbackQuery):
+    """Возврат из списков участника в меню 'Я - участник'"""
     await show_participant_menu(cq)
 
+@dp.callback_query(F.data == "mev:back_to_creator")
+async def back_to_creator_menu(cq: CallbackQuery):
+    """Возврат из списков создателя в меню 'Я - создатель'"""
+    await show_creator_menu(cq)
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
