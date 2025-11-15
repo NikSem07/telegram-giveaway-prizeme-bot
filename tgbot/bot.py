@@ -3024,56 +3024,6 @@ async def show_my_finished_giveaways(cq: CallbackQuery):
     await cq.answer()
 
 
-@dp.callback_query(F.data == "mev:back_to_main")
-async def back_to_events_main(cq: CallbackQuery):
-    """Вернуться в главное меню розыгрышей - ОБНОВЛЕННАЯ ВЕРСИЯ"""
-    try:
-        # Получаем актуальные данные для счетчиков
-        uid = cq.from_user.id
-        async with session_scope() as s:
-            # в которых участвую — уникальные активные розыгрыши, где у пользователя есть entries
-            res = await s.execute(stext(
-                "SELECT COUNT(DISTINCT g.id) "
-                "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
-                "WHERE e.user_id=:u AND g.status='active'"
-            ), {"u": uid})
-            count_involved = res.scalar_one() or 0
-
-            # завершённые вообще (по системе) где пользователь участвовал
-            res = await s.execute(stext(
-                "SELECT COUNT(DISTINCT g.id) "
-                "FROM entries e JOIN giveaways g ON g.id=e.giveaway_id "
-                "WHERE e.user_id=:u AND g.status='finished'"
-            ), {"u": uid})
-            count_finished = res.scalar_one() or 0
-
-            # мои активные, черновики и завершённые
-            res = await s.execute(stext(
-                "SELECT "
-                "SUM(CASE WHEN status='active' THEN 1 ELSE 0 END), "
-                "SUM(CASE WHEN status='draft' THEN 1 ELSE 0 END), "
-                "SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) "
-                "FROM giveaways WHERE owner_user_id=:u"
-            ), {"u": uid})
-            row = res.first()
-            my_active = int(row[0] or 0)
-            my_draft = int(row[1] or 0)
-            my_finished = int(row[2] or 0)
-
-        # РЕДАКТИРУЕМ текущее сообщение вместо отправки нового
-        text = "Розыгрыши:"
-        await cq.message.edit_text(
-            text, 
-            reply_markup=kb_my_events_menu(count_involved, count_finished, my_active, my_draft, my_finished)
-        )
-        await cq.answer()
-    except Exception as e:
-        logging.error(f"Error in back_to_events_main: {e}")
-        # Fallback: отправляем новое сообщение если редактирование не удалось
-        await show_my_giveaways_menu(cq.message)
-        await cq.answer()
-
-
 # --- Обработчики для просмотра конкретных розыгрышей ---
 
 @dp.callback_query(F.data.startswith("mev:view_involved:"))
