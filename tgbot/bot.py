@@ -1453,15 +1453,8 @@ def kb_event_actions(gid:int, status:str):
         # Для завершенных/отмененных - только статистика
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     
-    # Кнопка "Назад" возвращает к соответствующему списку
-    if status == GiveawayStatus.ACTIVE:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_active")
-    elif status == GiveawayStatus.DRAFT:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_drafts") 
-    elif status == GiveawayStatus.FINISHED:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
-    elif status == GiveawayStatus.CANCELLED:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
+    # Кнопка "Назад" ПРОСТО УДАЛЯЕТ СООБЩЕНИЕ (испаряется)
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     
     kb.adjust(1)
     return kb.as_markup()
@@ -1480,9 +1473,7 @@ async def close_message(cq: CallbackQuery):
 
 # --- Новая клавиатура для черновиков розыгрышей ---
 def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
-    """
-    Новая клавиатура для черновиков розыгрышей
-    """
+
     kb = InlineKeyboardBuilder()
     
     # 1 ряд: "Добавить канал / группу"
@@ -1495,7 +1486,7 @@ def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
     kb.button(text="🗑️ Удалить черновик", callback_data=f"ev:delete_draft:{gid}")
     
     # 4 ряд: "Назад" - просто удаляет сообщение с черновиком
-    kb.button(text="⬅️ Назад", callback_data="draft:back")
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     
     kb.adjust(1)  # Все кнопки в один столбец
     return kb.as_markup()
@@ -4900,7 +4891,7 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
         reply_markup = kb_finished_giveaway(giveaway_id, for_channel=True)
 
     # Добавляем кнопку "Назад"
-    reply_markup = add_back_button(reply_markup, "mev:back_to_involved" if giveaway_type == "active" else "mev:back_to_finished")
+    reply_markup = add_back_button(reply_markup, "close_message")
 
     # Определяем тип медиа
     kind, fid = unpack_media(gw.photo_file_id)
@@ -5106,9 +5097,7 @@ async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПКИ "НАЗАД" в "Мои розыгрыши" ---
 
 def add_back_button(existing_markup: InlineKeyboardMarkup, back_callback: str) -> InlineKeyboardMarkup:
-    """
-    Добавляет кнопку "Назад" к существующей клавиатуре
-    """
+
     # Создаем новый билдер
     kb = InlineKeyboardBuilder()
     
@@ -5116,8 +5105,8 @@ def add_back_button(existing_markup: InlineKeyboardMarkup, back_callback: str) -
     for row in existing_markup.inline_keyboard:
         kb.row(*row)
     
-    # Добавляем кнопку "Назад"
-    kb.button(text="⬅️ Назад", callback_data=back_callback)
+    # Добавляем кнопку "Назад" (всегда close_message)
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     
     return kb.as_markup()
 
