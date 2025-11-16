@@ -1453,8 +1453,15 @@ def kb_event_actions(gid:int, status:str):
         # Для завершенных/отмененных - только статистика
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     
-    # Кнопка "Назад" ПРОСТО УДАЛЯЕТ СООБЩЕНИЕ
-    kb.button(text="⬅️ Назад", callback_data="close_message")
+    # Кнопка "Назад" возвращает к соответствующему списку
+    if status == GiveawayStatus.ACTIVE:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_active")
+    elif status == GiveawayStatus.DRAFT:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_drafts") 
+    elif status == GiveawayStatus.FINISHED:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
+    elif status == GiveawayStatus.CANCELLED:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
     
     kb.adjust(1)
     return kb.as_markup()
@@ -3082,13 +3089,6 @@ async def view_my_active_giveaway(cq: CallbackQuery):
     """Просмотр активного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
     
-    # УДАЛЯЕМ сообщение со списком
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
-        
-    # Показываем карточку розыгрыша
     await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
@@ -3097,13 +3097,6 @@ async def view_my_draft_giveaway(cq: CallbackQuery):
     """Просмотр черновика организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
     
-    # УДАЛЯЕМ сообщение со списком
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
-        
-    # Показываем карточку розыгрыша
     await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
@@ -3112,13 +3105,6 @@ async def view_my_finished_giveaway(cq: CallbackQuery):
     """Просмотр завершенного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
     
-    # УДАЛЯЕМ сообщение со списком
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
-        
-    # Показываем карточку розыгрыша
     await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
