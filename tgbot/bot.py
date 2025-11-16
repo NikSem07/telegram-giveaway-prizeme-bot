@@ -3432,6 +3432,17 @@ async def event_status(cq: CallbackQuery):
         else:
             await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
 
+# === ОБРАБОТЧИКИ ВОЗВРАТА ИЗ СТАТИСТИКИ ===
+@dp.callback_query(F.data.startswith("stats:back_to_active:"))
+async def back_from_stats_to_active(cq: CallbackQuery):
+    """Возврат из статистики к списку активных розыгрышей"""
+    await show_my_active_giveaways(cq)
+
+@dp.callback_query(F.data.startswith("stats:back_to_finished:"))
+async def back_from_stats_to_finished(cq: CallbackQuery):
+    """Возврат из статистики к списку завершенных розыгрышей"""
+    await show_my_finished_giveaways(cq)
+
 
 # === ЗАГЛУШКА CSV ===
 
@@ -5033,7 +5044,7 @@ async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data="close_message")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_finished:{giveaway_id}")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
@@ -5099,7 +5110,7 @@ async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data="close_message")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_active:{giveaway_id}")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
