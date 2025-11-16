@@ -1447,10 +1447,10 @@ def kb_event_actions(gid:int, status:str):
         kb.button(text="Удалить", callback_data=f"ev:delete:{gid}")
     elif status==GiveawayStatus.ACTIVE:
         kb.button(text="Отменить (Cancel)", callback_data=f"ev:cancel:{gid}")
-        kb.button(text="Статус", callback_data=f"ev:status:{gid}")
+        kb.button(text="Статистика", callback_data=f"ev:stats:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-        kb.button(text="Отчёт", callback_data=f"ev:status:{gid}")
-    kb.button(text="⬅️ Назад", callback_data="my_events")
+        kb.button(text="Статистика", callback_data=f"ev:stats:{gid}")
+    kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
     return kb.as_markup()
 
 # --- Новая клавиатура для черновиков розыгрышей ---
@@ -3370,21 +3370,8 @@ async def draft_back(cq: CallbackQuery):
 async def event_cb(cq:CallbackQuery):
     _, action, sid = cq.data.split(":")
     gid = int(sid)
-    if action=="channels":
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            res = await s.execute(stext("SELECT id, title, chat_id FROM organizer_channels WHERE owner_user_id=:u"),{"u":gw.owner_user_id})
-            channels = res.all()
-            if not channels:
-                await cq.message.answer("Нет каналов. Сначала подключите через пересылку поста или @username."); return
-            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
-            for cid, title, chat_id in channels:
-                await s.execute(stext("INSERT INTO giveaway_channels(giveaway_id,channel_id,chat_id,title) VALUES(:g,:c,:chat,:t)"),
-                                {"g":gid,"c":cid,"chat":chat_id,"t":title})
-        await cq.message.answer("Каналы привязаны. Теперь можно запускать.")
-        await show_event_card(cq.message.chat.id, gid)
-
-    elif action=="launch":
+    
+    if action=="launch":
         gw = await _launch_and_publish(gid, cq.message)
         if not gw:
             await cq.answer("Розыгрыш не найден.", show_alert=True)
@@ -3392,24 +3379,41 @@ async def event_cb(cq:CallbackQuery):
         await cq.message.answer("Розыгрыш запущен.")
         await show_event_card(cq.message.chat.id, gid)
 
-    elif action=="delete":
-        # Старый обработчик удаления - оставляем для совместимости, но он не должен вызываться для черновиков
+    elif action=="status":
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
-            if gw.status != GiveawayStatus.DRAFT:
-                await cq.answer("Удалять можно только черновик.", show_alert=True); return
-            await s.execute(stext("DELETE FROM giveaways WHERE id=:gid"),{"gid":gid})
-            await s.execute(stext("DELETE FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":gid})
-        await cq.message.answer("Черновик удалён.")
-
-    elif action=="status":
-        await show_stats(cq.message.chat.id, gid)
+            if not gw:
+                await cq.answer("Розыгрыш не найден.", show_alert=True)
+                return
+            
+            if gw.status == GiveawayStatus.ACTIVE:
+                await show_active_stats(cq, gid)
+            elif gw.status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
+                await show_finished_stats(cq, gid)
+            else:
+                await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
 
     elif action=="cancel":
         await cancel_giveaway(gid, cq.from_user.id, reason=None)
         await cq.message.answer("Розыгрыш отменён.")
         await show_event_card(cq.message.chat.id, gid)
 
+# --- ОБРАБОТЧИКИ СТАТИСТИКИ ---
+
+@dp.callback_query(F.data.startswith("stats:csv:"))
+async def cb_csv_export(cq: CallbackQuery):
+    """Заглушка для выгрузки CSV"""
+    await cq.answer("📥 Функция выгрузки CSV в разработке", show_alert=True)
+
+@dp.callback_query(F.data.startswith("stats:back_to_giveaway:"))
+async def cb_back_from_stats(cq: CallbackQuery):
+    """Возврат из статистики к карточке розыгрыша"""
+    _, _, sid = cq.data.split(":")
+    gid = int(sid)
+    
+    # Просто показываем карточку розыгрыша снова
+    await show_event_card(cq.message.chat.id, gid)
+    await cq.answer()
 
 # ===== Карточка-превью медиа =====
 
@@ -4941,6 +4945,141 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             send_kwargs["disable_web_page_preview"] = True
             
         await message.answer(**send_kwargs)
+
+
+# --- ФУНКЦИИ СТАТИСТИКИ ДЛЯ СОЗДАТЕЛЯ ---
+
+async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
+    """Показывает статистику завершенного розыгрыша для создателя"""
+    async with session_scope() as s:
+        # Получаем данные розыгрыша
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        # Количество уникальных участников
+        participants_res = await s.execute(
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=1"),
+            {"gid": giveaway_id}
+        )
+        participants_count = participants_res.scalar_one() or 0
+
+        # Общее количество выданных билетов
+        tickets_res = await s.execute(
+            stext("SELECT COUNT(*) FROM entries WHERE giveaway_id=:gid"),
+            {"gid": giveaway_id}
+        )
+        tickets_count = tickets_res.scalar_one() or 0
+
+        # Количество победителей
+        winners_count = gw.winners_count
+
+        # Список победителей
+        winners_res = await s.execute(
+            stext("""
+                SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code 
+                FROM winners w
+                LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                LEFT JOIN users u ON u.user_id = w.user_id
+                WHERE w.giveaway_id = :gid
+                ORDER BY w.rank
+            """),
+            {"gid": giveaway_id}
+        )
+        winners = winners_res.all()
+
+    # Формируем текст статистики
+    text = (
+        f"📊 <b>Статистика розыгрыша</b>\n\n"
+        f"<b>Количество участников:</b> <code>{participants_count}</code>\n"
+        f"<b>Число выданных билетов:</b> <code>{tickets_count}</code>\n"
+        f"<b>Число победителей:</b> <code>{winners_count}</code>\n\n"
+        f"<b>Список победителей:</b>\n"
+    )
+
+    if winners:
+        for rank, username, ticket_code in winners:
+            display_name = f"@{username}" if username and username != "Участник" else "Участник"
+            text += f"{rank}. {display_name} - {ticket_code}\n"
+    else:
+        text += "Победители не определены\n"
+
+    # Создаем клавиатуру
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_giveaway:{giveaway_id}")
+    kb.adjust(1)
+
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
+    """Показывает статистику активного розыгрыша для создателя"""
+    async with session_scope() as s:
+        # Получаем данные розыгрыша
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        # Количество уникальных участников
+        participants_res = await s.execute(
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),
+            {"gid": giveaway_id}
+        )
+        participants_count = participants_res.scalar_one() or 0
+
+        # Общее количество выданных билетов
+        tickets_res = await s.execute(
+            stext("SELECT COUNT(*) FROM entries WHERE giveaway_id=:gid"),
+            {"gid": giveaway_id}
+        )
+        tickets_count = tickets_res.scalar_one() or 0
+
+        # Количество победителей (планируемое)
+        winners_count = gw.winners_count
+
+        # Подключенные каналы/группы
+        channels_res = await s.execute(
+            stext("""
+                SELECT gc.title, oc.username, gc.chat_id
+                FROM giveaway_channels gc
+                LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+                WHERE gc.giveaway_id = :gid
+                ORDER BY gc.id
+            """),
+            {"gid": giveaway_id}
+        )
+        channels = channels_res.all()
+
+    # Формируем текст статистики
+    text = (
+        f"📊 <b>Статистика розыгрыша</b>\n\n"
+        f"<b>Количество участников:</b> <code>{participants_count}</code>\n"
+        f"<b>Число выданных билетов:</b> <code>{tickets_count}</code>\n"
+        f"<b>Число победителей:</b> <code>{winners_count}</code>\n\n"
+        f"<b>Подключенные каналы / группы к розыгрышу:</b>\n"
+    )
+
+    if channels:
+        for title, username, chat_id in channels:
+            if username:
+                text += f"• <a href=\"https://t.me/{username}\">{title}</a>\n"
+            else:
+                text += f"• {title}\n"
+    else:
+        text += "Нет подключенных каналов\n"
+
+    # Создаем клавиатуру
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_giveaway:{giveaway_id}")
+    kb.adjust(1)
+
+    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
 
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПКИ "НАЗАД" в "Мои розыгрыши" ---
 
