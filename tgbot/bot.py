@@ -1440,17 +1440,30 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
 
 def kb_event_actions(gid:int, status:str):
+
     kb = InlineKeyboardBuilder()
-    if status==GiveawayStatus.DRAFT:
-        kb.button(text="Подключить каналы", callback_data=f"ev:channels:{gid}")
-        kb.button(text="Запустить (Launch)", callback_data=f"ev:launch:{gid}")
-        kb.button(text="Удалить", callback_data=f"ev:delete:{gid}")
-    elif status==GiveawayStatus.ACTIVE:
-        kb.button(text="Отменить (Cancel)", callback_data=f"ev:cancel:{gid}")
-        kb.button(text="Статистика", callback_data=f"ev:stats:{gid}")
+    
+    if status == GiveawayStatus.DRAFT:
+        # Для черновиков используем новую клавиатуру kb_draft_actions
+        return kb_draft_actions(gid)
+    elif status == GiveawayStatus.ACTIVE:
+        # Для активных розыгрышей - только статистика
+        kb.button(text="📊 Статистика", callback_data=f"ev:stats:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-        kb.button(text="Статистика", callback_data=f"ev:stats:{gid}")
-    kb.button(text="⬅️ Назад", callback_data="mev:back_to_creator")
+        # Для завершенных/отмененных - только статистика
+        kb.button(text="📊 Статистика", callback_data=f"ev:stats:{gid}")
+    
+    # Кнопка "Назад" возвращает к соответствующему списку
+    if status == GiveawayStatus.ACTIVE:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_active")
+    elif status == GiveawayStatus.DRAFT:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_drafts")
+    elif status == GiveawayStatus.FINISHED:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
+    elif status == GiveawayStatus.CANCELLED:
+        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
+    
+    kb.adjust(1)
     return kb.as_markup()
 
 # --- Новая клавиатура для черновиков розыгрышей ---
@@ -3061,32 +3074,26 @@ async def view_finished_participated_giveaway(cq: CallbackQuery):
 # --- ОБРАБОТЧИКИ ДЛЯ БЛОКА "Я - СОЗДАТЕЛЬ" ---
 @dp.callback_query(F.data.startswith("mev:view_my_active:"))
 async def view_my_active_giveaway(cq: CallbackQuery):
-    """Просмотр активного розыгрыша организатора"""
+    """Просмотр активного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Сначала показываем карточку розыгрыша
+    # Показываем карточку розыгрыша (заменяет текущее сообщение)
     await show_event_card(cq.message.chat.id, gid)
-    # Затем возвращаемся к списку активных розыгрышей создателя
-    await show_creator_menu(cq)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_draft:"))
 async def view_my_draft_giveaway(cq: CallbackQuery):
-    """Просмотр черновика организатора"""
+    """Просмотр черновика организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Сначала показываем карточку розыгрыша
+    # Показываем карточку розыгрыша (заменяет текущее сообщение)
     await show_event_card(cq.message.chat.id, gid)
-    # Затем возвращаемся к списку черновиков создателя
-    await show_creator_menu(cq)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_finished:"))
 async def view_my_finished_giveaway(cq: CallbackQuery):
-    """Просмотр завершенного розыгрыша организатора"""
+    """Просмотр завершенного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Сначала показываем карточку розыгрыша
+    # Показываем карточку розыгрыша (заменяет текущее сообщение)
     await show_event_card(cq.message.chat.id, gid)
-    # Затем возвращаемся к списку завершенных розыгрышей создателя
-    await show_creator_menu(cq)
     await cq.answer()
 
 
@@ -3366,37 +3373,52 @@ async def draft_back(cq: CallbackQuery):
 
 #--- Что-то другое ---
 
-@dp.callback_query(F.data.startswith("ev:"))
-async def event_cb(cq:CallbackQuery):
-    _, action, sid = cq.data.split(":")
-    gid = int(sid)
+# === ОБРАБОТЧИК ЗАПУСКА РОЗЫГРЫША ===
+@dp.callback_query(F.data.startswith("ev:launch:"))
+async def event_launch(cq: CallbackQuery):
+    """Запуск розыгрыша - ОТДЕЛЬНЫЙ ОБРАБОТЧИК"""
+    gid = int(cq.data.split(":")[2])
     
-    if action=="launch":
-        gw = await _launch_and_publish(gid, cq.message)
+    gw = await _launch_and_publish(gid, cq.message)
+    if not gw:
+        await cq.answer("Розыгрыш не найден.", show_alert=True)
+        return
+        
+    await cq.message.answer("Розыгрыш запущен.")
+    await show_event_card(cq.message.chat.id, gid)
+    await cq.answer()
+
+# === ОБРАБОТЧИК СТАТИСТИКИ ===
+@dp.callback_query(F.data.startswith("ev:status:"))
+async def event_status(cq: CallbackQuery):
+    """Статистика розыгрыша - ОТДЕЛЬНЫЙ ОБРАБОТЧИК"""
+    gid = int(cq.data.split(":")[2])
+    
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
         if not gw:
             await cq.answer("Розыгрыш не найден.", show_alert=True)
             return
-        await cq.message.answer("Розыгрыш запущен.")
-        await show_event_card(cq.message.chat.id, gid)
+        
+        # Определяем контекст возврата
+        if gw.status == GiveawayStatus.ACTIVE:
+            await show_active_stats(cq, gid)
+        elif gw.status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
+            await show_finished_stats(cq, gid)
+        else:
+            await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
 
-    elif action=="status":
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, gid)
-            if not gw:
-                await cq.answer("Розыгрыш не найден.", show_alert=True)
-                return
-            
-            if gw.status == GiveawayStatus.ACTIVE:
-                await show_active_stats(cq, gid)
-            elif gw.status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-                await show_finished_stats(cq, gid)
-            else:
-                await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
+# === ОБРАБОТЧИКИ ВОЗВРАТА ИЗ СТАТИСТИКИ ===
+@dp.callback_query(F.data.startswith("stats:back_to_active:"))
+async def back_from_stats_to_active(cq: CallbackQuery):
+    """Возврат из статистики к списку активных розыгрышей"""
+    await show_my_active_giveaways(cq)
 
-    elif action=="cancel":
-        await cancel_giveaway(gid, cq.from_user.id, reason=None)
-        await cq.message.answer("Розыгрыш отменён.")
-        await show_event_card(cq.message.chat.id, gid)
+@dp.callback_query(F.data.startswith("stats:back_to_finished:"))
+async def back_from_stats_to_finished(cq: CallbackQuery):
+    """Возврат из статистики к списку завершенных розыгрышей"""
+    await show_my_finished_giveaways(cq)
+
 
 # --- ОБРАБОТЧИКИ СТАТИСТИКИ ---
 
@@ -5008,7 +5030,7 @@ async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_giveaway:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_finished:{giveaway_id}")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
@@ -5074,7 +5096,7 @@ async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_giveaway:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_active:{giveaway_id}")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
