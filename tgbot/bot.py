@@ -1448,23 +1448,28 @@ def kb_event_actions(gid:int, status:str):
         return kb_draft_actions(gid)
     elif status == GiveawayStatus.ACTIVE:
         # Для активных розыгрышей - только статистика
-        kb.button(text="📊 Статистика", callback_data=f"ev:stats:{gid}")
+        kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
         # Для завершенных/отмененных - только статистика
-        kb.button(text="📊 Статистика", callback_data=f"ev:stats:{gid}")
+        kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     
-    # Кнопка "Назад" возвращает к соответствующему списку
-    if status == GiveawayStatus.ACTIVE:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_active")
-    elif status == GiveawayStatus.DRAFT:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_drafts")
-    elif status == GiveawayStatus.FINISHED:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
-    elif status == GiveawayStatus.CANCELLED:
-        kb.button(text="⬅️ Назад", callback_data="mev:my_finished")
+    # Кнопка "Назад" ПРОСТО УДАЛЯЕТ СООБЩЕНИЕ
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     
     kb.adjust(1)
     return kb.as_markup()
+
+@dp.callback_query(F.data == "close_message")
+async def close_message(cq: CallbackQuery):
+    """Просто удаляет сообщение с кнопками"""
+    try:
+        await cq.message.delete()
+    except Exception:
+        try:
+            await cq.message.edit_reply_markup()
+        except Exception:
+            pass
+    await cq.answer()
 
 # --- Новая клавиатура для черновиков розыгрышей ---
 def kb_draft_actions(gid: int) -> InlineKeyboardMarkup:
@@ -3076,24 +3081,45 @@ async def view_finished_participated_giveaway(cq: CallbackQuery):
 async def view_my_active_giveaway(cq: CallbackQuery):
     """Просмотр активного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Показываем карточку розыгрыша (заменяет текущее сообщение)
-    await show_event_card(cq.message.chat.id, gid)
+    
+    # УДАЛЯЕМ сообщение со списком
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+        
+    # Показываем карточку розыгрыша
+    await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_draft:"))
 async def view_my_draft_giveaway(cq: CallbackQuery):
     """Просмотр черновика организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Показываем карточку розыгрыша (заменяет текущее сообщение)
-    await show_event_card(cq.message.chat.id, gid)
+    
+    # УДАЛЯЕМ сообщение со списком
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+        
+    # Показываем карточку розыгрыша
+    await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("mev:view_my_finished:"))
 async def view_my_finished_giveaway(cq: CallbackQuery):
     """Просмотр завершенного розыгрыша организатора - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     gid = int(cq.data.split(":")[2])
-    # Показываем карточку розыгрыша (заменяет текущее сообщение)
-    await show_event_card(cq.message.chat.id, gid)
+    
+    # УДАЛЯЕМ сообщение со списком
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+        
+    # Показываем карточку розыгрыша
+    await show_event_card(cq.from_user.id, gid)
     await cq.answer()
 
 
@@ -3371,8 +3397,6 @@ async def draft_back(cq: CallbackQuery):
             pass
     await cq.answer()
 
-#--- Что-то другое ---
-
 # === ОБРАБОТЧИК ЗАПУСКА РОЗЫГРЫША ===
 @dp.callback_query(F.data.startswith("ev:launch:"))
 async def event_launch(cq: CallbackQuery):
@@ -3408,34 +3432,13 @@ async def event_status(cq: CallbackQuery):
         else:
             await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
 
-# === ОБРАБОТЧИКИ ВОЗВРАТА ИЗ СТАТИСТИКИ ===
-@dp.callback_query(F.data.startswith("stats:back_to_active:"))
-async def back_from_stats_to_active(cq: CallbackQuery):
-    """Возврат из статистики к списку активных розыгрышей"""
-    await show_my_active_giveaways(cq)
 
-@dp.callback_query(F.data.startswith("stats:back_to_finished:"))
-async def back_from_stats_to_finished(cq: CallbackQuery):
-    """Возврат из статистики к списку завершенных розыгрышей"""
-    await show_my_finished_giveaways(cq)
-
-
-# --- ОБРАБОТЧИКИ СТАТИСТИКИ ---
+# === ЗАГЛУШКА CSV ===
 
 @dp.callback_query(F.data.startswith("stats:csv:"))
 async def cb_csv_export(cq: CallbackQuery):
     """Заглушка для выгрузки CSV"""
     await cq.answer("📥 Функция выгрузки CSV в разработке", show_alert=True)
-
-@dp.callback_query(F.data.startswith("stats:back_to_giveaway:"))
-async def cb_back_from_stats(cq: CallbackQuery):
-    """Возврат из статистики к карточке розыгрыша"""
-    _, _, sid = cq.data.split(":")
-    gid = int(sid)
-    
-    # Просто показываем карточку розыгрыша снова
-    await show_event_card(cq.message.chat.id, gid)
-    await cq.answer()
 
 # ===== Карточка-превью медиа =====
 
@@ -5030,7 +5033,7 @@ async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_finished:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
@@ -5096,7 +5099,7 @@ async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
     # Создаем клавиатуру
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_active:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
     await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
