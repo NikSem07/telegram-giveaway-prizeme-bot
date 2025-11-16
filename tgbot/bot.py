@@ -3392,7 +3392,7 @@ async def event_launch(cq: CallbackQuery):
 # === ОБРАБОТЧИК СТАТИСТИКИ ===
 @dp.callback_query(F.data.startswith("ev:status:"))
 async def event_status(cq: CallbackQuery):
-    """Статистика розыгрыша - ОТДЕЛЬНЫЙ ОБРАБОТЧИК"""
+    """Статистика розыгрыша - ПОКАЗЫВАЕТСЯ КАК НОВОЕ СООБЩЕНИЕ"""
     gid = int(cq.data.split(":")[2])
     
     async with session_scope() as s:
@@ -3401,24 +3401,15 @@ async def event_status(cq: CallbackQuery):
             await cq.answer("Розыгрыш не найден.", show_alert=True)
             return
         
-        # Определяем контекст возврата
+        # Определяем контекст и показываем статистику как новое сообщение
         if gw.status == GiveawayStatus.ACTIVE:
-            await show_active_stats(cq, gid)
+            await show_active_stats(cq.message, gid)  # Передаем message вместо cq
         elif gw.status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-            await show_finished_stats(cq, gid)
+            await show_finished_stats(cq.message, gid)  # Передаем message вместо cq
         else:
             await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
-
-# === ОБРАБОТЧИКИ ВОЗВРАТА ИЗ СТАТИСТИКИ ===
-@dp.callback_query(F.data.startswith("stats:back_to_active:"))
-async def back_from_stats_to_active(cq: CallbackQuery):
-    """Возврат из статистики к списку активных розыгрышей"""
-    await show_my_active_giveaways(cq)
-
-@dp.callback_query(F.data.startswith("stats:back_to_finished:"))
-async def back_from_stats_to_finished(cq: CallbackQuery):
-    """Возврат из статистики к списку завершенных розыгрышей"""
-    await show_my_finished_giveaways(cq)
+    
+    await cq.answer()
 
 
 # === ЗАГЛУШКА CSV ===
@@ -4962,13 +4953,13 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
 
 # --- ФУНКЦИИ СТАТИСТИКИ ДЛЯ СОЗДАТЕЛЯ ---
 
-async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
-    """Показывает статистику завершенного розыгрыша для создателя"""
+async def show_finished_stats(message: Message, giveaway_id: int):
+    """Показывает статистику завершенного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
     async with session_scope() as s:
         # Получаем данные розыгрыша
         gw = await s.get(Giveaway, giveaway_id)
         if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            await message.answer("Розыгрыш не найден.")
             return
 
         # Количество уникальных участников
@@ -5018,22 +5009,22 @@ async def show_finished_stats(cq: CallbackQuery, giveaway_id: int):
     else:
         text += "Победители не определены\n"
 
-    # Создаем клавиатуру
+    # Создаем клавиатуру с кнопкой "Назад" которая удаляет сообщение
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_finished:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    await cq.answer()
+    # Отправляем как новое сообщение
+    await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
-async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
-    """Показывает статистику активного розыгрыша для создателя"""
+async def show_active_stats(message: Message, giveaway_id: int):
+    """Показывает статистику активного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
     async with session_scope() as s:
         # Получаем данные розыгрыша
         gw = await s.get(Giveaway, giveaway_id)
         if not gw:
-            await cq.answer("Розыгрыш не найден.", show_alert=True)
+            await message.answer("Розыгрыш не найден.")
             return
 
         # Количество уникальных участников
@@ -5084,14 +5075,14 @@ async def show_active_stats(cq: CallbackQuery, giveaway_id: int):
     else:
         text += "Нет подключенных каналов\n"
 
-    # Создаем клавиатуру
+    # Создаем клавиатуру с кнопкой "Назад" которая удаляет сообщение
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"stats:back_to_active:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
-    await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    await cq.answer()
+    # Отправляем как новое сообщение
+    await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
 
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПКИ "НАЗАД" в "Мои розыгрыши" ---
