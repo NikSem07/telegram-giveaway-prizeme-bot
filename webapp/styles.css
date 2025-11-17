@@ -320,7 +320,7 @@ button:hover{filter:brightness(1.1)}
   background: var(--tg-theme-bg-color);
   border: 1px solid var(--tg-theme-secondary-bg-color);
   border-radius: 50px;
-  padding: 8px 6px;
+  padding: 6px 8px;
   z-index: 1000;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: calc(100% - 32px);
@@ -332,7 +332,7 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   justify-content: space-around;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   height: 100%;
 }
 
@@ -340,23 +340,25 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 28px; /* ШИРИНА ЧЕРЕЗ ОТСТУПЫ - 2 Цифра*/ 
+  padding: 6px 14px; /* ШИРИНА ЧЕРЕЗ ОТСТУПЫ - 2 Цифра*/ 
   border: none;
   background: transparent;
   border-radius: 50px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  flex: 0 1 auto; /* АВТОМАТИЧЕСКАЯ ШИРИНА */
-  height: 42px;
+  flex: 1; /* АВТОМАТИЧЕСКАЯ ШИРИНА */
+  height: 36px;
   justify-content: center;
   box-sizing: border-box;
+  min-width: 0; /* РАЗРЕШАЕМ СЖАТИЕ */
 }
 
 .nav-item.active {
   background: var(--tg-theme-secondary-bg-color);
-  flex: 0 1 auto; /* ТАКОЕ ЖЕ ЗНАЧЕНИЕ */
-  padding: 28px 28px; /* ТАКИЕ ЖЕ ОТСТУПЫ как в .nav-item - ширина 2 Цифра*/
+  padding: 6px 14px; /* Такие же отступы */
+  height: 36px; /* Такая же высота */
+  flex: 1; /* Такое же значение */
 }
 
 .nav-item.active .nav-icon {
@@ -371,7 +373,7 @@ button:hover{filter:brightness(1.1)}
 
 .nav-icon {
   font-size: 18px;
-  margin-bottom: 10px;
+  margin-bottom: 8px; /* Уменьшили отступ между иконкой и текстом */
   transition: all 0.2s ease;
   color: var(--tg-theme-hint-color);
   line-height: 1;
@@ -383,6 +385,7 @@ button:hover{filter:brightness(1.1)}
   color: var(--tg-theme-hint-color);
   transition: all 0.2s ease;
   line-height: 1;
+  white-space: nowrap; /* Запрещаем перенос текста */
 }
 
 /* Остальные стили без изменений */
