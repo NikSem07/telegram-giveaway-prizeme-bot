@@ -347,7 +347,7 @@ button:hover{filter:brightness(1.1)}
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-width: 50px; /* Фиксированная ширина для всех */
+  min-width: 42px; /* Фиксированная ширина для всех */
   flex: 1;
   height: 42px;
   justify-content: center;
@@ -356,7 +356,10 @@ button:hover{filter:brightness(1.1)}
 
 .nav-item.active {
   background: var(--tg-theme-secondary-bg-color);
-  /* Убрали изменение padding и min-width для активного состояния */
+  /* ДОБАВЬТЕ ЭТИ СТРОКИ ДЛЯ РАЗМЕРОВ АКТИВНОЙ ПЛАШКИ */
+  min-width: 42px;   /* ← Должно быть такое же значение как у .nav-item */
+  height: 42px;      /* ← Должно быть такое же значение как у .nav-item */
+  padding: 6px 6px;  /* ← Должно быть такое же значение как у .nav-item */
 }
 
 .nav-item.active .nav-icon {
@@ -371,7 +374,7 @@ button:hover{filter:brightness(1.1)}
 
 .nav-icon {
   font-size: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   transition: all 0.2s ease;
   color: var(--tg-theme-hint-color);
   line-height: 1;
