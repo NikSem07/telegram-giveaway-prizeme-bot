@@ -182,9 +182,8 @@ function initializeMainPage() {
     sessionStorage.setItem('prizeme_gid', gid);
     window.location.href = '/miniapp/loading';
   } else {
-    // НЕТ параметра розыгрыша - НЕ делаем автоматический редирект!
-    console.log("No giveaway ID - staying on current page");
-    // Просто инициализируем текущую страницу (home с переключалкой)
+    // НЕТ параметра розыгрыша - остаемся на текущей странице (home_participant)
+    console.log("No giveaway ID - staying on home participant page");
     
     // Настройка Telegram WebApp
     if (window.Telegram && Telegram.WebApp) {

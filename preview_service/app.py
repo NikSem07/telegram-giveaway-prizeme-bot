@@ -646,14 +646,8 @@ async def api_check_giveaway_status(req: Request):
 # 1. Отдаём всегда один и тот же index.html независимо от под-путей
 @app.get("/miniapp/", response_class=HTMLResponse)
 async def miniapp_index_get() -> HTMLResponse:
-    html = INDEX_FILE.read_text(encoding="utf-8")
-    return HTMLResponse(
-        html,
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-        },
-    )
+    # Редирект сразу на версию участника (главную)
+    return RedirectResponse(url="/miniapp/home_participant")
 
 # Экран загрузки
 @app.get("/miniapp/loading", response_class=HTMLResponse)
@@ -759,14 +753,6 @@ async def miniapp_results_get() -> HTMLResponse:
             "Pragma": "no-cache",
         },
     )
-
-# Endpoint на Главный экран
-@app.get("/miniapp/home")
-async def serve_home():
-    return FileResponse("webapp/home.html", headers={
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-    })
 
 @app.get("/miniapp-static/home.js")
 async def serve_home_js():
