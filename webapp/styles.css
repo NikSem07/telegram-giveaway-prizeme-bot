@@ -320,12 +320,12 @@ button:hover{filter:brightness(1.1)}
   background: var(--tg-theme-bg-color);
   border: 1px solid var(--tg-theme-secondary-bg-color);
   border-radius: 50px;
-  padding: 6px 6px;
+  padding: 8px 8px;
   z-index: 1000;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: calc(100% - 32px);
   max-width: 360px;
-  height: 44px;
+  height: 48px;
 }
 
 .nav-container {
