@@ -182,9 +182,18 @@ function initializeMainPage() {
     sessionStorage.setItem('prizeme_gid', gid);
     window.location.href = '/miniapp/loading';
   } else {
-    // НЕТ параметра розыгрыша - показываем главный экран
-    console.log("No giveaway ID - showing home screen");
-    window.location.href = '/miniapp/home';
+    // НЕТ параметра розыгрыша - НЕ делаем автоматический редирект!
+    console.log("No giveaway ID - staying on current page");
+    // Просто инициализируем текущую страницу (home с переключалкой)
+    
+    // Настройка Telegram WebApp
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.expand();
+      Telegram.WebApp.enableClosingConfirmation();
+      Telegram.WebApp.setHeaderColor('#2481cc');
+      Telegram.WebApp.setBackgroundColor('#f4f4f5');
+      Telegram.WebApp.ready();
+    }
   }
 }
 

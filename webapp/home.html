@@ -12,10 +12,10 @@
     <!-- Переключалка режимов -->
     <div class="mode-switcher-container">
       <div class="mode-switcher">
-        <button class="mode-btn active" data-mode="participant">
+        <button class="mode-btn active" data-mode="participant" onclick="switchMode('participant')">
           <span class="mode-text">Участник</span>
         </button>
-        <button class="mode-btn" data-mode="creator">
+        <button class="mode-btn" data-mode="creator" onclick="switchMode('creator')">
           <span class="mode-text">Создатель</span>
         </button>
       </div>
@@ -26,12 +26,37 @@
       <div class="card loading-card">
         <div class="app-header">
           <h1>🎁 PrizeMe</h1>
-          <p class="welcome-text">Загрузка...</p>
+          <p class="welcome-text">Выберите режим работы</p>
+        </div>
+        <div style="text-align: center; padding: 20px;">
+          <p>Нажмите "Участник" для участия в розыгрышах</p>
+          <p>Или "Создатель" для управления розыгрышами</p>
         </div>
       </div>
     </main>
   </div>
   
-  <script src="/miniapp-static/home.js?v=MULTI-PAGE-V2"></script>
+  <script>
+    // Простая функция переключения режимов
+    function switchMode(mode) {
+      console.log('Switching to mode:', mode);
+      if (mode === 'participant') {
+        window.location.href = '/miniapp/home_participant';
+      } else {
+        window.location.href = '/miniapp/home_creator';
+      }
+    }
+
+    // Инициализация Telegram WebApp
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+        Telegram.WebApp.enableClosingConfirmation();
+        Telegram.WebApp.setHeaderColor('#2481cc');
+        Telegram.WebApp.setBackgroundColor('#f4f4f5');
+        Telegram.WebApp.ready();
+      }
+    });
+  </script>
 </body>
 </html>
