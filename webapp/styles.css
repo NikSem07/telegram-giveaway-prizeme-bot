@@ -589,12 +589,12 @@ button:hover{filter:brightness(1.1)}
   text-align: center;
 }
 
-/* Скрываем переключалку на не-главных страницах */
-body:not(.home-page) .mode-switcher-container {
-  display: none;
-}
-
 .loading-card {
   text-align: center;
   padding: 40px 20px;
+}
+
+/* Переключалка всегда видна на главных страницах */
+.mode-switcher-container {
+  display: flex !important;
 }

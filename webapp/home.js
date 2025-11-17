@@ -16,25 +16,24 @@ function switchMode(mode) {
 
 // Инициализация главного экрана
 function initHomeScreen() {
-    console.log('Initializing home screen with mode switcher...');
+    console.log('Initializing home screen with navigation...');
     
-    const modeButtons = document.querySelectorAll('.mode-btn');
+    // Загрузка статистики
+    loadHomeStats();
     
-    modeButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const mode = this.getAttribute('data-mode');
-            
-            // Обновляем активную кнопку
-            modeButtons.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Переключаем режим
-            switchMode(mode);
-        });
-    });
+    // Настройка навигации ЕСЛИ есть навбар
+    if (document.querySelector('.nav-item')) {
+        setupNavigation();
+    }
     
-    // НЕ делаем автоматический переход - пользователь сам выберет режим
-    console.log('Mode switcher ready - waiting for user selection');
+    // Настройка внешнего вида Mini App
+    if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+        Telegram.WebApp.enableClosingConfirmation();
+        Telegram.WebApp.setHeaderColor('#2481cc');
+        Telegram.WebApp.setBackgroundColor('#f4f4f5');
+        Telegram.WebApp.ready();
+    }
 }
 
 // Настройка навигационного бара (для других страниц)
@@ -185,4 +184,13 @@ function showResults() {
 }
 
 // Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', initHomeScreen);
+document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, на какой странице мы находимся
+    if (document.querySelector('.mode-switcher-container')) {
+        // Это home_participant.html с переключалкой
+        initHomeScreen();
+    } else {
+        // Это обычная страница с навбаром
+        initParticipantNavigation();
+    }
+});
