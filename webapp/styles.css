@@ -325,7 +325,7 @@ button:hover{filter:brightness(1.1)}
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: calc(100% - 32px);
   max-width: 360px;
-  height: 48px; /* Сохраняем вашу высоту */
+  height: 52px; /* Сохраняем вашу высоту */
 }
 
 .nav-container {
