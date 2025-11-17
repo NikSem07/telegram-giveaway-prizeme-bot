@@ -309,3 +309,86 @@ button:hover{filter:brightness(1.1)}
   margin-top: 4px;
   text-align: center;
 }
+
+
+/* Навигационный бар (точная копия Telegram) */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--tg-theme-bg-color);
+  border-top: 1px solid var(--tg-theme-secondary-bg-color);
+  padding: 8px 16px;
+  z-index: 1000;
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 60px;
+}
+
+.nav-item.active {
+  background: var(--tg-theme-secondary-bg-color);
+}
+
+.nav-item.active .nav-icon {
+  color: var(--tg-theme-button-color);
+  transform: scale(1.1);
+}
+
+.nav-item.active .nav-text {
+  color: var(--tg-theme-button-color);
+  font-weight: 500;
+}
+
+.nav-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+  transition: all 0.2s ease;
+  color: var(--tg-theme-hint-color);
+}
+
+.nav-text {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--tg-theme-hint-color);
+  transition: all 0.2s ease;
+}
+
+/* Адаптация основного контента под навбар */
+.main-content {
+  padding-bottom: 80px; /* Место для навбара */
+  min-height: calc(100vh - 80px);
+}
+
+.wrap {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Улучшенные стили для карточек */
+.card {
+  background: var(--tg-theme-bg-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}

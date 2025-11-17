@@ -9,7 +9,8 @@
 </head>
 <body>
   <div class="wrap">
-    <section id="screen-home">
+    <!-- Основной контент -->
+    <main class="main-content" id="main-content">
       <div class="card">
         <div class="app-header">
           <h1>🎁 PrizeMe</h1>
@@ -44,7 +45,27 @@
           </div>
         </div>
       </div>
-    </section>
+    </main>
+
+    <!-- Навигационный бар (как в Telegram) -->
+    <nav class="bottom-nav">
+      <div class="nav-container">
+        <button class="nav-item active" data-page="home">
+          <div class="nav-icon">🏠</div>
+          <div class="nav-text">Главная</div>
+        </button>
+        
+        <button class="nav-item" data-page="tasks">
+          <div class="nav-icon">📋</div>
+          <div class="nav-text">Задания</div>
+        </button>
+        
+        <button class="nav-item" data-page="settings">
+          <div class="nav-icon">⚙️</div>
+          <div class="nav-text">Настройки</div>
+        </button>
+      </div>
+    </nav>
   </div>
   <script src="/miniapp-static/home.js?v=MULTI-PAGE-V1"></script>
 </body>
