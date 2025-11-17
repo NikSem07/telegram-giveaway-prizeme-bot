@@ -536,3 +536,21 @@ button:hover{filter:brightness(1.1)}
   text-align: center;
 }
 
+/* Фикс для мигания иконок при нажатии */
+.nav-item {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.nav-item:active .nav-icon-img {
+  filter: 
+    brightness(0) saturate(100%) 
+    invert(39%) sepia(98%) saturate(1743%) 
+    hue-rotate(194deg) brightness(94%) contrast(101%);
+}
+
+.nav-item:active .nav-text {
+  color: var(--tg-theme-button-color);
+}
