@@ -3,76 +3,35 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PrizeMe — Главная</title>
+  <title>PrizeMe — Выбор режима</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
 </head>
 <body>
   <div class="wrap">
-    <!-- Основной контент -->
+    <!-- Переключалка режимов -->
+    <div class="mode-switcher-container">
+      <div class="mode-switcher">
+        <button class="mode-btn active" data-mode="participant">
+          <span class="mode-text">Участник</span>
+        </button>
+        <button class="mode-btn" data-mode="creator">
+          <span class="mode-text">Создатель</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Контент будет подгружаться динамически -->
     <main class="main-content" id="main-content">
-      <div class="card">
+      <div class="card loading-card">
         <div class="app-header">
           <h1>🎁 PrizeMe</h1>
-          <p class="welcome-text">Добро пожаловать в розыгрыши!</p>
-        </div>
-        
-        <div class="menu-grid">
-          <button class="menu-btn primary" onclick="navigateToGiveaway()">
-            <span class="btn-icon">🎯</span>
-            <span class="btn-text">Участвовать в розыгрышах</span>
-          </button>
-          
-          <button class="menu-btn secondary" onclick="showMyTickets()">
-            <span class="btn-icon">🎫</span>
-            <span class="btn-text">Мои билеты</span>
-          </button>
-          
-          <button class="menu-btn secondary" onclick="showResults()">
-            <span class="btn-icon">🏆</span>
-            <span class="btn-text">Результаты</span>
-          </button>
-        </div>
-        
-        <div class="stats-section">
-          <div class="stat-item">
-            <span class="stat-number" id="active-giveaways">0</span>
-            <span class="stat-label">активных розыгрышей</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-number" id="my-tickets">0</span>
-            <span class="stat-label">моих билетов</span>
-          </div>
+          <p class="welcome-text">Загрузка...</p>
         </div>
       </div>
     </main>
-
-    <!-- Навигационный бар (как в Telegram) -->
-    <nav class="bottom-nav">
-      <div class="nav-container">
-        <button class="nav-item active" data-page="home">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/home-icon.svg" alt="Главная" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Главная</div>
-        </button>
-        
-        <button class="nav-item" data-page="tasks">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/tasks-icon.svg" alt="Задания" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Задания</div>
-        </button>
-        
-        <button class="nav-item" data-page="settings">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/settings-icon.svg" alt="Настройки" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Настройки</div>
-        </button>
-      </div>
-    </nav>
   </div>
-  <script src="/miniapp-static/home.js?v=MULTI-PAGE-V1"></script>
+  
+  <script src="/miniapp-static/home.js?v=MULTI-PAGE-V2"></script>
 </body>
 </html>

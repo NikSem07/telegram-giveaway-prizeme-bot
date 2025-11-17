@@ -545,3 +545,56 @@ button:hover{filter:brightness(1.1)}
   margin-top: 4px;
   text-align: center;
 }
+
+/* Стили для переключалки режимов */
+.mode-switcher-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+  padding: 0 16px;
+}
+
+.mode-switcher {
+  display: flex;
+  background: var(--tg-theme-bg-color);
+  border: 1px solid var(--tg-theme-secondary-bg-color);
+  border-radius: 50px;
+  padding: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  max-width: 280px;
+  width: 100%;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tg-theme-hint-color);
+}
+
+.mode-btn.active {
+  background: var(--tg-theme-secondary-bg-color);
+  color: var(--tg-theme-button-color);
+  font-weight: 600;
+}
+
+.mode-text {
+  display: block;
+  text-align: center;
+}
+
+/* Скрываем переключалку на не-главных страницах */
+body:not(.home-page) .mode-switcher-container {
+  display: none;
+}
+
+.loading-card {
+  text-align: center;
+  padding: 40px 20px;
+}

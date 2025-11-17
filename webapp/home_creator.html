@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Создатель</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
+</head>
+<body>
+  <div class="wrap">
+    <!-- Переключалка режимов ТОЛЬКО на главной -->
+    <div class="mode-switcher-container">
+      <div class="mode-switcher">
+        <button class="mode-btn" data-mode="participant" onclick="switchMode('participant')">
+          <span class="mode-text">Участник</span>
+        </button>
+        <button class="mode-btn active" data-mode="creator" onclick="switchMode('creator')">
+          <span class="mode-text">Создатель</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Основной контент -->
+    <main class="main-content" id="main-content">
+      <div class="card">
+        <div class="app-header">
+          <h1>🎁 PrizeMe Creator</h1>
+          <p class="welcome-text">Панель управления розыгрышами</p>
+        </div>
+        
+        <div class="menu-grid">
+          <button class="menu-btn primary" onclick="createGiveaway()">
+            <span class="btn-icon">➕</span>
+            <span class="btn-text">Создать розыгрыш</span>
+          </button>
+          
+          <button class="menu-btn secondary" onclick="showMyGiveaways()">
+            <span class="btn-icon">📋</span>
+            <span class="btn-text">Мои розыгрыши</span>
+          </button>
+          
+          <button class="menu-btn secondary" onclick="showStatistics()">
+            <span class="btn-icon">📊</span>
+            <span class="btn-text">Статистика</span>
+          </button>
+        </div>
+        
+        <div class="stats-section">
+          <div class="stat-item">
+            <span class="stat-number" id="active-giveaways">0</span>
+            <span class="stat-label">активных</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number" id="total-participants">0</span>
+            <span class="stat-label">участников</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number" id="completed-giveaways">0</span>
+            <span class="stat-label">завершено</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Навигационный бар для создателя -->
+    <nav class="bottom-nav">
+      <div class="nav-container">
+        <button class="nav-item active" data-page="home">
+          <div class="nav-icon">
+            <img src="/miniapp-static/assets/icons/home-icon.svg" alt="Главная" class="nav-icon-img">
+          </div>
+          <div class="nav-text">Главная</div>
+        </button>
+        
+        <button class="nav-item" data-page="services">
+          <div class="nav-icon">
+            <img src="/miniapp-static/assets/icons/services-icon.svg" alt="Сервисы" class="nav-icon-img">
+          </div>
+          <div class="nav-text">Сервисы</div>
+        </button>
+        
+        <button class="nav-item" data-page="giveaways">
+          <div class="nav-icon">
+            <img src="/miniapp-static/assets/icons/giveaways-icon.svg" alt="Розыгрыши" class="nav-icon-img">
+          </div>
+          <div class="nav-text">Розыгрыши</div>
+        </button>
+        
+        <button class="nav-item" data-page="stats">
+          <div class="nav-icon">
+            <img src="/miniapp-static/assets/icons/stats-icon.svg" alt="Статистика" class="nav-icon-img">
+          </div>
+          <div class="nav-text">Статистика</div>
+        </button>
+      </div>
+    </nav>
+  </div>
+  
+  <script src="/miniapp-static/home_creator.js?v=MULTI-PAGE-V2"></script>
+</body>
+</html>

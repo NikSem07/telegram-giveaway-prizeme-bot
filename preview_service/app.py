@@ -769,6 +769,20 @@ async def serve_home():
 async def serve_home_js():
     return FileResponse("webapp/home.js")
 
+# Endpoint для главной создателя
+@app.get("/miniapp/home_creator")
+async def serve_home_creator():
+    return FileResponse("webapp/home_creator.html")
+
+# Endpoint для главной участника  
+@app.get("/miniapp/home_participant")
+async def serve_home_participant():
+    return FileResponse("webapp/home_participant.html")
+
+# Endpoint для JS создателя
+@app.get("/miniapp-static/home_creator.js")
+async def serve_home_creator_js():
+    return FileResponse("webapp/home_creator.js")
 
 @app.head("/miniapp/results")
 async def miniapp_results_head():

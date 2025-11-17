@@ -172,3 +172,37 @@ function showResults() {
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', initHomeScreen);
+
+// Переключение режимов для участника
+function switchMode(mode) {
+  if (mode === 'participant') {
+    window.location.href = '/miniapp/home_participant';
+  } else {
+    window.location.href = '/miniapp/home_creator';
+  }
+}
+
+// Обновите initHomeScreen для главной страницы с переключалкой
+function initHomeScreen() {
+  console.log('Initializing home screen with mode switcher...');
+  
+  const modeButtons = document.querySelectorAll('.mode-btn');
+  
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const mode = this.getAttribute('data-mode');
+      
+      // Обновляем активную кнопку
+      modeButtons.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      
+      // Переключаем режим
+      switchMode(mode);
+    });
+  });
+  
+  // Автоматически загружаем режим участника
+  setTimeout(() => {
+    switchMode('participant');
+  }, 100);
+}
