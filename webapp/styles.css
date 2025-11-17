@@ -340,23 +340,23 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 8px; /* Уменьшили горизонтальные отступы */
+  padding: 6px 12px; /* Фиксированные отступы для всех состояний */
   border: none;
   background: transparent;
   border-radius: 50px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-width: 50px; /* Уменьшили минимальную ширину */
-  flex: 0 1 auto; /* Изменили на auto чтобы не растягивались */
+  min-width: 70px; /* Фиксированная ширина для всех */
+  flex: 1;
   height: 38px;
   justify-content: center;
+  box-sizing: border-box; /* Чтобы padding не влиял на размер */
 }
 
 .nav-item.active {
   background: var(--tg-theme-secondary-bg-color);
-  padding: 6px 12px; /* Увеличили отступы только для активного состояния */
-  min-width: 60px; /* Немного увеличили для активного состояния */
+  /* Убрали изменение padding и min-width для активного состояния */
 }
 
 .nav-item.active .nav-icon {
@@ -371,7 +371,7 @@ button:hover{filter:brightness(1.1)}
 
 .nav-icon {
   font-size: 16px;
-  margin-bottom: 4px; /* Увеличили отступ между иконкой и текстом */
+  margin-bottom: 8px;
   transition: all 0.2s ease;
   color: var(--tg-theme-hint-color);
   line-height: 1;
