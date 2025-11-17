@@ -573,3 +573,24 @@ button:hover{filter:brightness(1.1)}
 .nav-item:active:not(.active) .nav-text {
   color: var(--tg-theme-button-color) !important;
 }
+
+/* ДОПОЛНИТЕЛЬНЫЙ АГРЕССИВНЫЙ ФИКС */
+.nav-item, .nav-item * {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.nav-item:active, 
+.nav-item:active *,
+.nav-item:active:focus,
+.nav-item:active:hover {
+  background: var(--tg-theme-secondary-bg-color) !important;
+}
+
+.nav-item:active .nav-icon-img,
+.nav-item:active:focus .nav-icon-img,
+.nav-item:active:hover .nav-icon-img {
+  filter: 
+    brightness(0) saturate(100%) 
+    invert(39%) sepia(98%) saturate(1743%) 
+    hue-rotate(194deg) brightness(94%) contrast(101%) !important;
+}
