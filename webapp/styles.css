@@ -340,7 +340,7 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 14px; /* Увеличили вертикальные отступы */
+  padding: 20px 14px; /* Увеличили вертикальные отступы */
   border: none;
   background: transparent;
   border-radius: 50px;
@@ -348,7 +348,7 @@ button:hover{filter:brightness(1.1)}
   transition: all 0.2s ease;
   position: relative;
   flex: 1;
-  height: 48px; /* Высота кнопки */
+  height: 54px; /* Высота кнопки */
   justify-content: center;
   box-sizing: border-box;
   min-width: 0;
@@ -356,8 +356,8 @@ button:hover{filter:brightness(1.1)}
 
 .nav-item.active {
   background: var(--tg-theme-secondary-bg-color);
-  padding: 16px 14px; /* Такие же отступы */
-  height: 48px; /* Такая же высота */
+  padding: 20px 14px; /* Такие же отступы */
+  height: 54px; /* Такая же высота */
   flex: 1;
 }
 
