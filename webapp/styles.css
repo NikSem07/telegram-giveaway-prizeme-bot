@@ -352,6 +352,12 @@ button:hover{filter:brightness(1.1)}
   justify-content: center;
   box-sizing: border-box;
   min-width: 0;
+  /* ПОЛНОЕ отключение браузерных стилей */
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  outline: none !important;
 }
 
 .nav-item.active {
@@ -376,30 +382,42 @@ button:hover{filter:brightness(1.1)}
   font-weight: 500;
 }
 
-/* Стили для кастомных иконок навбара - УСИЛЕННЫЕ ФИЛЬТРЫ */
+/* Стили для кастомных иконок навбара */
 .nav-icon-img {
   width: 20px;
   height: 20px;
   margin-bottom: 2px;
   transition: all 0.2s ease;
-  /* СИЛЬНЫЙ фильтр для перекрытия любых цветов - делает серым */
-  filter: 
-    brightness(0) saturate(100%) 
-    invert(44%) sepia(0%) saturate(0%) 
-    hue-rotate(0deg) brightness(94%) contrast(88%);
-}
-
-.nav-item.active .nav-icon-img {
-  /* СИЛЬНЫЙ фильтр для синего цвета */
+  /* СИНИЙ фильтр по умолчанию для ВСЕХ состояний */
   filter: 
     brightness(0) saturate(100%) 
     invert(39%) sepia(98%) saturate(1743%) 
     hue-rotate(194deg) brightness(94%) contrast(101%);
 }
 
+/* НЕАКТИВНЫЕ иконки - серые */
+.nav-item:not(.active) .nav-icon-img {
+  filter: 
+    brightness(0) saturate(100%) 
+    invert(44%) sepia(0%) saturate(0%) 
+    hue-rotate(0deg) brightness(94%) contrast(88%);
+}
+
+/* АКТИВНЫЕ иконки - синие (уже установлено по умолчанию) */
+.nav-item.active .nav-icon-img {
+  /* Фильтр уже установлен в .nav-icon-img */
+}
+
+/* Убираем transition для мгновенного переключения */
+.nav-item:active .nav-icon-img,
+.nav-item.active .nav-icon-img,
+.nav-item:not(.active) .nav-icon-img {
+  transition: filter 0s ease !important;
+}
+
 /* Поддержка темной/светлой темы Telegram */
 @media (prefers-color-scheme: dark) {
-  .nav-icon-img {
+  .nav-item:not(.active) .nav-icon-img {
     filter: 
       brightness(0) saturate(100%) 
       invert(60%) sepia(0%) saturate(0%) 
@@ -421,15 +439,7 @@ button:hover{filter:brightness(1.1)}
   }
 }
 
-/* Адаптация под разные плотности пикселей */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  .nav-icon-img {
-    width: 22px;
-    height: 22px;
-  }
-}
-
-/* Остальные стили */
+/* Остальные стили БЕЗ ИЗМЕНЕНИЙ */
 .main-content {
   padding-bottom: 80px;
   min-height: calc(100vh - 80px);
@@ -534,63 +544,4 @@ button:hover{filter:brightness(1.1)}
   color: var(--tg-theme-hint-color);
   margin-top: 4px;
   text-align: center;
-}
-
-/* Фикс для мигания иконок при нажатии */
-.nav-item {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.nav-item:active .nav-icon-img {
-  filter: 
-    brightness(0) saturate(100%) 
-    invert(39%) sepia(98%) saturate(1743%) 
-    hue-rotate(194deg) brightness(94%) contrast(101%);
-}
-
-.nav-item:active .nav-text {
-  color: var(--tg-theme-button-color);
-}
-
-.nav-item:active {
-  background: var(--tg-theme-secondary-bg-color) !important;
-}
-
-.nav-item:active:not(.active) {
-  background: var(--tg-theme-secondary-bg-color) !important;
-}
-
-.nav-item:active:not(.active) .nav-icon-img {
-  filter: 
-    brightness(0) saturate(100%) 
-    invert(39%) sepia(98%) saturate(1743%) 
-    hue-rotate(194deg) brightness(94%) contrast(101%) !important;
-}
-
-.nav-item:active:not(.active) .nav-text {
-  color: var(--tg-theme-button-color) !important;
-}
-
-/* ДОПОЛНИТЕЛЬНЫЙ АГРЕССИВНЫЙ ФИКС */
-.nav-item, .nav-item * {
-  -webkit-tap-highlight-color: transparent !important;
-}
-
-.nav-item:active, 
-.nav-item:active *,
-.nav-item:active:focus,
-.nav-item:active:hover {
-  background: var(--tg-theme-secondary-bg-color) !important;
-}
-
-.nav-item:active .nav-icon-img,
-.nav-item:active:focus .nav-icon-img,
-.nav-item:active:hover .nav-icon-img {
-  filter: 
-    brightness(0) saturate(100%) 
-    invert(39%) sepia(98%) saturate(1743%) 
-    hue-rotate(194deg) brightness(94%) contrast(101%) !important;
 }
