@@ -376,26 +376,40 @@ button:hover{filter:brightness(1.1)}
   font-weight: 500;
 }
 
-/* Стили для кастомных иконок навбара */
+/* Стили для кастомных иконок навбара - УСИЛЕННЫЕ ФИЛЬТРЫ */
 .nav-icon-img {
   width: 20px;
   height: 20px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   transition: all 0.2s ease;
-  filter: brightness(0.8); /* Базовая прозрачность для неактивных */
+  /* СИЛЬНЫЙ фильтр для перекрытия любых цветов - делает серым */
+  filter: 
+    brightness(0) saturate(100%) 
+    invert(44%) sepia(0%) saturate(0%) 
+    hue-rotate(0deg) brightness(94%) contrast(88%);
 }
 
 .nav-item.active .nav-icon-img {
-  filter: brightness(1) sepia(1) hue-rotate(190deg) saturate(5); /* Синий цвет как в Telegram */
+  /* СИЛЬНЫЙ фильтр для синего цвета */
+  filter: 
+    brightness(0) saturate(100%) 
+    invert(39%) sepia(98%) saturate(1743%) 
+    hue-rotate(194deg) brightness(94%) contrast(101%);
 }
 
 /* Поддержка темной/светлой темы Telegram */
 @media (prefers-color-scheme: dark) {
   .nav-icon-img {
-    filter: brightness(0.7);
+    filter: 
+      brightness(0) saturate(100%) 
+      invert(60%) sepia(0%) saturate(0%) 
+      hue-rotate(0deg) brightness(90%) contrast(85%);
   }
   .nav-item.active .nav-icon-img {
-    filter: brightness(1) sepia(1) hue-rotate(190deg) saturate(5);
+    filter: 
+      brightness(0) saturate(100%) 
+      invert(39%) sepia(98%) saturate(1743%) 
+      hue-rotate(194deg) brightness(94%) contrast(101%);
   }
 }
 
