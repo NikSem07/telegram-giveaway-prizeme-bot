@@ -340,16 +340,16 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 6px; /* Фиксированные отступы для всех состояний */
+  padding: 8px 8px; /* Фиксированные отступы для всех состояний */
   border: none;
   background: transparent;
   border-radius: 50px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-width: 42px; /* Фиксированная ширина для всех */
+  min-width: 20px; /* Фиксированная ширина для всех */
   flex: 1;
-  height: 42px;
+  height: 20px;
   justify-content: center;
   box-sizing: border-box; /* Чтобы padding не влиял на размер */
 }
@@ -357,9 +357,9 @@ button:hover{filter:brightness(1.1)}
 .nav-item.active {
   background: var(--tg-theme-secondary-bg-color);
   /* ДОБАВЬТЕ ЭТИ СТРОКИ ДЛЯ РАЗМЕРОВ АКТИВНОЙ ПЛАШКИ */
-  min-width: 42px;   /* ← Должно быть такое же значение как у .nav-item */
-  height: 42px;      /* ← Должно быть такое же значение как у .nav-item */
-  padding: 6px 6px;  /* ← Должно быть такое же значение как у .nav-item */
+  min-width: 20px;   /* ← Должно быть такое же значение как у .nav-item */
+  height: 20px;      /* ← Должно быть такое же значение как у .nav-item */
+  padding: 8px 8px;  /* ← Должно быть такое же значение как у .nav-item */
 }
 
 .nav-item.active .nav-icon {
