@@ -760,6 +760,16 @@ async def miniapp_results_get() -> HTMLResponse:
         },
     )
 
+# Endpoint на Главный экран
+@app.get("/miniapp/home")
+async def serve_home():
+    return FileResponse("webapp/home.html")
+
+@app.get("/miniapp-static/home.js")
+async def serve_home_js():
+    return FileResponse("webapp/home.js")
+
+
 @app.head("/miniapp/results")
 async def miniapp_results_head():
     return Response(

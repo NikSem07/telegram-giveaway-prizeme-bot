@@ -173,18 +173,18 @@ async function checkFlow() {
 // Инициализация для главной страницы
 function initializeMainPage() {
   console.log("[MULTI-PAGE] Initializing main page");
-  // Главная страница сразу запускает проверку и редиректит на loading
+  
   const gid = getStartParam();
+  
   if (gid) {
+    // ЕСТЬ параметр розыгрыша - запускаем стандартный flow участия
+    console.log("Giveaway ID found:", gid);
     sessionStorage.setItem('prizeme_gid', gid);
     window.location.href = '/miniapp/loading';
   } else {
-    document.getElementById('main-content').innerHTML = `
-      <div class="card">
-        <h1>Ошибка</h1>
-        <p>Не удалось определить розыгрыш. Проверьте ссылку.</p>
-      </div>
-    `;
+    // НЕТ параметра розыгрыша - показываем главный экран
+    console.log("No giveaway ID - showing home screen");
+    window.location.href = '/miniapp/home';
   }
 }
 
