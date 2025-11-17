@@ -763,7 +763,10 @@ async def miniapp_results_get() -> HTMLResponse:
 # Endpoint на Главный экран
 @app.get("/miniapp/home")
 async def serve_home():
-    return FileResponse("webapp/home.html")
+    return FileResponse("webapp/home.html", headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    })
 
 @app.get("/miniapp-static/home.js")
 async def serve_home_js():

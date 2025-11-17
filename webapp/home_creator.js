@@ -5,6 +5,7 @@ let currentPage = 'home';
 
 // Переключение режимов
 function switchMode(mode) {
+  console.log('Creator: Switching mode to:', mode);
   if (mode === 'participant') {
     window.location.href = '/miniapp/home_participant';
   } else {

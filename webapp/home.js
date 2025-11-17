@@ -4,26 +4,40 @@ console.log('PrizeMe Home Screen loaded');
 // Текущая активная страница
 let currentPage = 'home';
 
-// Инициализация главного экрана
-function initHomeScreen() {
-    console.log('Initializing home screen with navigation...');
-    
-    // Загрузка статистики
-    loadHomeStats();
-    
-    // Настройка навигации
-    setupNavigation();
-    
-    // Настройка внешнего вида Mini App
-    if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.expand();
-        Telegram.WebApp.enableClosingConfirmation();
-        Telegram.WebApp.setHeaderColor('#2481cc');
-        Telegram.WebApp.setBackgroundColor('#f4f4f5');
-    }
+// Переключение режимов для участника
+function switchMode(mode) {
+  console.log('Switching mode to:', mode);
+  if (mode === 'participant') {
+    window.location.href = '/miniapp/home_participant';
+  } else {
+    window.location.href = '/miniapp/home_creator';
+  }
 }
 
-// Настройка навигационного бара
+// Инициализация главного экрана
+function initHomeScreen() {
+    console.log('Initializing home screen with mode switcher...');
+    
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mode = this.getAttribute('data-mode');
+            
+            // Обновляем активную кнопку
+            modeButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Переключаем режим
+            switchMode(mode);
+        });
+    });
+    
+    // НЕ делаем автоматический переход - пользователь сам выберет режим
+    console.log('Mode switcher ready - waiting for user selection');
+}
+
+// Настройка навигационного бара (для других страниц)
 function setupNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
     
@@ -172,37 +186,3 @@ function showResults() {
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', initHomeScreen);
-
-// Переключение режимов для участника
-function switchMode(mode) {
-  if (mode === 'participant') {
-    window.location.href = '/miniapp/home_participant';
-  } else {
-    window.location.href = '/miniapp/home_creator';
-  }
-}
-
-// Обновите initHomeScreen для главной страницы с переключалкой
-function initHomeScreen() {
-  console.log('Initializing home screen with mode switcher...');
-  
-  const modeButtons = document.querySelectorAll('.mode-btn');
-  
-  modeButtons.forEach(btn => {
-    btn.addEventListener('click', function() {
-      const mode = this.getAttribute('data-mode');
-      
-      // Обновляем активную кнопку
-      modeButtons.forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      
-      // Переключаем режим
-      switchMode(mode);
-    });
-  });
-  
-  // Автоматически загружаем режим участника
-  setTimeout(() => {
-    switchMode('participant');
-  }, 100);
-}
