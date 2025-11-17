@@ -52,11 +52,21 @@ function setupNavigation() {
 function switchPage(page) {
     if (page === currentPage) return;
     
+    console.log('Switching to page:', page);
+    
     // Обновляем активный элемент навбара
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
     document.querySelector(`[data-page="${page}"]`).classList.add('active');
+    
+    // Управляем видимостью переключалки
+    const body = document.body;
+    if (page === 'home') {
+        body.classList.add('home-page');
+    } else {
+        body.classList.remove('home-page');
+    }
     
     // Показываем соответствующий контент
     const mainContent = document.getElementById('main-content');
@@ -182,6 +192,16 @@ function showResults() {
     console.log('Showing results...');
     window.location.href = '/miniapp/results';
 }
+
+// Убедимся что при загрузке переключалка видна
+function ensureHomePageClass() {
+    if (currentPage === 'home') {
+        document.body.classList.add('home-page');
+    }
+}
+
+// Вызываем при инициализации
+ensureHomePageClass();
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', function() {

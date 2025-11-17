@@ -54,6 +54,14 @@ function switchCreatorPage(page) {
   });
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
   
+  // Управляем видимостью переключалки
+  const body = document.body;
+  if (page === 'home') {
+    body.classList.add('home-page');
+  } else {
+    body.classList.remove('home-page');
+  }
+  
   // Показываем соответствующий контент
   const mainContent = document.getElementById('main-content');
   
@@ -207,6 +215,16 @@ function showStatistics() {
   console.log('Showing statistics...');
   alert('Функция "Статистика" в разработке');
 }
+
+// Убедимся что при загрузке переключалка видна
+function ensureHomePageClass() {
+    if (currentPage === 'home') {
+        document.body.classList.add('home-page');
+    }
+}
+
+// Вызываем при инициализации
+ensureHomePageClass();
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', initCreatorScreen);

@@ -594,7 +594,11 @@ button:hover{filter:brightness(1.1)}
   padding: 40px 20px;
 }
 
-/* Переключалка всегда видна на главных страницах */
+/* Переключалка видна ТОЛЬКО на главных страницах */
 .mode-switcher-container {
-  display: flex !important;
+  display: none;
+}
+
+body.home-page .mode-switcher-container {
+  display: flex;
 }
