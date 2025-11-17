@@ -311,20 +311,21 @@ button:hover{filter:brightness(1.1)}
 }
 
 
-/* Навигационный бар (точно как в Telegram) */
+/* Навигационный бар (уменьшенный размер) */
 .bottom-nav {
   position: fixed;
-  bottom: 32px; /* Подняли выше */
+  bottom: 20px; /* Немного опустили т.к. навбар стал меньше */
   left: 50%;
   transform: translateX(-50%);
   background: var(--tg-theme-bg-color);
   border: 1px solid var(--tg-theme-secondary-bg-color);
-  border-radius: 50px; /* Максимальное закругление */
-  padding: 8px 8px; /* Уменьшили боковые отступы */
+  border-radius: 50px;
+  padding: 6px 8px; /* Уменьшили вертикальные отступы */
   z-index: 1000;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
-  width: calc(100% - 32px); /* Растягиваем по ширине контейнера */
-  max-width: 360px; /* Максимальная ширина как у контента */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: calc(100% - 32px);
+  max-width: 360px;
+  height: 50px; /* Фиксированная высота навбара */
 }
 
 .nav-container {
@@ -332,21 +333,24 @@ button:hover{filter:brightness(1.1)}
   justify-content: space-around;
   align-items: center;
   gap: 2px;
+  height: 100%;
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px 12px;
+  padding: 6px 10px; /* Уменьшили отступы кнопок */
   border: none;
   background: transparent;
-  border-radius: 50px; /* Максимальное закругление для кнопок */
+  border-radius: 50px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-width: 70px;
+  min-width: 60px; /* Уменьшили минимальную ширину */
   flex: 1;
+  height: 38px; /* Фиксированная высота кнопок */
+  justify-content: center;
 }
 
 .nav-item.active {
@@ -355,7 +359,7 @@ button:hover{filter:brightness(1.1)}
 
 .nav-item.active .nav-icon {
   color: var(--tg-theme-button-color);
-  transform: scale(1.1);
+  transform: scale(1.05); /* Уменьшили масштаб при активации */
 }
 
 .nav-item.active .nav-text {
@@ -364,24 +368,27 @@ button:hover{filter:brightness(1.1)}
 }
 
 .nav-icon {
-  font-size: 22px;
-  margin-bottom: 3px;
+  font-size: 16px; /* Уменьшили на 30% (было 22px) */
+  margin-bottom: 1px; /* Уменьшили отступ */
   transition: all 0.2s ease;
   color: var(--tg-theme-hint-color);
+  line-height: 1;
 }
 
 .nav-text {
-  font-size: 12px;
+  font-size: 10px; /* Немного уменьшили текст */
   font-weight: 400;
   color: var(--tg-theme-hint-color);
   transition: all 0.2s ease;
+  line-height: 1;
 }
 
 /* Адаптация основного контента под навбар */
 .main-content {
-  padding-bottom: 100px; /* Увеличили отступ для поднятого навбара */
-  min-height: calc(100vh - 100px);
+  padding-bottom: 80px; /* Уменьшили отступ т.к. навбар стал меньше */
+  min-height: calc(100vh - 80px);
 }
+
 
 .wrap {
   position: relative;
