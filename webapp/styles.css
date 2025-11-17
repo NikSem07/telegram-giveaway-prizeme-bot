@@ -314,7 +314,7 @@ button:hover{filter:brightness(1.1)}
 /* Навигационный бар */
 .bottom-nav {
   position: fixed;
-  bottom: 40px;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--tg-theme-bg-color);
