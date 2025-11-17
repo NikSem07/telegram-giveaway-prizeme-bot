@@ -314,12 +314,12 @@ button:hover{filter:brightness(1.1)}
 /* Навигационный бар (точно как в Telegram) */
 .bottom-nav {
   position: fixed;
-  bottom: 16px; /* Подняли выше */
+  bottom: 32px; /* Подняли выше */
   left: 50%;
   transform: translateX(-50%);
   background: var(--tg-theme-bg-color);
   border: 1px solid var(--tg-theme-secondary-bg-color);
-  border-radius: 25px; /* Максимальное закругление */
+  border-radius: 50px; /* Максимальное закругление */
   padding: 8px 8px; /* Уменьшили боковые отступы */
   z-index: 1000;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
@@ -341,7 +341,7 @@ button:hover{filter:brightness(1.1)}
   padding: 10px 12px;
   border: none;
   background: transparent;
-  border-radius: 20px; /* Максимальное закругление для кнопок */
+  border-radius: 50px; /* Максимальное закругление для кнопок */
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
