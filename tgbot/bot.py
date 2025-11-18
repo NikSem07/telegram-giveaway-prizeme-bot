@@ -956,7 +956,6 @@ class Winner(Base):
 # путь к bot.db строго рядом с bot.py (один файл для всех)
 DB_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod")
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
 
