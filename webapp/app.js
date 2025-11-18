@@ -12,23 +12,36 @@ const hide = (sel) => $(sel)?.classList.add("hide");
 // Получаем start_param из URL или initData
 function getStartParam() {
   try {
+    // Пробуем получить из URL параметра (ПРИОРИТЕТ)
+    const url = new URL(location.href);
+    const urlParam = url.searchParams.get("tgWebAppStartParam");
+    if (urlParam) {
+      console.log("[MULTI-PAGE] Got start_param from URL:", urlParam);
+      if (urlParam.startsWith('results_')) {
+        return urlParam.replace('results_', '');
+      }
+      return urlParam;
+    }
+  } catch (e) {
+    console.log("[MULTI-PAGE] URL parse error:", e);
+  }
+
+  try {
+    // Пробуем получить из initData (резервный вариант)
     const p = tg.initDataUnsafe?.start_param;
     if (p) {
-      // Если start_param начинается с "results_", это запрос результатов
+      console.log("[MULTI-PAGE] Got start_param from initData:", p);
       if (p.startsWith('results_')) {
         return p.replace('results_', '');
       }
       return p;
     }
-  } catch {}
-  try {
-    const url = new URL(location.href);
-    const param = url.searchParams.get("tgWebAppStartParam");
-    if (param && param.startsWith('results_')) {
-      return param.replace('results_', '');
-    }
-    return param;
-  } catch { return null; }
+  } catch (e) {
+    console.log("[MULTI-PAGE] initData parse error:", e);
+  }
+
+  console.log("[MULTI-PAGE] No start_param found");
+  return null;
 }
 
 // Универсальный вызов API
@@ -175,15 +188,26 @@ function initializeMainPage() {
   console.log("[MULTI-PAGE] Initializing main page");
   
   const gid = getStartParam();
+  console.log("[MULTI-PAGE] Extracted gid:", gid);
+  
+  // ДИАГНОСТИКА: логируем все доступные параметры
+  try {
+    const url = new URL(location.href);
+    console.log("[MULTI-PAGE] Full URL:", location.href);
+    console.log("[MULTI-PAGE] URL params:", Object.fromEntries(url.searchParams));
+    console.log("[MULTI-PAGE] initDataUnsafe:", tg.initDataUnsafe);
+  } catch (e) {
+    console.log("[MULTI-PAGE] Diagnostic error:", e);
+  }
   
   if (gid) {
     // ЕСТЬ параметр розыгрыша - запускаем стандартный flow участия
-    console.log("Giveaway ID found:", gid);
+    console.log("🎯 Giveaway ID found:", gid);
     sessionStorage.setItem('prizeme_gid', gid);
     window.location.href = '/miniapp/loading';
   } else {
     // НЕТ параметра розыгрыша - остаемся на текущей странице (home_participant)
-    console.log("No giveaway ID - staying on home participant page");
+    console.log("❌ No giveaway ID - staying on home participant page");
     
     // Настройка Telegram WebApp
     if (window.Telegram && Telegram.WebApp) {

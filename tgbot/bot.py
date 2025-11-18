@@ -584,7 +584,7 @@ def _compose_post_text(
     days_left: int | None = None
 ) -> str:
     """
-    Текст для публикации в посте (с коррекцией времени +3 часа).
+    Текст для публикации в посте (БЕЗ двойной коррекции времени).
     Сохраняет пользовательское форматирование из message.html_text
     """
     lines = []
@@ -602,27 +602,8 @@ def _compose_post_text(
     lines.append(f"Количество призов: {max(0, prizes)}")
 
     if end_at_msk:
-        # Корректируем время на +3 часа только для постов
-        try:
-            time_part, date_part = end_at_msk.split(' ')
-            hours, minutes = map(int, time_part.split(':'))
-            
-            corrected_hours = (hours + 3) % 24
-            if corrected_hours < 10:
-                corrected_hours_str = f"0{corrected_hours}"
-            else:
-                corrected_hours_str = str(corrected_hours)
-            
-            corrected_time = f"{corrected_hours_str}:{minutes:02d}"
-            corrected_end_at = f"{corrected_time} {date_part}"
-            
-            tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
-            lines.append(f"Дата розыгрыша: {corrected_end_at}{tail}")
-            
-        except Exception as e:
-            logging.warning(f"Time correction failed for {end_at_msk}: {e}")
-            tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
-            lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
+        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
+        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
     else:
         lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
 
