@@ -57,81 +57,105 @@ app.get('/uploads/:path(*)', async (req, res) => {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
     
-    // ⭐ ИСПРАВЛЕННЫЙ URL S3
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     console.log(`[MEDIA] Proxying to: ${s3Url}`);
     
+    // TIME WEB S3 ТРЕБУЕТ АУТЕНТИФИКАЦИЮ!
+    const s3AccessKey = process.env.S3_ACCESS_KEY;
+    const s3SecretKey = process.env.S3_SECRET_KEY;
+    
+    const headers = {
+      'User-Agent': 'PrizeMe-Media-Proxy/1.0'
+    };
+    
+    // ДОБАВЛЯЕМ AWS SIGNATURE V4 ДЛЯ S3 (TimeWeb совместим)
+    if (s3AccessKey && s3SecretKey) {
+      // Для TimeWeb Cloud S3 используем Basic Auth как временное решение
+      const auth = Buffer.from(`${s3AccessKey}:${s3SecretKey}`).toString('base64');
+      headers['Authorization'] = `Basic ${auth}`;
+    }
+    
     const response = await fetch(s3Url, {
       method: 'GET',
-      headers: {
-        'User-Agent': 'PrizeMe-Media-Proxy/1.0'
-      },
-      timeout: 15000
+      headers: headers,
+      timeout: 30000  // 30 секунд как в Python
     });
 
-    if (!response.ok) {
-      console.log(`[MEDIA] S3 response not OK: ${response.status} ${response.statusText}`);
-      return res.status(response.status).send(`Media not found: ${response.status}`);
-    }
-
-    // ⭐ УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ MIME-ТИПА
-    let contentType = response.headers.get('content-type');
+    // ТОЧНАЯ ЛОГИКА ОБРАБОТКИ ОТВЕТА
+    const status = response.status < 400 ? 200 : 404;
     
-    if (!contentType || contentType === 'application/octet-stream') {
-      // Определяем по расширению файла
-      const ext = mediaPath.split('.').pop().toLowerCase();
-      const mimeMap = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg', 
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'webp': 'image/webp',
-        'mp4': 'video/mp4',
-        'mov': 'video/quicktime',
-        'avi': 'video/x-msvideo'
-      };
-      contentType = mimeMap[ext] || 'application/octet-stream';
+    if (!response.ok) {
+      console.log(`[MEDIA] S3 response: ${response.status} -> mapping to ${status}`);
+      return res.status(status).send('Media not found');
     }
 
-    // ⭐ ПРАВИЛЬНЫЕ ЗАГОЛОВКИ ДЛЯ TELEGRAM PREVIEW
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 часа
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('X-Proxy-Source', 'prizeme-s3-proxy');
+    // ОПРЕДЕЛЕНИЕ MIME-ТИПА
+    let contentType = response.headers.get('content-type');
+    if (!contentType) {
+      const mimeType = mime.lookup(mediaPath);
+      contentType = mimeType || 'application/octet-stream';
+    }
 
-    // Передаем поток данных
+    // ЗАГОЛОВКИ
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', `public, max-age=300`); // CACHE_SEC = 300
+    res.setHeader('X-Proxy-From', s3Url);
+
+    // Передаем данные
     const buffer = await response.arrayBuffer();
-    res.send(Buffer.from(buffer));
+    res.status(status).send(Buffer.from(buffer));
 
     console.log(`[MEDIA] ✅ Successfully served: ${mediaPath} (${contentType})`);
 
   } catch (error) {
     console.log(`[MEDIA] ❌ Error: ${error.message}`);
-    res.status(500).send('Media proxy error: ' + error.message);
+    res.status(500).send('Media proxy error');
   }
 });
 
-// HEAD запросы для медиа
+// HEAD ЗАПРОСЫ ДЛЯ МЕДИА
 app.head('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     
-    const response = await fetch(s3Url, { method: 'HEAD', timeout: 10000 });
+    // ТА ЖЕ АУТЕНТИФИКАЦИЯ ДЛЯ HEAD
+    const s3AccessKey = process.env.S3_ACCESS_KEY;
+    const s3SecretKey = process.env.S3_SECRET_KEY;
+    
+    const headers = {
+      'User-Agent': 'PrizeMe-Media-Proxy/1.0'
+    };
+    
+    if (s3AccessKey && s3SecretKey) {
+      const auth = Buffer.from(`${s3AccessKey}:${s3SecretKey}`).toString('base64');
+      headers['Authorization'] = `Basic ${auth}`;
+    }
+    
+    const response = await fetch(s3Url, { 
+      method: 'HEAD', 
+      headers: headers,
+      timeout: 10000 
+    });
+    
+    // ТОЧНАЯ ЛОГИКА СТАТУСА
+    const status = response.status < 400 ? 200 : 404;
     
     if (response.ok) {
-      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+      const contentType = response.headers.get('content-type') || mime.lookup(mediaPath) || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', response.headers.get('content-length') || '0');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.status(200).end();
-    } else {
-      res.status(404).end();
+      res.setHeader('Cache-Control', 'public, max-age=300');
     }
+    
+    res.status(status).end();
+    
   } catch (error) {
     console.log(`[MEDIA-HEAD] Error: ${error.message}`);
     res.status(500).end();
   }
 });
+
 
 // Вспомогательные функции
 function _normalizeChatId(raw, username = null) {
