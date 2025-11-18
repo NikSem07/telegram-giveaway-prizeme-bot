@@ -965,8 +965,8 @@ async def mark_membership(chat_id: int, user_id: int) -> None:
         async with s.begin():
             await s.execute(
                 _sqltext(
-                    "INSERT OR IGNORE INTO channel_memberships(chat_id, user_id) "
-                    "VALUES (:c, :u)"
+                    "INSERT INTO channel_memberships(chat_id, user_id) "
+                    "VALUES (:c, :u) ON CONFLICT (chat_id, user_id) DO NOTHING"
                 ),
                 {"c": chat_id, "u": user_id},
             )
@@ -1173,11 +1173,18 @@ async def save_shared_chat(
             # пробуем вставить; если дубликат — просто игнор
             await s.execute(
                 """
-                INSERT OR IGNORE INTO organizer_channels
+                INSERT INTO organizer_channels
                     (owner_user_id, chat_id, title, is_private, bot_role)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (:user_id, :chat_id, :title, :is_private, :role)
+                ON CONFLICT (owner_user_id, chat_id) DO NOTHING
                 """,
-                (owner_user_id, chat_id, title, int(is_private), bot_role)
+                {
+                    "user_id": owner_user_id, 
+                    "chat_id": chat_id, 
+                    "title": title, 
+                    "is_private": int(is_private), 
+                    "role": bot_role
+                }
             )
         # проверим, появилась ли запись
         res = await s.execute(
@@ -4796,8 +4803,8 @@ async def on_my_chat_member(event: ChatMemberUpdated):
             else:
                 # если бота удалили из чата - помечаем только для этого пользователя
                 await s.execute(
-                    stext("UPDATE organizer_channels SET status='gone' WHERE owner_user_id=? AND chat_id=?"),
-                    (user_id, chat.id),
+                    stext("UPDATE organizer_channels SET status='gone' WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
+                    {"user_id": user_id, "chat_id": chat_id},
                 )
 
     logging.info(f"🔁 my_chat_member: user={user_id}, chat={chat.title} ({chat.id}) -> {status}")
