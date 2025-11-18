@@ -95,6 +95,7 @@ app.get('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
+    console.log(`[MEDIA] Headers:`, req.headers);
     
     const s3Path = `/${S3_BUCKET}/${mediaPath}`;
     const s3Url = `${S3_ENDPOINT}${s3Path}`;
@@ -102,6 +103,7 @@ app.get('/uploads/:path(*)', async (req, res) => {
     
     // Создаем подписанный запрос
     const signedHeaders = signS3Request('GET', s3Path);
+    console.log(`[MEDIA] Signed headers:`, signedHeaders);
     
     const response = await fetch(s3Url, {
       method: 'GET',
