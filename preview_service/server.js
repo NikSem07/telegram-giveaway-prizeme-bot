@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const mimetypes = require('mimetypes');
 
 // ЯВНОЕ ПОДКЛЮЧЕНИЕ .env ФАЙЛА
 require('dotenv').config({ path: '/root/telegram-giveaway-prizeme-bot/.env' });
@@ -37,6 +38,113 @@ const pool = new Pool({
   port: 5432,
   database: 'prizeme_prod',
   ssl: false
+});
+
+// Константы после подключения к PostgreSQL
+const S3_ENDPOINT = process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru';
+const S3_BUCKET = process.env.S3_BUCKET || '';
+const MEDIA_BASE_URL = process.env.MEDIA_BASE_URL || 'https://media.prizeme.ru';
+
+// --- Проксирование медиа из S3 ---
+app.get('/uploads/:path(*)', async (req, res) => {
+  try {
+    const mediaPath = req.params.path;
+    console.log(`[MEDIA] Request for: ${mediaPath}`);
+    
+    // Безопасная обработка пути
+    if (!mediaPath || mediaPath.includes('..')) {
+      return res.status(400).send('Invalid path');
+    }
+    
+    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
+    console.log(`[MEDIA] Proxying to: ${s3Url}`);
+    
+    const response = await fetch(s3Url, {
+      method: 'GET',
+      timeout: 30000
+    });
+
+    if (!response.ok) {
+      console.log(`[MEDIA] S3 response not OK: ${response.status}`);
+      return res.status(response.status).send('Media not found');
+    }
+
+    // Получаем Content-Type
+    const contentType = response.headers.get('content-type') || 
+                       mimetypes.lookup(mediaPath) || 
+                       'application/octet-stream';
+
+    // Получаем Content-Length
+    const contentLength = response.headers.get('content-length');
+
+    // Устанавливаем правильные заголовки
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час кэша
+    res.setHeader('X-Proxy-From', s3Url);
+    
+    if (contentLength) {
+      res.setHeader('Content-Length', contentLength);
+    }
+
+    // Передаем поток данных
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+
+    console.log(`[MEDIA] Successfully served: ${mediaPath} (${contentLength} bytes)`);
+
+  } catch (error) {
+    console.log(`[MEDIA] Error: ${error.message}`);
+    res.status(500).send('Media proxy error');
+  }
+});
+
+// HEAD запросы для медиа
+app.head('/uploads/:path(*)', async (req, res) => {
+  try {
+    const mediaPath = req.params.path;
+    
+    if (!mediaPath || mediaPath.includes('..')) {
+      return res.status(400).end();
+    }
+    
+    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
+    
+    const response = await fetch(s3Url, { method: 'HEAD', timeout: 10000 });
+    
+    if (response.ok) {
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+      res.setHeader('Content-Length', response.headers.get('content-length') || '0');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.status(200).end();
+    } else {
+      res.status(404).end();
+    }
+  } catch (error) {
+    console.log(`[MEDIA-HEAD] Error: ${error.message}`);
+    res.status(500).end();
+  }
+});
+
+// HEAD запросы для медиа
+app.head('/uploads/:path(*)', async (req, res) => {
+  try {
+    const path = req.params.path;
+    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${path}`;
+    
+    const response = await fetch(s3Url, { method: 'HEAD', timeout: 10000 });
+    
+    if (response.ok) {
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+      res.setHeader('Content-Length', response.headers.get('content-length') || '0');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.status(200).end();
+    } else {
+      res.status(404).end();
+    }
+  } catch (error) {
+    console.log(`[MEDIA-HEAD] Error: ${error.message}`);
+    res.status(500).end();
+  }
 });
 
 
@@ -256,10 +364,28 @@ app.get('/miniapp/home_creator', (req, res) => {
   res.sendFile(path.join(__dirname, '../webapp/home_creator.html'));
 });
 
-// HEAD requests for all miniapp routes
+// HEAD ENDPOINTS
+
+// HEAD для всех miniapp routes
 app.head('/miniapp/*', (req, res) => {
   res.status(200).end();
 });
+
+// HEAD для health check
+app.head('/health', (req, res) => {
+  res.status(200).end();
+});
+
+// HEAD для статических файлов
+app.head('/miniapp-static/*', (req, res) => {
+  res.status(200).end();
+});
+
+// HEAD для API endpoints (важно для Telegram)
+app.head('/api/*', (req, res) => {
+  res.status(200).end();
+});
+
 
 // --- POST /api/check_giveaway_status ---
 app.post('/api/check_giveaway_status', async (req, res) => {
