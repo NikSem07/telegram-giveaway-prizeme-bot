@@ -210,6 +210,53 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'PrizeMe Node.js backend is running', timestamp: new Date().toISOString() });
 });
 
+// Serve static files from webapp directory
+app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
+
+// HTML endpoints for Mini App
+app.get('/miniapp/', (req, res) => {
+  res.redirect('/miniapp/home_participant');
+});
+
+app.get('/miniapp/loading', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/loading.html'));
+});
+
+app.get('/miniapp/need_subscription', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/need_subscription.html'));
+});
+
+app.get('/miniapp/success', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/success.html'));
+});
+
+app.get('/miniapp/already', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/already_participating.html'));
+});
+
+app.get('/miniapp/results', (req, res) => {
+  const resultsPath = path.join(__dirname, '../webapp/results.html');
+  if (fs.existsSync(resultsPath)) {
+    res.sendFile(resultsPath);
+  } else {
+    res.status(404).send('<h1>Страница результатов временно недоступна</h1>');
+  }
+});
+
+// Participant and creator home pages
+app.get('/miniapp/home_participant', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/home_participant.html'));
+});
+
+app.get('/miniapp/home_creator', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/home_creator.html'));
+});
+
+// HEAD requests for all miniapp routes
+app.head('/miniapp/*', (req, res) => {
+  res.status(200).end();
+});
+
 // --- POST /api/check_giveaway_status ---
 app.post('/api/check_giveaway_status', async (req, res) => {
   console.log('[CHECK_STATUS] Request received:', req.body);
@@ -620,6 +667,61 @@ app.post('/api/claim', async (req, res) => {
     res.status(500).json({ 
       ok: false, 
       reason: `server_error: ${error.message}`
+    });
+  }
+});
+
+// --- POST /api/results ---
+app.post('/api/results', async (req, res) => {
+  console.log('[RESULTS] Request received:', req.body);
+  
+  try {
+    const { gid, init_data } = req.body;
+
+    // Извлекаем user_id из init_data
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = parseInt(parsedInitData.user_parsed.id);
+    const giveawayId = parseInt(gid);
+
+    if (!giveawayId) {
+      return res.status(400).json({ ok: false, reason: 'bad_gid' });
+    }
+
+    console.log(`[RESULTS] USER_EXTRACTED: id=${userId}, gid=${giveawayId}`);
+
+    // Проксируем запрос к внутреннему API бота
+    const response = await fetch(`${BOT_INTERNAL_URL}/api/giveaway_results`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        gid: giveawayId,
+        user_id: userId
+      }),
+      timeout: 10000
+    });
+
+    if (response.ok) {
+      const resultData = await response.json();
+      res.json(resultData);
+    } else {
+      console.log(`[RESULTS] Internal API error: ${response.status}`);
+      res.status(500).json({ 
+        ok: false, 
+        reason: `internal_api_error: ${response.status}` 
+      });
+    }
+
+  } catch (error) {
+    console.log(`[RESULTS] Proxy error: ${error}`);
+    res.status(500).json({ 
+      ok: false, 
+      reason: `proxy_error: ${error.message}` 
     });
   }
 });
