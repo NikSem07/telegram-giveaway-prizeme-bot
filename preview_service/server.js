@@ -137,7 +137,8 @@ async function tgGetChatMember(chatId, userId) {
         return { ok: false, debug: 'chat_not_found', status: 'left' };
       } else if (description.toLowerCase().includes('user not found')) {
         return { ok: false, debug: 'user_not_found_in_chat', status: 'left' };
-      } else if (description.toLowerCase().includes('bad request: user not found')) {
+      } else if (description.toLowerCase().includes('bad request: user not found') || 
+                 description.toLowerCase().includes('participant_id_invalid')) {
         // PARTICIPANT_ID_INVALID - пользователь не существует в Telegram
         return { ok: false, debug: 'participant_id_invalid', status: 'invalid' };
       } else if (description.toLowerCase().includes('not enough rights')) {
@@ -399,6 +400,8 @@ app.post('/api/check', async (req, res) => {
 
       // Проверка членства
       let channelOk = false;
+      let participantInvalid = false;
+
       try {
         if (chatId && await _isMemberLocal(parseInt(chatId), parseInt(userId))) {
           details.push(`[${title}] local=OK`);
@@ -411,6 +414,7 @@ app.post('/api/check', async (req, res) => {
             // Пользователь не существует в Telegram - особая обработка
             details.push(`[${title}] participant_id_invalid - user does not exist in Telegram`);
             channelOk = false;
+            participantInvalid = true;
             need.push({
               title: title,
               username: username,
@@ -438,7 +442,7 @@ app.post('/api/check', async (req, res) => {
         });
       }
 
-      if (!channelOk) {
+      if (!channelOk && !participantInvalid) {
         isOkOverall = false;
       }
     }
