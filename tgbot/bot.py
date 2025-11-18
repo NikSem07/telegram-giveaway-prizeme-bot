@@ -5154,7 +5154,7 @@ async def main():
     await init_db()
     await ensure_schema()
     logging.info("✅ База данных инициализирована")
-    logging.info(f"DB file in use: {DB_PATH.resolve()}")
+    logging.info("✅ База данных PostgreSQL инициализирована")
 
     # 2) запускаем планировщик
     scheduler.start()
