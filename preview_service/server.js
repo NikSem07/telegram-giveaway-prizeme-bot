@@ -60,23 +60,37 @@ app.get('/uploads/:path(*)', async (req, res) => {
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     console.log(`[MEDIA] Proxying to: ${s3Url}`);
     
-    // ПРОСТОЙ ЗАПРОС КАК В PYTHON - БЕЗ АУТЕНТИФИКАЦИИ
+    // УЛУЧШЕННАЯ РЕАЛИЗАЦИЯ - как в Python
     const response = await fetch(s3Url, {
       method: 'GET',
-      redirect: 'follow', // Важно: следуем за редиректами
-      timeout: 30000      // 30 секунд как в Python
+      redirect: 'manual', // Ручная обработка редиректов как в httpx
     });
 
-    // ТОЧНАЯ ЛОГИКА КАК В PYTHON
-    const status = response.status < 400 ? 200 : 404;
+    // ОБРАБОТКА РЕДИРЕКТОВ как в Python
+    let finalUrl = s3Url;
+    let finalResponse = response;
     
-    if (!response.ok) {
-      console.log(`[MEDIA] S3 response: ${response.status} -> mapping to ${status}`);
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const redirectUrl = response.headers.get('location');
+      console.log(`[MEDIA] Following redirect to: ${redirectUrl}`);
+      
+      if (redirectUrl) {
+        finalResponse = await fetch(redirectUrl, {
+          method: 'GET',
+        });
+        finalUrl = redirectUrl;
+      }
+    }
+
+    const status = finalResponse.status < 400 ? 200 : 404;
+    
+    if (!finalResponse.ok) {
+      console.log(`[MEDIA] S3 response: ${finalResponse.status} -> mapping to ${status}`);
       return res.status(status).send('Media not found');
     }
 
     // Определяем MIME-тип
-    let contentType = response.headers.get('content-type');
+    let contentType = finalResponse.headers.get('content-type');
     if (!contentType) {
       const mimeType = mime.lookup(mediaPath);
       contentType = mimeType || 'application/octet-stream';
@@ -85,10 +99,10 @@ app.get('/uploads/:path(*)', async (req, res) => {
     // Заголовки как в Python
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('X-Proxy-From', s3Url);
+    res.setHeader('X-Proxy-From', finalUrl);
 
-    // Передаем данные
-    const buffer = await response.arrayBuffer();
+    // Передаем данные потоком для эффективности
+    const buffer = await finalResponse.arrayBuffer();
     res.status(status).send(Buffer.from(buffer));
 
     console.log(`[MEDIA] ✅ Successfully served: ${mediaPath} (${contentType})`);
@@ -99,7 +113,7 @@ app.get('/uploads/:path(*)', async (req, res) => {
   }
 });
 
-// HEAD запросы
+// УЛУЧШЕННЫЙ HEAD ЗАПРОС
 app.head('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
@@ -107,16 +121,24 @@ app.head('/uploads/:path(*)', async (req, res) => {
     
     const response = await fetch(s3Url, { 
       method: 'HEAD',
-      redirect: 'follow',
-      timeout: 10000
+      redirect: 'manual',
     });
     
-    const status = response.status < 400 ? 200 : 404;
+    // ОБРАБОТКА РЕДИРЕКТОВ для HEAD
+    let finalResponse = response;
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const redirectUrl = response.headers.get('location');
+      if (redirectUrl) {
+        finalResponse = await fetch(redirectUrl, { method: 'HEAD' });
+      }
+    }
     
-    if (response.ok) {
-      const contentType = response.headers.get('content-type') || mime.lookup(mediaPath) || 'application/octet-stream';
+    const status = finalResponse.status < 400 ? 200 : 404;
+    
+    if (finalResponse.ok) {
+      const contentType = finalResponse.headers.get('content-type') || mime.lookup(mediaPath) || 'application/octet-stream';
       res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Length', response.headers.get('content-length') || '0');
+      res.setHeader('Content-Length', finalResponse.headers.get('content-length') || '0');
       res.setHeader('Cache-Control', 'public, max-age=300');
     }
     
