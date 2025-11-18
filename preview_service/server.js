@@ -12,6 +12,14 @@ require('dotenv').config({ path: '/root/telegram-giveaway-prizeme-bot/.env' });
 const app = express();
 const PORT = process.env.PORT || 8086;
 
+// ДИАГНОСТИКА ЗАГРУЗКИ .env
+console.log('🔧 .env DIAGNOSTICS:');
+console.log('   S3_ENDPOINT:', process.env.S3_ENDPOINT);
+console.log('   S3_BUCKET:', process.env.S3_BUCKET);
+console.log('   S3_ACCESS_KEY:', process.env.S3_ACCESS_KEY ? '***SET***' : 'NOT SET');
+console.log('   S3_SECRET_KEY:', process.env.S3_SECRET_KEY ? '***SET***' : 'NOT SET');
+console.log('   BOT_TOKEN:', process.env.BOT_TOKEN ? '***SET***' : 'NOT SET');
+
 // Middleware
 app.use(cors());
 app.use(express.json());
