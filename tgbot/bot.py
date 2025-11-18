@@ -4194,10 +4194,10 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
             
             print(f"✅ Розыгрыш активен, продолжаем...")
             
-            # Получаем участников
+            # Получаем участников - ИСПРАВЛЕННЫЙ ЗАПРОС
             print(f"🔍 Ищем участников розыгрыша {gid}")
             res = await s.execute(
-                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id=:gid AND prelim_ok=1"),
+                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id=:gid AND prelim_ok=true"),
                 {"gid": gid}
             )
             entries = res.all()
@@ -4217,9 +4217,10 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
                     ok, details = await check_membership_on_all(bot_instance, uid, gid)
                     print(f"📝 Результат проверки user {uid}: {ok}")
                     
+                    # ИСПРАВЛЕННЫЙ UPDATE - используем True/False вместо 1/0
                     await s.execute(
                         stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
-                        {"ok": 1 if ok else 0, "ts": datetime.now(timezone.utc), "eid": entry_id}
+                        {"ok": True if ok else False, "ts": datetime.now(timezone.utc), "eid": entry_id}
                     )
                     
                     if ok:
