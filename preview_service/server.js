@@ -40,10 +40,16 @@ const pool = new Pool({
   ssl: false
 });
 
-// Константы после подключения к PostgreSQL
+// КОНФИГУРАЦИЯ S3 ИЗ .env
 const S3_ENDPOINT = process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru';
-const S3_BUCKET = process.env.S3_BUCKET || '';
+const S3_BUCKET = process.env.S3_BUCKET || '7b2a8ba5-prizeme-media'; // ⭐ ИСПРАВЛЕНО!
 const MEDIA_BASE_URL = process.env.MEDIA_BASE_URL || 'https://media.prizeme.ru';
+
+console.log('🔧 S3 Configuration:');
+console.log('   S3_ENDPOINT:', S3_ENDPOINT);
+console.log('   S3_BUCKET:', S3_BUCKET);
+console.log('   MEDIA_BASE_URL:', MEDIA_BASE_URL);
+
 
 // --- Проксирование медиа из S3 ---
 app.get('/uploads/:path(*)', async (req, res) => {
@@ -51,38 +57,57 @@ app.get('/uploads/:path(*)', async (req, res) => {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
     
+    // ⭐ ИСПРАВЛЕННЫЙ URL S3
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     console.log(`[MEDIA] Proxying to: ${s3Url}`);
     
     const response = await fetch(s3Url, {
       method: 'GET',
-      timeout: 30000
+      headers: {
+        'User-Agent': 'PrizeMe-Media-Proxy/1.0'
+      },
+      timeout: 15000
     });
 
     if (!response.ok) {
-      console.log(`[MEDIA] S3 response not OK: ${response.status}`);
-      return res.status(404).send('Media not found');
+      console.log(`[MEDIA] S3 response not OK: ${response.status} ${response.statusText}`);
+      return res.status(response.status).send(`Media not found: ${response.status}`);
     }
 
-    // Получаем Content-Type с использованием mime-types
-    const contentType = response.headers.get('content-type') || 
-                       mime.lookup(mediaPath) || 
-                       'application/octet-stream';
+    // ⭐ УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ MIME-ТИПА
+    let contentType = response.headers.get('content-type');
+    
+    if (!contentType || contentType === 'application/octet-stream') {
+      // Определяем по расширению файла
+      const ext = mediaPath.split('.').pop().toLowerCase();
+      const mimeMap = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg', 
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'mp4': 'video/mp4',
+        'mov': 'video/quicktime',
+        'avi': 'video/x-msvideo'
+      };
+      contentType = mimeMap[ext] || 'application/octet-stream';
+    }
 
-    // Устанавливаем правильные заголовки
+    // ⭐ ПРАВИЛЬНЫЕ ЗАГОЛОВКИ ДЛЯ TELEGRAM PREVIEW
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('X-Proxy-From', s3Url);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 часа
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Proxy-Source', 'prizeme-s3-proxy');
 
     // Передаем поток данных
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
 
-    console.log(`[MEDIA] Successfully served: ${mediaPath}`);
+    console.log(`[MEDIA] ✅ Successfully served: ${mediaPath} (${contentType})`);
 
   } catch (error) {
-    console.log(`[MEDIA] Error: ${error.message}`);
-    res.status(500).send('Media proxy error');
+    console.log(`[MEDIA] ❌ Error: ${error.message}`);
+    res.status(500).send('Media proxy error: ' + error.message);
   }
 });
 
