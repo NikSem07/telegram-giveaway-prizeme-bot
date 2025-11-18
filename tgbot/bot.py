@@ -966,8 +966,12 @@ class Winner(Base):
 
 # ---- DB INIT ----
 
-# путь к bot.db строго рядом с bot.py (один файл для всех)
-DB_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod")
+# 🔧 ПРИНУДИТЕЛЬНО УКАЗЫВАЕМ ASYNCPG ДРАЙВЕР
+DB_URL = "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod"
+
+# 🔧 ПРИНУДИТЕЛЬНО ЗАГРУЖАЕМ ASYNCPG ДРАЙВЕР ДЛЯ SQLALCHEMY
+import sqlalchemy.dialects.postgresql.asyncpg
+print("✅ asyncpg драйвер принудительно зарегистрирован в SQLAlchemy")
 
 engine = create_async_engine(DB_URL, echo=True, future=True)
 Session = async_sessionmaker(engine, expire_on_commit=False)
