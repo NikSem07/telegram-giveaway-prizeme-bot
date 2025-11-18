@@ -247,6 +247,207 @@ app.post('/api/check_giveaway_status', async (req, res) => {
   }
 });
 
+// --- POST /api/check ---
+app.post('/api/check', async (req, res) => {
+  console.log('[CHECK] Request received:', req.body);
+
+  if (!BOT_TOKEN) {
+    return res.status(500).json({ ok: false, reason: 'no_bot_token' });
+  }
+
+  try {
+    const { gid, init_data } = req.body;
+    const giveawayId = parseInt(gid);
+
+    if (!giveawayId) {
+      return res.status(400).json({ ok: false, reason: 'bad_gid' });
+    }
+
+    // Валидация init_data и извлечение user_id
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = parseInt(parsedInitData.user_parsed.id);
+    console.log(`[CHECK] user_id=${userId}, gid=${giveawayId}`);
+
+    // Получаем каналы розыгрыша из БД
+    const channelsResult = await pool.query(`
+      SELECT gc.chat_id, gc.title, oc.username
+      FROM giveaway_channels gc
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE gc.giveaway_id = $1
+      ORDER BY gc.id
+    `, [giveawayId]);
+
+    const channels = channelsResult.rows.map(row => ({
+      chat_id: row.chat_id,
+      title: row.title,
+      username: row.username
+    }));
+
+    // Получаем время окончания розыгрыша
+    const giveawayResult = await pool.query(
+      'SELECT end_at_utc FROM giveaways WHERE id = $1',
+      [giveawayId]
+    );
+    const endAtUtc = giveawayResult.rows[0]?.end_at_utc || null;
+
+    console.log(`[CHECK] channels_from_db:`, channels);
+
+    if (!channels.length) {
+      return res.json({
+        ok: true,
+        done: false,
+        need: [{ title: "Ошибка конфигурации", username: null, url: "#" }],
+        details: ["No channels configured for this giveaway"],
+        end_at_utc: endAtUtc
+      });
+    }
+
+    // Проверка подписки на каналы
+    const need = [];
+    const details = [];
+    let isOkOverall = true;
+
+    for (const ch of channels) {
+      const rawId = ch.chat_id;
+      const title = ch.title || ch.username || "канал";
+      const username = (ch.username || "").replace(/^@/, "") || null;
+      
+      let chatId = null;
+
+      // Нормализация chat_id
+      const { chatId: normalizedId, debug: normDebug } = _normalizeChatId(rawId, username);
+      details.push(`[${title}] norm: ${normDebug}`);
+      chatId = normalizedId;
+
+      // Если не удалось нормализовать - пробуем резолв по username
+      if (chatId === null && username) {
+        try {
+          const chatInfo = await tgGetChat(username);
+          chatId = parseInt(chatInfo.id);
+          details.push(`[${title}] resolved id=${chatId} from @${username}`);
+        } catch (error) {
+          details.push(`[${title}] resolve_failed: ${error.message}`);
+        }
+      }
+
+      // Если chatId так и не появился - используем raw_id
+      if (chatId === null && rawId) {
+        chatId = rawId;
+        details.push(`[${title}] using_raw_id: ${rawId}`);
+      }
+
+      // Проверка членства
+      let channelOk = false;
+      try {
+        if (chatId && await _isMemberLocal(parseInt(chatId), parseInt(userId))) {
+          details.push(`[${title}] local=OK`);
+          channelOk = true;
+        } else {
+          const memberResult = await tgGetChatMember(parseInt(chatId), parseInt(userId));
+          details.push(`[${title}] ${memberResult.debug}`);
+          
+          if (['creator', 'administrator', 'member'].includes(memberResult.status)) {
+            channelOk = true;
+          } else {
+            channelOk = false;
+            need.push({
+              title: title,
+              username: username,
+              url: username ? `https://t.me/${username}` : `https://t.me/${chatId}`
+            });
+          }
+        }
+      } catch (error) {
+        details.push(`[${title}] get_chat_member_failed: ${error.message}`);
+        channelOk = false;
+        need.push({
+          title: title,
+          username: username,
+          url: username ? `https://t.me/${username}` : `https://t.me/${chatId}`
+        });
+      }
+
+      if (!channelOk) {
+        isOkOverall = false;
+      }
+    }
+
+    console.log(`[CHECK] user_id=${userId}, is_ok_overall=${isOkOverall}`);
+    console.log(`[CHECK] need list:`, need);
+
+    const done = isOkOverall;
+    let ticket = null;
+    let isNewTicket = false;
+
+    // Если все условия выполнены - создаем/проверяем билет
+    if (done) {
+      try {
+        // Ищем существующий билет
+        const ticketResult = await pool.query(
+          'SELECT ticket_code FROM entries WHERE giveaway_id = $1 AND user_id = $2',
+          [giveawayId, userId]
+        );
+
+        if (ticketResult.rows.length > 0) {
+          ticket = ticketResult.rows[0].ticket_code;
+          console.log(`[CHECK] ✅ Найден существующий билет: ${ticket}`);
+        } else {
+          console.log(`[CHECK] 📝 Создаем новый билет для user_id=${userId}, gid=${giveawayId}`);
+          
+          // Генерация уникального кода билета
+          const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const code = Array.from({ length: 6 }, () => 
+              alphabet[Math.floor(Math.random() * alphabet.length)]
+            ).join('');
+            
+            try {
+              await pool.query(
+                `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) 
+                 VALUES ($1, $2, $3, true, NOW())`,
+                [giveawayId, userId, code]
+              );
+              ticket = code;
+              isNewTicket = true;
+              console.log(`[CHECK] ✅ Создан новый билет: ${ticket} (попытка ${attempt + 1})`);
+              break;
+            } catch (error) {
+              if (error.code === '23505') { // UNIQUE constraint violation
+                console.log(`[CHECK] ⚠️ Коллизия билета ${code}, пробуем другой`);
+                continue;
+              } else {
+                throw error;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`[CHECK] ❌ Ошибка при работе с билетом: ${error}`);
+        details.push(`ticket_issue_error: ${error.message}`);
+      }
+    }
+
+    // Финальный ответ
+    res.json({
+      ok: true,
+      done: done,
+      need: need,
+      ticket: ticket,
+      is_new_ticket: isNewTicket,
+      end_at_utc: endAtUtc,
+      details: details
+    });
+
+  } catch (error) {
+    console.log(`[CHECK] Error: ${error}`);
+    res.status(500).json({ ok: false, reason: `server_error: ${error.message}` });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
