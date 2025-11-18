@@ -211,20 +211,35 @@ app.post('/api/check_giveaway_status', async (req, res) => {
       return res.status(400).json({ ok: false, reason: 'bad_gid' });
     }
 
-    // Тестовая заглушка - потом заменим на реальный запрос к БД
-    console.log(`[CHECK_STATUS] Checking giveaway ${giveawayId}`);
+    // ЗАПРОС К POSTGRESQL
+    const result = await pool.query(
+      'SELECT status, end_at_utc FROM giveaways WHERE id = $1',
+      [giveawayId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, reason: 'giveaway_not_found' });
+    }
+
+    const row = result.rows[0];
+    const status = row.status;
+    const endAtUtc = row.end_at_utc;
     
+    // Проверяем, завершен ли розыгрыш
+    const isCompleted = ['completed', 'finished'].includes(status);
+
+    console.log(`[CHECK_STATUS] gid=${giveawayId}, status=${status}, is_completed=${isCompleted}`);
+
     res.json({
       ok: true,
-      status: 'active',
-      end_at_utc: '2024-12-31 23:59:59',
-      is_completed: false,
-      message: 'Test endpoint - DB integration pending'
+      status: status,
+      end_at_utc: endAtUtc,
+      is_completed: isCompleted
     });
 
   } catch (error) {
     console.log(`[CHECK_STATUS] Error: ${error}`);
-    res.status(500).json({ ok: false, reason: `server_error: ${error.message}` });
+    res.status(500).json({ ok: false, reason: `db_error: ${error.message}` });
   }
 });
 
