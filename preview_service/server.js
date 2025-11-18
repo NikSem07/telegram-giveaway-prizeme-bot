@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const mimetypes = require('mimetypes');
+const mime = require('mime-types');
 
 // ЯВНОЕ ПОДКЛЮЧЕНИЕ .env ФАЙЛА
 require('dotenv').config({ path: '/root/telegram-giveaway-prizeme-bot/.env' });
@@ -51,11 +51,6 @@ app.get('/uploads/:path(*)', async (req, res) => {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
     
-    // Безопасная обработка пути
-    if (!mediaPath || mediaPath.includes('..')) {
-      return res.status(400).send('Invalid path');
-    }
-    
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     console.log(`[MEDIA] Proxying to: ${s3Url}`);
     
@@ -66,31 +61,24 @@ app.get('/uploads/:path(*)', async (req, res) => {
 
     if (!response.ok) {
       console.log(`[MEDIA] S3 response not OK: ${response.status}`);
-      return res.status(response.status).send('Media not found');
+      return res.status(404).send('Media not found');
     }
 
-    // Получаем Content-Type
+    // Получаем Content-Type с использованием mime-types
     const contentType = response.headers.get('content-type') || 
-                       mimetypes.lookup(mediaPath) || 
+                       mime.lookup(mediaPath) || 
                        'application/octet-stream';
-
-    // Получаем Content-Length
-    const contentLength = response.headers.get('content-length');
 
     // Устанавливаем правильные заголовки
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час кэша
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('X-Proxy-From', s3Url);
-    
-    if (contentLength) {
-      res.setHeader('Content-Length', contentLength);
-    }
 
     // Передаем поток данных
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
 
-    console.log(`[MEDIA] Successfully served: ${mediaPath} (${contentLength} bytes)`);
+    console.log(`[MEDIA] Successfully served: ${mediaPath}`);
 
   } catch (error) {
     console.log(`[MEDIA] Error: ${error.message}`);
@@ -102,11 +90,6 @@ app.get('/uploads/:path(*)', async (req, res) => {
 app.head('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
-    
-    if (!mediaPath || mediaPath.includes('..')) {
-      return res.status(400).end();
-    }
-    
     const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
     
     const response = await fetch(s3Url, { method: 'HEAD', timeout: 10000 });
@@ -124,29 +107,6 @@ app.head('/uploads/:path(*)', async (req, res) => {
     res.status(500).end();
   }
 });
-
-// HEAD запросы для медиа
-app.head('/uploads/:path(*)', async (req, res) => {
-  try {
-    const path = req.params.path;
-    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${path}`;
-    
-    const response = await fetch(s3Url, { method: 'HEAD', timeout: 10000 });
-    
-    if (response.ok) {
-      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
-      res.setHeader('Content-Length', response.headers.get('content-length') || '0');
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      res.status(200).end();
-    } else {
-      res.status(404).end();
-    }
-  } catch (error) {
-    console.log(`[MEDIA-HEAD] Error: ${error.message}`);
-    res.status(500).end();
-  }
-});
-
 
 // Вспомогательные функции
 function _normalizeChatId(raw, username = null) {
