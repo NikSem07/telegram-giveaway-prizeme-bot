@@ -48,43 +48,85 @@ const pool = new Pool({
   ssl: false
 });
 
-// КОНФИГУРАЦИЯ S3 ИЗ .env
+// S3 Конфигурация (добавьте в начало после других конфигов)
 const S3_ENDPOINT = process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru';
-const S3_BUCKET = process.env.S3_BUCKET || '7b2a8ba5-prizeme-media'; // ⭐ ИСПРАВЛЕНО!
+const S3_BUCKET = process.env.S3_BUCKET || '7b2a8ba5-prizeme-media';
+const S3_KEY = process.env.S3_ACCESS_KEY || 'RRAW3NKI3GIRFXCF9BE0';
+const S3_SECRET = process.env.S3_SECRET_KEY || 'jwEbCUdB68S8BJDBXWNSslMpcLeGmrm1e1A6iCzi';
+const S3_REGION = process.env.S3_REGION || 'ru-1';
 const MEDIA_BASE_URL = process.env.MEDIA_BASE_URL || 'https://media.prizeme.ru';
 
 console.log('🔧 S3 Configuration:');
 console.log('   S3_ENDPOINT:', S3_ENDPOINT);
 console.log('   S3_BUCKET:', S3_BUCKET);
-console.log('   MEDIA_BASE_URL:', MEDIA_BASE_URL);
+console.log('   S3_KEY:', S3_KEY ? '***SET***' : 'NOT SET');
+console.log('   S3_SECRET:', S3_SECRET ? '***SET***' : 'NOT SET');
+console.log('   S3_REGION:', S3_REGION);
 
+// Функция для создания подписи AWS Signature v4
+function signS3Request(method, path, headers = {}) {
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  
+  // Канонический запрос
+  const canonicalHeaders = `host:s3.twcstorage.ru\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-amz-date';
+  const canonicalRequest = `${method}\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\nUNSIGNED-PAYLOAD`;
+  
+  // Строка для подписи
+  const algorithm = 'AWS4-HMAC-SHA256';
+  const credentialScope = `${dateStamp}/${S3_REGION}/s3/aws4_request`;
+  const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${crypto.createHash('sha256').update(canonicalRequest).digest('hex')}`;
+  
+  // Подпись
+  const kDate = crypto.createHmac('sha256', 'AWS4' + S3_SECRET).update(dateStamp).digest();
+  const kRegion = crypto.createHmac('sha256', kDate).update(S3_REGION).digest();
+  const kService = crypto.createHmac('sha256', kRegion).update('s3').digest();
+  const kSigning = crypto.createHmac('sha256', kService).update('aws4_request').digest();
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+  
+  return {
+    'x-amz-date': amzDate,
+    'Authorization': `${algorithm} Credential=${S3_KEY}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+  };
+}
 
-// --- Проксирование медиа из S3 ---
 app.get('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
     
-    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
+    const s3Path = `/${S3_BUCKET}/${mediaPath}`;
+    const s3Url = `${S3_ENDPOINT}${s3Path}`;
     console.log(`[MEDIA] Proxying to: ${s3Url}`);
     
-    // УЛУЧШЕННАЯ РЕАЛИЗАЦИЯ - как в Python
+    // Создаем подписанный запрос
+    const signedHeaders = signS3Request('GET', s3Path);
+    
     const response = await fetch(s3Url, {
       method: 'GET',
-      redirect: 'manual', // Ручная обработка редиректов как в httpx
+      headers: {
+        'Host': 's3.twcstorage.ru',
+        ...signedHeaders
+      },
+      redirect: 'manual',
     });
 
-    // ОБРАБОТКА РЕДИРЕКТОВ как в Python
-    let finalUrl = s3Url;
     let finalResponse = response;
-    
+    let finalUrl = s3Url;
+
+    // Обработка редиректов
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const redirectUrl = response.headers.get('location');
       console.log(`[MEDIA] Following redirect to: ${redirectUrl}`);
       
       if (redirectUrl) {
-        finalResponse = await fetch(redirectUrl, {
+        finalResponse = await fetch(redirectUrl, { 
           method: 'GET',
+          headers: {
+            'Host': 's3.twcstorage.ru',
+            ...signedHeaders
+          }
         });
         finalUrl = redirectUrl;
       }
@@ -104,12 +146,12 @@ app.get('/uploads/:path(*)', async (req, res) => {
       contentType = mimeType || 'application/octet-stream';
     }
 
-    // Заголовки как в Python
+    // Заголовки
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.setHeader('X-Proxy-From', finalUrl);
 
-    // Передаем данные потоком для эффективности
+    // Передаем данные
     const buffer = await finalResponse.arrayBuffer();
     res.status(status).send(Buffer.from(buffer));
 
@@ -125,10 +167,17 @@ app.get('/uploads/:path(*)', async (req, res) => {
 app.head('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
-    const s3Url = `${S3_ENDPOINT}/${S3_BUCKET}/${mediaPath}`;
+    const s3Path = `/${S3_BUCKET}/${mediaPath}`;
+    const s3Url = `${S3_ENDPOINT}${s3Path}`;
+    
+    const signedHeaders = signS3Request('HEAD', s3Path);
     
     const response = await fetch(s3Url, { 
       method: 'HEAD',
+      headers: {
+        'Host': 's3.twcstorage.ru',
+        ...signedHeaders
+      },
       redirect: 'manual',
     });
     
@@ -137,7 +186,13 @@ app.head('/uploads/:path(*)', async (req, res) => {
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const redirectUrl = response.headers.get('location');
       if (redirectUrl) {
-        finalResponse = await fetch(redirectUrl, { method: 'HEAD' });
+        finalResponse = await fetch(redirectUrl, { 
+          method: 'HEAD',
+          headers: {
+            'Host': 's3.twcstorage.ru',
+            ...signedHeaders
+          }
+        });
       }
     }
     
