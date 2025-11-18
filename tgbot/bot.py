@@ -1014,12 +1014,12 @@ async def ensure_schema():
         # 1) Таблица (если нет) — полная версия со всеми колонками.
         await conn.exec_driver_sql("""
         CREATE TABLE IF NOT EXISTS organizer_channels (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            id            SERIAL PRIMARY KEY,
             owner_user_id BIGINT   NOT NULL,
             chat_id       BIGINT   NOT NULL,
             username      TEXT,
             title         TEXT     NOT NULL,
-            is_private    BOOLEAN  NOT NULL DEFAULT 0,
+            is_private    BOOLEAN  NOT NULL DEFAULT false,
             bot_role      TEXT     NOT NULL DEFAULT 'member',
             status        TEXT     NOT NULL DEFAULT 'ok',
             added_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
