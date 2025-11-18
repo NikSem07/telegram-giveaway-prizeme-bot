@@ -455,6 +455,175 @@ app.post('/api/check', async (req, res) => {
   }
 });
 
+// --- POST /api/claim ---
+app.post('/api/claim', async (req, res) => {
+  console.log('[CLAIM] Request received:', req.body);
+
+  if (!BOT_TOKEN) {
+    return res.status(500).json({ ok: false, reason: 'no_bot_token' });
+  }
+
+  try {
+    const { gid, init_data } = req.body;
+    const giveawayId = parseInt(gid);
+
+    if (!giveawayId) {
+      return res.status(400).json({ ok: false, reason: 'bad_gid' });
+    }
+
+    // Валидация init_data и извлечение user_id
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = parseInt(parsedInitData.user_parsed.id);
+    console.log(`[CLAIM] user_id=${userId}, gid=${giveawayId}`);
+
+    // Получаем время окончания розыгрыша
+    const giveawayResult = await pool.query(
+      'SELECT end_at_utc FROM giveaways WHERE id = $1',
+      [giveawayId]
+    );
+    const endAtUtc = giveawayResult.rows[0]?.end_at_utc || null;
+
+    // Проверяем есть ли уже билет ПРЕЖДЕ проверки подписки
+    const existingTicket = await pool.query(
+      'SELECT ticket_code FROM entries WHERE giveaway_id = $1 AND user_id = $2',
+      [giveawayId, userId]
+    );
+
+    if (existingTicket.rows.length > 0) {
+      console.log(`[CLAIM] ✅ Пользователь уже имеет билет: ${existingTicket.rows[0].ticket_code}`);
+      return res.json({
+        ok: true,
+        done: true,
+        ticket: existingTicket.rows[0].ticket_code,
+        end_at_utc: endAtUtc,
+        details: ["Already have ticket - skipping subscription check"]
+      });
+    }
+
+    // Проверка подписки на каналы
+    const channelsResult = await pool.query(`
+      SELECT gc.chat_id, gc.title, oc.username
+      FROM giveaway_channels gc
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE gc.giveaway_id = $1
+      ORDER BY gc.id
+    `, [giveawayId]);
+
+    const channels = channelsResult.rows.map(row => ({
+      chat_id: row.chat_id,
+      title: row.title,
+      username: row.username
+    }));
+
+    const need = [];
+    const details = [];
+
+    for (const ch of channels) {
+      const title = ch.title || "канал";
+      const username = (ch.username || "").replace(/^@/, "") || null;
+      
+      try {
+        const chatId = parseInt(ch.chat_id);
+        
+        // Проверка членства
+        let isOk = false;
+        if (await _isMemberLocal(chatId, userId)) {
+          isOk = true;
+        } else {
+          const memberResult = await tgGetChatMember(chatId, userId);
+          details.push(`[${title}] ${memberResult.debug}`);
+          isOk = ['creator', 'administrator', 'member'].includes(memberResult.status);
+        }
+
+        if (!isOk) {
+          need.push({
+            title: title,
+            username: username,
+            url: username ? `https://t.me/${username}` : null
+          });
+        }
+      } catch (error) {
+        details.push(`[${title}] claim_check_failed: ${error.message}`);
+        need.push({
+          title: title,
+          username: username,
+          url: username ? `https://t.me/${username}` : null
+        });
+      }
+    }
+
+    const done = need.length === 0;
+    if (!done) {
+      return res.json({
+        ok: true,
+        done: false,
+        need: need,
+        end_at_utc: endAtUtc,
+        details: details
+      });
+    }
+
+    // Выдаем новый билет
+    console.log(`[CLAIM] 📝 Создаем новый билет для user_id=${userId}, gid=${giveawayId}`);
+    
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let ticket = null;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const code = Array.from({ length: 6 }, () => 
+        alphabet[Math.floor(Math.random() * alphabet.length)]
+      ).join('');
+      
+      try {
+        await pool.query(
+          `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) 
+           VALUES ($1, $2, $3, true, NOW())`,
+          [giveawayId, userId, code]
+        );
+        ticket = code;
+        console.log(`[CLAIM] ✅ Успешно создан билет: ${code}`);
+        break;
+      } catch (error) {
+        if (error.code === '23505') { // UNIQUE constraint violation
+          console.log(`[CLAIM] ⚠️ Коллизия билета ${code}, попытка ${attempt + 1}`);
+          continue;
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!ticket) {
+      console.log(`[CLAIM] ❌ Не удалось создать уникальный билет после 12 попыток`);
+      return res.status(500).json({
+        ok: false,
+        done: true,
+        reason: "ticket_issue_failed_after_retries",
+        end_at_utc: endAtUtc
+      });
+    }
+
+    res.json({
+      ok: true,
+      done: true,
+      ticket: ticket,
+      end_at_utc: endAtUtc,
+      details: details
+    });
+
+  } catch (error) {
+    console.log(`[CLAIM] ❌ Критическая ошибка: ${error}`);
+    res.status(500).json({ 
+      ok: false, 
+      reason: `server_error: ${error.message}`
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
