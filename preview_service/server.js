@@ -4,7 +4,9 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config();
+
+// ЯВНОЕ ПОДКЛЮЧЕНИЕ .env ФАЙЛА
+require('dotenv').config({ path: '/root/telegram-giveaway-prizeme-bot/.env' });
 
 const app = express();
 const PORT = process.env.PORT || 8086;
@@ -13,16 +15,6 @@ const PORT = process.env.PORT || 8086;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../webapp')));
-
-// PostgreSQL подключение
-const pool = new Pool({
-  user: 'prizeme_user',
-  password: 'Akinneket19!',
-  host: 'localhost',
-  port: 5432,
-  database: 'prizeme_prod',
-  ssl: false
-});
 
 // Конфигурация из .env
 const BOT_TOKEN = process.env.BOT_TOKEN?.trim();
@@ -36,8 +28,16 @@ console.log('   BOT_TOKEN:', BOT_TOKEN ? '***SET***' : 'NOT SET');
 console.log('   BOT_INTERNAL_URL:', BOT_INTERNAL_URL);
 console.log('   WEBAPP_BASE_URL:', WEBAPP_BASE_URL || 'NOT SET');
 console.log('   TELEGRAM_API:', TELEGRAM_API || 'NOT SET (no BOT_TOKEN)');
-console.log('🎯 PrizeMe Node.js backend starting...');
-console.log('📊 PostgreSQL configured');
+
+// PostgreSQL подключение
+const pool = new Pool({
+  user: 'prizeme_user',
+  password: 'Akinneket19!',
+  host: 'localhost',
+  port: 5432,
+  database: 'prizeme_prod',
+  ssl: false
+});
 
 
 // Вспомогательные функции
