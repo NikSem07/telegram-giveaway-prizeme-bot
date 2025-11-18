@@ -34,6 +34,19 @@ from sqlalchemy import text as stext
 from sqlalchemy import (text, String, Integer, BigInteger,
                         Boolean, DateTime, ForeignKey)
 from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
+
+# 🔧 ПРИНУДИТЕЛЬНАЯ ЗАГРУЗКА ASYNCPG ДЛЯ ИЗБЕЖАНИЯ КОНФЛИКТА
+import sys
+venv_path = "/root/telegram-giveaway-prizeme-bot/venv/lib/python3.12/site-packages"
+if venv_path not in sys.path:
+    sys.path.insert(0, venv_path)
+try:
+    import asyncpg
+    print("✅ asyncpg принудительно загружен из venv")
+except ImportError as e:
+    print(f"❌ Ошибка загрузки asyncpg: {e}")
+    sys.exit(1)
+
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
