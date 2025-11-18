@@ -137,6 +137,9 @@ async function tgGetChatMember(chatId, userId) {
         return { ok: false, debug: 'chat_not_found', status: 'left' };
       } else if (description.toLowerCase().includes('user not found')) {
         return { ok: false, debug: 'user_not_found_in_chat', status: 'left' };
+      } else if (description.toLowerCase().includes('bad request: user not found')) {
+        // PARTICIPANT_ID_INVALID - пользователь не существует в Telegram
+        return { ok: false, debug: 'participant_id_invalid', status: 'invalid' };
       } else if (description.toLowerCase().includes('not enough rights')) {
         return { ok: false, debug: 'bot_not_admin', status: 'restricted' };
       } else if (errorCode === 400) {
@@ -404,7 +407,17 @@ app.post('/api/check', async (req, res) => {
           const memberResult = await tgGetChatMember(parseInt(chatId), parseInt(userId));
           details.push(`[${title}] ${memberResult.debug}`);
           
-          if (['creator', 'administrator', 'member'].includes(memberResult.status)) {
+          if (memberResult.status === 'invalid') {
+            // Пользователь не существует в Telegram - особая обработка
+            details.push(`[${title}] participant_id_invalid - user does not exist in Telegram`);
+            channelOk = false;
+            need.push({
+              title: title,
+              username: username,
+              url: username ? `https://t.me/${username}` : `https://t.me/${chatId}`,
+              error: 'user_not_found'
+            });
+          } else if (['creator', 'administrator', 'member'].includes(memberResult.status)) {
             channelOk = true;
           } else {
             channelOk = false;
@@ -583,7 +596,7 @@ app.post('/api/claim', async (req, res) => {
         } else {
           const memberResult = await tgGetChatMember(chatId, userId);
           details.push(`[${title}] ${memberResult.debug}`);
-          isOk = ['creator', 'administrator', 'member'].includes(memberResult.status);
+          isOk = memberResult.status !== 'invalid' && ['creator', 'administrator', 'member'].includes(memberResult.status);
         }
 
         if (!isOk) {
