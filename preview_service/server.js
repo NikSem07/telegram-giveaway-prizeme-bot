@@ -28,10 +28,17 @@ const pool = new Pool({
 const BOT_TOKEN = process.env.BOT_TOKEN?.trim();
 const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:8088';
 const WEBAPP_BASE_URL = process.env.WEBAPP_BASE_URL?.trim();
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TELEGRAM_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
 
+// Логируем конфигурацию при запуске
+console.log('🔧 Configuration loaded:');
+console.log('   BOT_TOKEN:', BOT_TOKEN ? '***SET***' : 'NOT SET');
+console.log('   BOT_INTERNAL_URL:', BOT_INTERNAL_URL);
+console.log('   WEBAPP_BASE_URL:', WEBAPP_BASE_URL || 'NOT SET');
+console.log('   TELEGRAM_API:', TELEGRAM_API || 'NOT SET (no BOT_TOKEN)');
 console.log('🎯 PrizeMe Node.js backend starting...');
 console.log('📊 PostgreSQL configured');
+
 
 // Вспомогательные функции
 function _normalizeChatId(raw, username = null) {
