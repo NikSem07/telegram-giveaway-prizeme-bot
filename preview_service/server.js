@@ -48,7 +48,7 @@ const pool = new Pool({
   ssl: false
 });
 
-// S3 Конфигурация (добавьте в начало после других конфигов)
+// S3 Конфигурация
 const S3_ENDPOINT = process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru';
 const S3_BUCKET = process.env.S3_BUCKET || '7b2a8ba5-prizeme-media';
 const S3_KEY = process.env.S3_ACCESS_KEY || 'RRAW3NKI3GIRFXCF9BE0';
@@ -56,12 +56,13 @@ const S3_SECRET = process.env.S3_SECRET_KEY || 'jwEbCUdB68S8BJDBXWNSslMpcLeGmrm1
 const S3_REGION = process.env.S3_REGION || 'ru-1';
 const MEDIA_BASE_URL = process.env.MEDIA_BASE_URL || 'https://media.prizeme.ru';
 
-console.log('🔧 S3 Configuration:');
+console.log('🔧 S3 Configuration Check:');
 console.log('   S3_ENDPOINT:', S3_ENDPOINT);
 console.log('   S3_BUCKET:', S3_BUCKET);
 console.log('   S3_KEY:', S3_KEY ? '***SET***' : 'NOT SET');
 console.log('   S3_SECRET:', S3_SECRET ? '***SET***' : 'NOT SET');
 console.log('   S3_REGION:', S3_REGION);
+console.log('   MEDIA_BASE_URL:', MEDIA_BASE_URL);
 
 // Функция для создания подписи AWS Signature v4
 function signS3Request(method, path, headers = {}) {
@@ -71,7 +72,9 @@ function signS3Request(method, path, headers = {}) {
   // Канонический запрос
   const canonicalHeaders = `host:s3.twcstorage.ru\nx-amz-date:${amzDate}\n`;
   const signedHeaders = 'host;x-amz-date';
-  const canonicalRequest = `${method}\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\nUNSIGNED-PAYLOAD`;
+  const payloadHash = 'UNSIGNED-PAYLOAD';
+  
+  const canonicalRequest = `${method}\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
   
   // Строка для подписи
   const algorithm = 'AWS4-HMAC-SHA256';
@@ -87,6 +90,7 @@ function signS3Request(method, path, headers = {}) {
   
   return {
     'x-amz-date': amzDate,
+    'x-amz-content-sha256': payloadHash,
     'Authorization': `${algorithm} Credential=${S3_KEY}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
   };
 }
@@ -95,7 +99,6 @@ app.get('/uploads/:path(*)', async (req, res) => {
   try {
     const mediaPath = req.params.path;
     console.log(`[MEDIA] Request for: ${mediaPath}`);
-    console.log(`[MEDIA] Headers:`, req.headers);
     
     const s3Path = `/${S3_BUCKET}/${mediaPath}`;
     const s3Url = `${S3_ENDPOINT}${s3Path}`;
@@ -103,46 +106,22 @@ app.get('/uploads/:path(*)', async (req, res) => {
     
     // Создаем подписанный запрос
     const signedHeaders = signS3Request('GET', s3Path);
-    console.log(`[MEDIA] Signed headers:`, signedHeaders);
     
     const response = await fetch(s3Url, {
       method: 'GET',
       headers: {
         'Host': 's3.twcstorage.ru',
         ...signedHeaders
-      },
-      redirect: 'manual',
+      }
     });
 
-    let finalResponse = response;
-    let finalUrl = s3Url;
-
-    // Обработка редиректов
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      const redirectUrl = response.headers.get('location');
-      console.log(`[MEDIA] Following redirect to: ${redirectUrl}`);
-      
-      if (redirectUrl) {
-        finalResponse = await fetch(redirectUrl, { 
-          method: 'GET',
-          headers: {
-            'Host': 's3.twcstorage.ru',
-            ...signedHeaders
-          }
-        });
-        finalUrl = redirectUrl;
-      }
-    }
-
-    const status = finalResponse.status < 400 ? 200 : 404;
-    
-    if (!finalResponse.ok) {
-      console.log(`[MEDIA] S3 response: ${finalResponse.status} -> mapping to ${status}`);
-      return res.status(status).send('Media not found');
+    if (!response.ok) {
+      console.log(`[MEDIA] S3 response: ${response.status}`);
+      return res.status(response.status).send('Media not found');
     }
 
     // Определяем MIME-тип
-    let contentType = finalResponse.headers.get('content-type');
+    let contentType = response.headers.get('content-type');
     if (!contentType) {
       const mimeType = mime.lookup(mediaPath);
       contentType = mimeType || 'application/octet-stream';
@@ -150,12 +129,12 @@ app.get('/uploads/:path(*)', async (req, res) => {
 
     // Заголовки
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('X-Proxy-From', finalUrl);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Увеличиваем кэш
+    res.setHeader('X-Proxy-From', s3Url);
 
-    // Передаем данные
-    const buffer = await finalResponse.arrayBuffer();
-    res.status(status).send(Buffer.from(buffer));
+    // Передаем данные потоком
+    const buffer = await response.arrayBuffer();
+    res.status(200).send(Buffer.from(buffer));
 
     console.log(`[MEDIA] ✅ Successfully served: ${mediaPath} (${contentType})`);
 
@@ -164,6 +143,7 @@ app.get('/uploads/:path(*)', async (req, res) => {
     res.status(500).send('Media proxy error');
   }
 });
+
 
 // УЛУЧШЕННЫЙ HEAD ЗАПРОС
 app.head('/uploads/:path(*)', async (req, res) => {
