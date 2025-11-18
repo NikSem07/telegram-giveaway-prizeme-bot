@@ -199,6 +199,35 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'PrizeMe Node.js backend is running', timestamp: new Date().toISOString() });
 });
 
+// --- POST /api/check_giveaway_status ---
+app.post('/api/check_giveaway_status', async (req, res) => {
+  console.log('[CHECK_STATUS] Request received:', req.body);
+  
+  try {
+    const { gid } = req.body;
+    const giveawayId = parseInt(gid);
+
+    if (!giveawayId) {
+      return res.status(400).json({ ok: false, reason: 'bad_gid' });
+    }
+
+    // Тестовая заглушка - потом заменим на реальный запрос к БД
+    console.log(`[CHECK_STATUS] Checking giveaway ${giveawayId}`);
+    
+    res.json({
+      ok: true,
+      status: 'active',
+      end_at_utc: '2024-12-31 23:59:59',
+      is_completed: false,
+      message: 'Test endpoint - DB integration pending'
+    });
+
+  } catch (error) {
+    console.log(`[CHECK_STATUS] Error: ${error}`);
+    res.status(500).json({ ok: false, reason: `server_error: ${error.message}` });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
