@@ -954,8 +954,7 @@ class Winner(Base):
 # ---- DB INIT ----
 
 # путь к bot.db строго рядом с bot.py (один файл для всех)
-DB_PATH = Path(os.getenv("DB_PATH") or Path(__file__).with_name("bot.db")).resolve()
-DB_URL  = f"sqlite+aiosqlite:///{DB_PATH.as_posix()}"
+DB_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod")
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 engine = create_async_engine(DB_URL, echo=True, future=True)
