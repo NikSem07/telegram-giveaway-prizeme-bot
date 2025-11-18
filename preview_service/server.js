@@ -48,6 +48,72 @@ const pool = new Pool({
   ssl: false
 });
 
+// Диагностика подключения к БД
+app.post('/api/debug/db_check', async (req, res) => {
+  try {
+    // Проверяем подключение к БД
+    const result = await pool.query('SELECT NOW() as current_time');
+    console.log('[DEBUG] PostgreSQL connection OK:', result.rows[0]);
+    
+    // Проверяем наличие таблиц
+    const tables = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+    
+    console.log('[DEBUG] Available tables:', tables.rows.map(r => r.table_name));
+    
+    res.json({
+      ok: true,
+      db_time: result.rows[0].current_time,
+      tables: tables.rows.map(r => r.table_name)
+    });
+    
+  } catch (error) {
+    console.log('[DEBUG] DB check failed:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Диагностика конкретного розыгрыша
+app.post('/api/debug/giveaway_check', async (req, res) => {
+  try {
+    const { gid } = req.body;
+    const giveawayId = parseInt(gid);
+
+    if (!giveawayId) {
+      return res.status(400).json({ ok: false, reason: 'bad_gid' });
+    }
+
+    // 1. Проверяем сам розыгрыш
+    const giveawayResult = await pool.query(
+      'SELECT id, internal_title, status, end_at_utc FROM giveaways WHERE id = $1',
+      [giveawayId]
+    );
+
+    // 2. Проверяем прикрепленные каналы
+    const channelsResult = await pool.query(`
+      SELECT gc.chat_id, gc.title, oc.username
+      FROM giveaway_channels gc
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE gc.giveaway_id = $1
+      ORDER BY gc.id
+    `, [giveawayId]);
+
+    res.json({
+      ok: true,
+      giveaway: giveawayResult.rows[0] || null,
+      channels: channelsResult.rows,
+      channels_count: channelsResult.rows.length
+    });
+
+  } catch (error) {
+    console.log('[DEBUG] Giveaway check failed:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // S3 Конфигурация
 const S3_ENDPOINT = process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru';
 const S3_BUCKET = process.env.S3_BUCKET || '7b2a8ba5-prizeme-media';
