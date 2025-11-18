@@ -16,8 +16,12 @@ app.use(express.static(path.join(__dirname, '../webapp')));
 
 // PostgreSQL подключение
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  user: 'prizeme_user',
+  password: 'Akinneket19!',
+  host: 'localhost',
+  port: 5432,
+  database: 'prizeme_prod',
+  ssl: false
 });
 
 // Конфигурация из .env
