@@ -9,44 +9,52 @@ const $ = (q) => document.querySelector(q);
 const show = (sel) => $(sel)?.classList.remove("hide");
 const hide = (sel) => $(sel)?.classList.add("hide");
 
+// Инициализация Telegram WebApp
+function initializeTelegramWebApp() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) {
+    console.error('❌ Telegram WebApp is not available');
+    return false;
+  }
+
+  console.log('✅ Telegram WebApp initialized');
+  console.log('📱 Platform:', tg.platform);
+  console.log('🔢 Version:', tg.version);
+  console.log('👤 User:', tg.initDataUnsafe?.user);
+  console.log('🎯 Start param:', tg.initDataUnsafe?.start_param);
+  console.log('📋 InitData:', tg.initData ? 'AVAILABLE' : 'MISSING');
+
+  // Расширяем на весь экран
+  tg.expand();
+  
+  // Отключаем подтверждение закрытия
+  tg.enableClosingConfirmation();
+  
+  // Устанавливаем цвета
+  tg.setHeaderColor('#2481cc');
+  tg.setBackgroundColor('#f4f4f5');
+  
+  // Говорим Telegram что приложение готово
+  tg.ready();
+  
+  return true;
+}
+
 // Получаем start_param из URL или initData
 function getStartParam() {
   console.log('🎯 [getStartParam] Starting parameter search...');
   
   try {
-    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра (gid)
-    const url = new URL(location.href);
-    const urlGid = url.searchParams.get("gid");
-    if (urlGid) {
-      console.log('🎯 [getStartParam] ✅ Got gid from URL:', urlGid);
-      return urlGid;
-    }
-  } catch (e) {
-    console.log('[getStartParam] URL parse error:', e);
-  }
-
-  try {
-    // ПРИОРИТЕТ 2: Пробуем получить из sessionStorage
-    const sessionGid = sessionStorage.getItem('prizeme_gid');
-    if (sessionGid) {
-      console.log('🎯 [getStartParam] ✅ Got gid from sessionStorage:', sessionGid);
-      return sessionGid;
-    }
-  } catch (e) {
-    console.log('[getStartParam] sessionStorage error:', e);
-  }
-
-  try {
-    // ПРИОРИТЕТ 3: Пробуем получить из URL параметра tgWebAppStartParam
+    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра tgWebAppStartParam
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
     if (urlParam && urlParam !== 'demo') {
-      console.log('🎯 [getStartParam] ✅ Got tgWebAppStartParam from URL:', urlParam);
+      console.log('🎯 [getStartParam] ✅ Got start_param from URL:', urlParam);
       
       // Обработка результатов
       if (urlParam.startsWith('results_')) {
         const gid = urlParam.replace('results_', '');
-        sessionStorage.setItem('prizeme_results_gid', gid);
+        console.log('🎯 [getStartParam] Results mode, gid:', gid);
         return gid;
       }
       
@@ -57,26 +65,30 @@ function getStartParam() {
   }
 
   try {
-    // ПРИОРИТЕТ 4: Пробуем получить из initData
-    const p = tg.initDataUnsafe?.start_param;
-    if (p && p !== 'demo') {
-      console.log('🎯 [getStartParam] ✅ Got start_param from initData:', p);
-      
-      if (p.startsWith('results_')) {
-        const gid = p.replace('results_', '');
-        sessionStorage.setItem('prizeme_results_gid', gid);
-        return gid;
+    // ПРИОРИТЕТ 2: Пробуем получить из initData
+    const tg = window.Telegram?.WebApp;
+    if (tg && tg.initDataUnsafe?.start_param) {
+      const p = tg.initDataUnsafe.start_param;
+      if (p && p !== 'demo') {
+        console.log('🎯 [getStartParam] ✅ Got start_param from initData:', p);
+        
+        if (p.startsWith('results_')) {
+          const gid = p.replace('results_', '');
+          console.log('🎯 [getStartParam] Results mode from initData, gid:', gid);
+          return gid;
+        }
+        
+        return p;
       }
-      
-      return p;
     }
   } catch (e) {
     console.log('[getStartParam] initData parse error:', e);
   }
 
-  console.log('❌ [getStartParam] No valid start_param found in any source');
+  console.log('❌ [getStartParam] No valid start_param found');
   return null;
 }
+
 
 // Проверка завершения розыгрыша
 async function checkGiveawayCompletion(gid) {
@@ -196,17 +208,17 @@ async function checkFlow() {
     const gid = getStartParam();
     if (!gid) throw new Error("Empty start_param (gid)");
 
-    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
-    if (!init_data) throw new Error("No initData");
-
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
 
-    // 🔄 НОВАЯ ПРОВЕРКА: если розыгрыш завершен - сразу показываем результаты
-    const isCompleted = await checkGiveawayCompletion(gid);
-    if (isCompleted) {
-      console.log("[MULTI-PAGE] Giveaway completed, redirecting to RESULTS screen");
-      window.location.href = `/miniapp/results?gid=${gid}`;
-      return;
+    // Получаем initData - КРИТИЧЕСКИ ВАЖНО!
+    const tg = window.Telegram?.WebApp;
+    const init_data = tg?.initData || '';
+    
+    console.log("[MULTI-PAGE] init_data available:", !!init_data);
+    console.log("[MULTI-PAGE] Telegram WebApp available:", !!tg);
+
+    if (!init_data) {
+      throw new Error("Telegram WebApp not initialized. Please open through Telegram app.");
     }
 
     // 1) Проверяем условия
@@ -220,7 +232,6 @@ async function checkFlow() {
         if (check.is_new_ticket) {
           // НОВЫЙ билет - редирект на экран успеха
           console.log("[MULTI-PAGE] Redirecting to SUCCESS screen");
-          // Сохраняем данные для следующего экрана
           sessionStorage.setItem('prizeme_ticket', check.ticket);
           sessionStorage.setItem('prizeme_end_at', check.end_at_utc);
           window.location.href = '/miniapp/success';
@@ -257,7 +268,6 @@ async function checkFlow() {
 
   } catch (err) {
     console.error("[MULTI-PAGE] checkFlow error:", err);
-    // В случае ошибки - показываем экран подписки с сообщением об ошибке
     sessionStorage.setItem('prizeme_error', err.message);
     window.location.href = '/miniapp/need_subscription';
   }
@@ -424,9 +434,15 @@ function initializeCurrentPage() {
   const path = window.location.pathname;
   console.log("[MULTI-PAGE] Current path:", path);
   
-  // ПРЕЖДЕ всего проверяем немедленный редирект на результаты
+  // Инициализируем Telegram WebApp на ВСЕХ страницах
+  const tgInitialized = initializeTelegramWebApp();
+  if (!tgInitialized) {
+    console.error('❌ Cannot initialize Telegram WebApp');
+  }
+
+  // Проверяем немедленный редирект на результаты
   if (checkImmediateResults()) {
-    return; // Останавливаем дальнейшее выполнение
+    return;
   }
   
   switch(path) {
