@@ -445,18 +445,25 @@ app.get('/miniapp/', (req, res) => {
   console.log('🎯 [ROOT] Request to /miniapp/, tgWebAppStartParam:', tgWebAppStartParam);
   
   if (tgWebAppStartParam && tgWebAppStartParam !== 'demo') {
-    console.log('🎯 [ROOT] Redirecting to loading with gid:', tgWebAppStartParam);
-    // Сохраняем параметр в sessionStorage через JavaScript редирект
+    console.log('🎯 [ROOT] Serving loading page with gid:', tgWebAppStartParam);
+    
+    // Отправляем HTML который сохранит параметр и сразу перейдет на loading
     res.send(`
       <!DOCTYPE html>
       <html>
       <head>
+        <title>PrizeMe - Loading</title>
         <script>
+          // Сохраняем параметр в sessionStorage
           sessionStorage.setItem('prizeme_gid', '${tgWebAppStartParam}');
-          window.location.href = '/miniapp/loading';
+          console.log('🎯 [ROOT-SCRIPT] Saved gid to sessionStorage:', '${tgWebAppStartParam}');
+          // Немедленный переход на loading
+          window.location.href = '/miniapp/loading?gid=${tgWebAppStartParam}';
         </script>
       </head>
-      <body>Redirecting...</body>
+      <body>
+        <p>Redirecting to participation...</p>
+      </body>
       </html>
     `);
   } else {

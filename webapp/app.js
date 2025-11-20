@@ -11,38 +11,59 @@ const hide = (sel) => $(sel)?.classList.add("hide");
 
 // Получаем start_param из URL или initData
 function getStartParam() {
+  console.log('🎯 [getStartParam] Starting parameter search...');
+  
   try {
-    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра
+    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра (gid)
+    const url = new URL(location.href);
+    const urlGid = url.searchParams.get("gid");
+    if (urlGid) {
+      console.log('🎯 [getStartParam] ✅ Got gid from URL:', urlGid);
+      return urlGid;
+    }
+  } catch (e) {
+    console.log('[getStartParam] URL parse error:', e);
+  }
+
+  try {
+    // ПРИОРИТЕТ 2: Пробуем получить из sessionStorage
+    const sessionGid = sessionStorage.getItem('prizeme_gid');
+    if (sessionGid) {
+      console.log('🎯 [getStartParam] ✅ Got gid from sessionStorage:', sessionGid);
+      return sessionGid;
+    }
+  } catch (e) {
+    console.log('[getStartParam] sessionStorage error:', e);
+  }
+
+  try {
+    // ПРИОРИТЕТ 3: Пробуем получить из URL параметра tgWebAppStartParam
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
     if (urlParam && urlParam !== 'demo') {
-      console.log("[MULTI-PAGE] ✅ Got start_param from URL:", urlParam);
+      console.log('🎯 [getStartParam] ✅ Got tgWebAppStartParam from URL:', urlParam);
       
       // Обработка результатов
       if (urlParam.startsWith('results_')) {
         const gid = urlParam.replace('results_', '');
-        console.log("[MULTI-PAGE] 🔄 Results mode, gid:", gid);
         sessionStorage.setItem('prizeme_results_gid', gid);
         return gid;
       }
       
-      // Обычный режим участия
-      console.log("[MULTI-PAGE] 🎯 Participation mode, gid:", urlParam);
       return urlParam;
     }
   } catch (e) {
-    console.log("[MULTI-PAGE] URL parse error:", e);
+    console.log('[getStartParam] URL parse error:', e);
   }
 
   try {
-    // ПРИОРИТЕТ 2: Пробуем получить из initData (резервный вариант)
+    // ПРИОРИТЕТ 4: Пробуем получить из initData
     const p = tg.initDataUnsafe?.start_param;
     if (p && p !== 'demo') {
-      console.log("[MULTI-PAGE] ✅ Got start_param from initData:", p);
+      console.log('🎯 [getStartParam] ✅ Got start_param from initData:', p);
       
       if (p.startsWith('results_')) {
         const gid = p.replace('results_', '');
-        console.log("[MULTI-PAGE] 🔄 Results mode from initData, gid:", gid);
         sessionStorage.setItem('prizeme_results_gid', gid);
         return gid;
       }
@@ -50,10 +71,10 @@ function getStartParam() {
       return p;
     }
   } catch (e) {
-    console.log("[MULTI-PAGE] initData parse error:", e);
+    console.log('[getStartParam] initData parse error:', e);
   }
 
-  console.log("[MULTI-PAGE] ❌ No valid start_param found");
+  console.log('❌ [getStartParam] No valid start_param found in any source');
   return null;
 }
 
@@ -264,11 +285,26 @@ function initializeMainPage() {
 
 // Инициализация для экрана загрузки
 function initializeLoadingPage() {
-  console.log("[MULTI-PAGE] Initializing loading page");
-  // Экран загрузки сразу запускает проверку
+  console.log('🎯 [LOADING] Initializing loading page');
+  
+  const gid = getStartParam();
+  console.log('🎯 [LOADING] Extracted gid:', gid);
+  
+  if (!gid) {
+    console.log('❌ [LOADING] No gid found, showing error');
+    sessionStorage.setItem('prizeme_error', 'Empty start_param (gid). Please try again.');
+    window.location.href = '/miniapp/need_subscription';
+    return;
+  }
+  
+  // Сохраняем gid в sessionStorage для резервной копии
+  sessionStorage.setItem('prizeme_gid', gid);
+  console.log('🎯 [LOADING] Saved gid to sessionStorage:', gid);
+  
+  // Запускаем проверку через 1 секунду (дает время для инициализации)
   setTimeout(() => {
     checkFlow();
-  }, 500);
+  }, 1000);
 }
 
 // Инициализация для экрана "Нужно подписаться"
