@@ -41,43 +41,59 @@ function initializeTelegramWebApp() {
 }
 
 // Получаем start_param из URL или initData
+// Получаем start_param / gid из URL, initData или sessionStorage
 function getStartParam() {
   console.log('🎯 [getStartParam] Starting parameter search...');
-  
+
+  // 1. Пробуем получить из URL
   try {
-    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра tgWebAppStartParam
     const url = new URL(location.href);
+
+    // 1.1. Классический параметр tgWebAppStartParam
     const urlParam = url.searchParams.get("tgWebAppStartParam");
     if (urlParam && urlParam !== 'demo') {
-      console.log('🎯 [getStartParam] ✅ Got start_param from URL:', urlParam);
-      
-      // Обработка результатов
+      console.log('🎯 [getStartParam] ✅ Got start_param from URL tgWebAppStartParam:', urlParam);
+
       if (urlParam.startsWith('results_')) {
         const gid = urlParam.replace('results_', '');
         console.log('🎯 [getStartParam] Results mode, gid:', gid);
         return gid;
       }
-      
+
       return urlParam;
+    }
+
+    // 1.2. НОВОЕ: поддержка прямого gid в URL (например, /miniapp/loading?gid=116)
+    const gidParam = url.searchParams.get("gid");
+    if (gidParam) {
+      console.log('🎯 [getStartParam] ✅ Got gid from URL param "gid":', gidParam);
+
+      if (gidParam.startsWith('results_')) {
+        const gid = gidParam.replace('results_', '');
+        console.log('🎯 [getStartParam] Results mode from gid param, gid:', gid);
+        return gid;
+      }
+
+      return gidParam;
     }
   } catch (e) {
     console.log('[getStartParam] URL parse error:', e);
   }
 
+  // 2. Пробуем получить из initData (как было раньше)
   try {
-    // ПРИОРИТЕТ 2: Пробуем получить из initData
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initDataUnsafe?.start_param) {
       const p = tg.initDataUnsafe.start_param;
       if (p && p !== 'demo') {
         console.log('🎯 [getStartParam] ✅ Got start_param from initData:', p);
-        
+
         if (p.startsWith('results_')) {
           const gid = p.replace('results_', '');
           console.log('🎯 [getStartParam] Results mode from initData, gid:', gid);
           return gid;
         }
-        
+
         return p;
       }
     }
@@ -85,7 +101,25 @@ function getStartParam() {
     console.log('[getStartParam] initData parse error:', e);
   }
 
-  console.log('❌ [getStartParam] No valid start_param found');
+  // 3. НОВОЕ: fallback на sessionStorage.prizeme_gid, куда уже пишет Node.js
+  try {
+    const storedGid = sessionStorage.getItem('prizeme_gid');
+    if (storedGid) {
+      console.log('🎯 [getStartParam] ✅ Got gid from sessionStorage.prizeme_gid:', storedGid);
+
+      if (storedGid.startsWith('results_')) {
+        const gid = storedGid.replace('results_', '');
+        console.log('[getStartParam] Results mode from sessionStorage, gid:', gid);
+        return gid;
+      }
+
+      return storedGid;
+    }
+  } catch (e) {
+    console.log('[getStartParam] sessionStorage error:', e);
+  }
+
+  console.log('❌ [getStartParam] No valid start_param/gid found');
   return null;
 }
 
