@@ -441,7 +441,28 @@ app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
 
 // HTML endpoints for Mini App
 app.get('/miniapp/', (req, res) => {
-  res.redirect('/miniapp/home_participant');
+  const tgWebAppStartParam = req.query.tgWebAppStartParam;
+  console.log('🎯 [ROOT] Request to /miniapp/, tgWebAppStartParam:', tgWebAppStartParam);
+  
+  if (tgWebAppStartParam && tgWebAppStartParam !== 'demo') {
+    console.log('🎯 [ROOT] Redirecting to loading with gid:', tgWebAppStartParam);
+    // Сохраняем параметр в sessionStorage через JavaScript редирект
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <script>
+          sessionStorage.setItem('prizeme_gid', '${tgWebAppStartParam}');
+          window.location.href = '/miniapp/loading';
+        </script>
+      </head>
+      <body>Redirecting...</body>
+      </html>
+    `);
+  } else {
+    console.log('❌ [ROOT] No valid start param, redirecting to home_participant');
+    res.redirect('/miniapp/home_participant');
+  }
 });
 
 app.get('/miniapp/loading', (req, res) => {
