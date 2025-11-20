@@ -4178,7 +4178,7 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
             # Получаем участников - ИСПРАВЛЕННЫЙ ЗАПРОС
             print(f"🔍 Ищем участников розыгрыша {gid}")
             res = await s.execute(
-                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id=:gid AND prelim_ok=true"),
+                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
                 {"gid": gid}
             )
             entries = res.all()
@@ -4200,8 +4200,8 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
                     
                     # ИСПРАВЛЕННЫЙ UPDATE - используем True/False вместо 1/0
                     await s.execute(
-                        stext("UPDATE entries SET final_ok=:ok, final_checked_at=:ts WHERE id=:eid"),
-                        {"ok": True if ok else False, "ts": datetime.now(timezone.utc), "eid": entry_id}
+                        stext("UPDATE entries SET final_ok = :ok, final_checked_at = :ts WHERE id = :eid"),
+                        {"ok": ok, "ts": datetime.now(timezone.utc), "eid": entry_id}
                     )
                     
                     if ok:
@@ -4383,7 +4383,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
             # Получаем билеты участников из базы
             participant_tickets = {}
             res = await s.execute(stext(
-                "SELECT user_id, ticket_code FROM entries WHERE giveaway_id=:gid AND final_ok=true"
+                "SELECT user_id, ticket_code FROM entries WHERE giveaway_id = :gid AND final_ok = true"
             ), {"gid": gid})
             for row in res.all():
                 participant_tickets[row[0]] = row[1]
@@ -4512,7 +4512,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             # Получаем количество участников
             print(f"🔍 Ищем количество участников для розыгрыша {giveaway_id}")
             participants_res = await s.execute(
-                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=true"),
+                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
                 {"gid": giveaway_id}
             )
             participants_count = participants_res.scalar_one() or 0
@@ -4860,7 +4860,7 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
         # Получаем количество участников и победителей
         async with session_scope() as s:
             participants_res = await s.execute(
-                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=true"),
+                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
                 {"gid": giveaway_id}
             )
             participants_count = participants_res.scalar_one() or 0
@@ -4968,7 +4968,7 @@ async def show_finished_stats(message: Message, giveaway_id: int):
 
         # Количество уникальных участников
         participants_res = await s.execute(
-            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=true"),
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
             {"gid": giveaway_id}
         )
         participants_count = participants_res.scalar_one() or 0
@@ -5033,7 +5033,7 @@ async def show_active_stats(message: Message, giveaway_id: int):
 
         # Количество уникальных участников
         participants_res = await s.execute(
-            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND prelim_ok=true"),
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
             {"gid": giveaway_id}
         )
         participants_count = participants_res.scalar_one() or 0
@@ -5387,7 +5387,7 @@ def make_internal_app():
 
                 # 2) Получаем участников и победителей
                 participants_res = await s.execute(
-                    stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id=:gid AND final_ok=true"),
+                    stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
                     {"gid": giveaway_id}
                 )
                 participants_count = participants_res.scalar_one() or 0
@@ -5395,7 +5395,7 @@ def make_internal_app():
                 # 3) Получаем список победителей с их билетами
                 winners_res = await s.execute(
                     stext("""
-                        SELECT w.rank, w.user_id, e.ticket_code, u.username
+                        SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code 
                         FROM winners w
                         LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
                         LEFT JOIN users u ON u.user_id = w.user_id

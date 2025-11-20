@@ -78,6 +78,23 @@ function getStartParam() {
   return null;
 }
 
+// Проверка завершения розыгрыша
+async function checkGiveawayCompletion(gid) {
+    try {
+        console.log(`[COMPLETION-CHECK] Checking if giveaway ${gid} is completed`);
+        
+        const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+        if (!init_data) return false;
+        
+        const statusCheck = await api("/api/check_giveaway_status", { gid, init_data });
+        console.log(`[COMPLETION-CHECK] Status response:`, statusCheck);
+        
+        return statusCheck.ok && statusCheck.is_completed;
+    } catch (err) {
+        console.error(`[COMPLETION-CHECK] Error:`, err);
+        return false;
+    }
+}
 
 // Проверка, нужно ли сразу открывать результаты
 function checkImmediateResults() {
@@ -184,9 +201,9 @@ async function checkFlow() {
 
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
 
-    // Проверяем, не завершен ли розыгрыш
-    const shouldShowResultsPage = await shouldShowResults(gid);
-    if (shouldShowResultsPage) {
+    // 🔄 НОВАЯ ПРОВЕРКА: если розыгрыш завершен - сразу показываем результаты
+    const isCompleted = await checkGiveawayCompletion(gid);
+    if (isCompleted) {
       console.log("[MULTI-PAGE] Giveaway completed, redirecting to RESULTS screen");
       window.location.href = `/miniapp/results?gid=${gid}`;
       return;
