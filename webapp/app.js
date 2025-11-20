@@ -12,14 +12,22 @@ const hide = (sel) => $(sel)?.classList.add("hide");
 // Получаем start_param из URL или initData
 function getStartParam() {
   try {
-    // Пробуем получить из URL параметра (ПРИОРИТЕТ)
+    // ПРИОРИТЕТ 1: Пробуем получить из URL параметра
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
-    if (urlParam) {
-      console.log("[MULTI-PAGE] Got start_param from URL:", urlParam);
+    if (urlParam && urlParam !== 'demo') {
+      console.log("[MULTI-PAGE] ✅ Got start_param from URL:", urlParam);
+      
+      // Обработка результатов
       if (urlParam.startsWith('results_')) {
-        return urlParam.replace('results_', '');
+        const gid = urlParam.replace('results_', '');
+        console.log("[MULTI-PAGE] 🔄 Results mode, gid:", gid);
+        sessionStorage.setItem('prizeme_results_gid', gid);
+        return gid;
       }
+      
+      // Обычный режим участия
+      console.log("[MULTI-PAGE] 🎯 Participation mode, gid:", urlParam);
       return urlParam;
     }
   } catch (e) {
@@ -27,21 +35,55 @@ function getStartParam() {
   }
 
   try {
-    // Пробуем получить из initData (резервный вариант)
+    // ПРИОРИТЕТ 2: Пробуем получить из initData (резервный вариант)
     const p = tg.initDataUnsafe?.start_param;
-    if (p) {
-      console.log("[MULTI-PAGE] Got start_param from initData:", p);
+    if (p && p !== 'demo') {
+      console.log("[MULTI-PAGE] ✅ Got start_param from initData:", p);
+      
       if (p.startsWith('results_')) {
-        return p.replace('results_', '');
+        const gid = p.replace('results_', '');
+        console.log("[MULTI-PAGE] 🔄 Results mode from initData, gid:", gid);
+        sessionStorage.setItem('prizeme_results_gid', gid);
+        return gid;
       }
+      
       return p;
     }
   } catch (e) {
     console.log("[MULTI-PAGE] initData parse error:", e);
   }
 
-  console.log("[MULTI-PAGE] No start_param found");
+  console.log("[MULTI-PAGE] ❌ No valid start_param found");
   return null;
+}
+
+
+// Проверка, нужно ли сразу открывать результаты
+function checkImmediateResults() {
+  try {
+    const url = new URL(location.href);
+    const urlParam = url.searchParams.get("tgWebAppStartParam");
+    
+    if (urlParam && urlParam.startsWith('results_')) {
+      const gid = urlParam.replace('results_', '');
+      console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results for gid:", gid);
+      window.location.href = `/miniapp/results?gid=${gid}`;
+      return true;
+    }
+    
+    // Проверяем initData для результатов
+    const initParam = tg.initDataUnsafe?.start_param;
+    if (initParam && initParam.startsWith('results_')) {
+      const gid = initParam.replace('results_', '');
+      console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results from initData, gid:", gid);
+      window.location.href = `/miniapp/results?gid=${gid}`;
+      return true;
+    }
+  } catch (e) {
+    console.log("[IMMEDIATE-RESULTS] Error:", e);
+  }
+  
+  return false;
 }
 
 // Универсальный вызов API
@@ -200,14 +242,14 @@ function initializeMainPage() {
     console.log("[MULTI-PAGE] Diagnostic error:", e);
   }
   
-  if (gid) {
-    // ЕСТЬ параметр розыгрыша - запускаем стандартный flow участия
-    console.log("🎯 Giveaway ID found:", gid);
+  if (gid && gid !== 'demo') {
+    // ЕСТЬ параметр розыгрыша - СРАЗУ запускаем flow участия (не показываем home_participant!)
+    console.log("🎯 Giveaway ID found:", gid, "- Starting participation flow immediately");
     sessionStorage.setItem('prizeme_gid', gid);
     window.location.href = '/miniapp/loading';
   } else {
-    // НЕТ параметра розыгрыша - остаемся на текущей странице (home_participant)
-    console.log("❌ No giveaway ID - staying on home participant page");
+    // НЕТ параметра розыгрыша или demo - остаемся на home_participant
+    console.log("❌ No giveaway ID or demo mode - staying on home participant page");
     
     // Настройка Telegram WebApp
     if (window.Telegram && Telegram.WebApp) {
@@ -329,6 +371,11 @@ function initializeCurrentPage() {
   const path = window.location.pathname;
   console.log("[MULTI-PAGE] Current path:", path);
   
+  // ПРЕЖДЕ всего проверяем немедленный редирект на результаты
+  if (checkImmediateResults()) {
+    return; // Останавливаем дальнейшее выполнение
+  }
+  
   switch(path) {
     case '/miniapp/':
       initializeMainPage();
@@ -345,7 +392,7 @@ function initializeCurrentPage() {
     case '/miniapp/already':
       initializeAlreadyPage();
       break;
-    case '/miniapp/results':  // ← ДОБАВЛЯЕМ НОВЫЙ КЕЙС
+    case '/miniapp/results':
       initializeResultsPage();
       break;
     default:
