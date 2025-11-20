@@ -41,7 +41,6 @@ function initializeTelegramWebApp() {
 }
 
 // Получаем start_param из URL или initData
-// Получаем start_param / gid из URL, initData или sessionStorage
 function getStartParam() {
   console.log('🎯 [getStartParam] Starting parameter search...');
 
@@ -63,7 +62,7 @@ function getStartParam() {
       return urlParam;
     }
 
-    // 1.2. НОВОЕ: поддержка прямого gid в URL (например, /miniapp/loading?gid=116)
+    // 1.2. Прямой gid в URL (например, /miniapp/loading?gid=116)
     const gidParam = url.searchParams.get("gid");
     if (gidParam) {
       console.log('🎯 [getStartParam] ✅ Got gid from URL param "gid":', gidParam);
@@ -80,7 +79,7 @@ function getStartParam() {
     console.log('[getStartParam] URL parse error:', e);
   }
 
-  // 2. Пробуем получить из initData (как было раньше)
+  // 2. Пробуем получить из initData (на случай, если туда что-то зашито)
   try {
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initDataUnsafe?.start_param) {
@@ -101,7 +100,7 @@ function getStartParam() {
     console.log('[getStartParam] initData parse error:', e);
   }
 
-  // 3. НОВОЕ: fallback на sessionStorage.prizeme_gid, куда уже пишет Node.js
+  // 3. Fallback: берем из sessionStorage, куда уже пишет серверный /miniapp/ и loading
   try {
     const storedGid = sessionStorage.getItem('prizeme_gid');
     if (storedGid) {
@@ -244,9 +243,23 @@ async function checkFlow() {
 
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
 
-    // Получаем initData - КРИТИЧЕСКИ ВАЖНО!
+    // Получаем initData
     const tg = window.Telegram?.WebApp;
-    const init_data = tg?.initData || '';
+    let init_data = tg?.initData || '';
+
+    // Fallback: если на этой странице Telegram не отдал initData,
+    // берем его из sessionStorage, куда сохранил /miniapp/ при первом входе
+    if (!init_data) {
+      try {
+        const storedInit = sessionStorage.getItem('prizeme_init_data');
+        if (storedInit) {
+          console.log("[MULTI-PAGE] Using init_data from sessionStorage.prizeme_init_data");
+          init_data = storedInit;
+        }
+      } catch (e) {
+        console.log("[MULTI-PAGE] sessionStorage init_data error:", e);
+      }
+    }
     
     console.log("[MULTI-PAGE] init_data available:", !!init_data);
     console.log("[MULTI-PAGE] Telegram WebApp available:", !!tg);

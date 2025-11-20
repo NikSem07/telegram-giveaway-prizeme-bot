@@ -447,18 +447,34 @@ app.get('/miniapp/', (req, res) => {
   if (tgWebAppStartParam && tgWebAppStartParam !== 'demo') {
     console.log('🎯 [ROOT] Serving loading page with gid:', tgWebAppStartParam);
     
-    // Отправляем HTML который сохранит параметр и сразу перейдет на loading
+    // Отправляем HTML который сохранит параметр и init_data и сразу перейдет на loading
     res.send(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>PrizeMe - Loading</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <script>
-          // Сохраняем параметр в sessionStorage
-          sessionStorage.setItem('prizeme_gid', '${tgWebAppStartParam}');
-          console.log('🎯 [ROOT-SCRIPT] Saved gid to sessionStorage:', '${tgWebAppStartParam}');
-          // Немедленный переход на loading
-          window.location.href = '/miniapp/loading?gid=${tgWebAppStartParam}';
+          (function() {
+            try {
+              var tg = window.Telegram && Telegram.WebApp;
+              if (tg && tg.initData) {
+                sessionStorage.setItem('prizeme_init_data', tg.initData);
+                console.log('🎯 [ROOT-SCRIPT] Saved init_data to sessionStorage, length:', tg.initData.length);
+              } else {
+                console.log('⚠️ [ROOT-SCRIPT] Telegram WebApp or initData not available on root page');
+              }
+            } catch (e) {
+              console.log('❌ [ROOT-SCRIPT] Error while reading initData:', e);
+            }
+
+            // Сохраняем gid
+            sessionStorage.setItem('prizeme_gid', '${tgWebAppStartParam}');
+            console.log('🎯 [ROOT-SCRIPT] Saved gid to sessionStorage:', '${tgWebAppStartParam}');
+            
+            // Немедленный переход на loading
+            window.location.href = '/miniapp/loading?gid=${tgWebAppStartParam}';
+          })();
         </script>
       </head>
       <body>
