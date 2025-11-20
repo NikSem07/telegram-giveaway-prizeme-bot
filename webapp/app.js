@@ -187,57 +187,78 @@ async function api(path, body) {
 }
 
 // Функция для обновления счетчика времени
-function updateCountdown(endAtUtc, elementId = 'countdown') {
-    try {
-        const countdownElement = document.getElementById(elementId);
-        if (!countdownElement) return;
+function updateCountdown(endAtUtc, elementId) {
+  const countdownElement = document.getElementById(elementId);
+  if (!countdownElement) {
+    console.warn(`[COUNTDOWN] Элемент с ID '${elementId}' не найден.`);
+    return;
+  }
 
-        if (!endAtUtc) {
-            console.warn("[COUNTDOWN] No endAtUtc provided");
-            countdownElement.textContent = "Дата окончания не задана";
-            return;
-        }
+  // Универсальный парсер даты окончания
+  function parseEndTime(value) {
+    if (!value) return null;
 
-        // Пытаемся распарсить как есть (ISO-строка из backend)
-        let endTime = new Date(endAtUtc);
+    // Если уже Date – используем как есть
+    if (value instanceof Date) return value;
 
-        // Если вдруг формат без часового пояса — пробуем добавить 'Z'
-        if (isNaN(endTime.getTime())) {
-            endTime = new Date(endAtUtc + 'Z');
-        }
+    let raw = String(value).trim();
+    if (!raw) return null;
 
-        if (isNaN(endTime.getTime())) {
-            console.error("[COUNTDOWN] Invalid endAtUtc value:", endAtUtc);
-            countdownElement.textContent = "Ошибка расчета времени";
-            return;
-        }
+    // 1) Первая попытка – как есть
+    let d = new Date(raw);
+    if (!isNaN(d.getTime())) return d;
 
-        const now = new Date();
-        const timeLeft = endTime - now;
-
-        if (timeLeft <= 0) {
-            countdownElement.textContent = "Розыгрыш завершен";
-            return;
-        }
-
-        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
-        countdownElement.textContent =
-            `${days} дн., ${hours.toString().padStart(2, '0')}:` +
-            `${minutes.toString().padStart(2, '0')}:` +
-            `${seconds.toString().padStart(2, '0')}`;
-
-        setTimeout(() => updateCountdown(endAtUtc, elementId), 1000);
-    } catch (err) {
-        console.error("[COUNTDOWN] Error:", err);
-        const countdownElement = document.getElementById(elementId);
-        if (countdownElement) {
-            countdownElement.textContent = "Ошибка расчета времени";
-        }
+    // 2) Формат "2025-11-20 20:00:00" → ISO
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
+      d = new Date(raw.replace(' ', 'T') + 'Z');
+      if (!isNaN(d.getTime())) return d;
     }
+
+    // 3) Формат "2025-11-20T20:00:00" → добавляем Z
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
+      d = new Date(raw + 'Z');
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    return null;
+  }
+
+  const endTime = parseEndTime(endAtUtc);
+  if (!endTime) {
+    console.warn('[COUNTDOWN] Не удалось разобрать дату окончания:', endAtUtc);
+    countdownElement.textContent = 'Дата окончания не указана';
+    return;
+  }
+
+  function formatTimeLeft() {
+    const now = new Date();
+    const timeLeft = endTime.getTime() - now.getTime();
+
+    if (!isFinite(timeLeft)) {
+      countdownElement.textContent = 'Дата окончания не указана';
+      return;
+    }
+
+    if (timeLeft <= 0) {
+      countdownElement.textContent = 'Розыгрыш завершён';
+      return;
+    }
+
+    const totalSeconds = Math.floor(timeLeft / 1000);
+    const days = Math.floor(totalSeconds / (60 * 60 * 24));
+    const hours = Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60));
+    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+    const seconds = totalSeconds % 60;
+
+    countdownElement.textContent =
+      `${days} дн., ${String(hours).padStart(2, '0')}:` +
+      `${String(minutes).padStart(2, '0')}:` +
+      `${String(seconds).padStart(2, '0')}`;
+  }
+
+  // Первый расчёт + обновление раз в секунду
+  formatTimeLeft();
+  setInterval(formatTimeLeft, 1000);
 }
 
 // Функция для проверки, нужно ли открывать экран результатов
