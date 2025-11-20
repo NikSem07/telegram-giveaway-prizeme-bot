@@ -189,12 +189,31 @@ async function api(path, body) {
 // Функция для обновления счетчика времени
 function updateCountdown(endAtUtc, elementId = 'countdown') {
     try {
-        const endTime = new Date(endAtUtc + 'Z');
+        const countdownElement = document.getElementById(elementId);
+        if (!countdownElement) return;
+
+        if (!endAtUtc) {
+            console.warn("[COUNTDOWN] No endAtUtc provided");
+            countdownElement.textContent = "Дата окончания не задана";
+            return;
+        }
+
+        // Пытаемся распарсить как есть (ISO-строка из backend)
+        let endTime = new Date(endAtUtc);
+
+        // Если вдруг формат без часового пояса — пробуем добавить 'Z'
+        if (isNaN(endTime.getTime())) {
+            endTime = new Date(endAtUtc + 'Z');
+        }
+
+        if (isNaN(endTime.getTime())) {
+            console.error("[COUNTDOWN] Invalid endAtUtc value:", endAtUtc);
+            countdownElement.textContent = "Ошибка расчета времени";
+            return;
+        }
+
         const now = new Date();
         const timeLeft = endTime - now;
-
-        const countdownElement = $(`#${elementId}`);
-        if (!countdownElement) return;
 
         if (timeLeft <= 0) {
             countdownElement.textContent = "Розыгрыш завершен";
@@ -206,13 +225,15 @@ function updateCountdown(endAtUtc, elementId = 'countdown') {
         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
-        countdownElement.textContent = `${days} дн., ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        countdownElement.textContent =
+            `${days} дн., ${hours.toString().padStart(2, '0')}:` +
+            `${minutes.toString().padStart(2, '0')}:` +
+            `${seconds.toString().padStart(2, '0')}`;
 
         setTimeout(() => updateCountdown(endAtUtc, elementId), 1000);
-        
     } catch (err) {
         console.error("[COUNTDOWN] Error:", err);
-        const countdownElement = $(`#${elementId}`);
+        const countdownElement = document.getElementById(elementId);
         if (countdownElement) {
             countdownElement.textContent = "Ошибка расчета времени";
         }
