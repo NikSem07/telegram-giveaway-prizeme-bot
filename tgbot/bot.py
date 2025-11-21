@@ -57,9 +57,18 @@ from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
 
 def normalize_datetime(dt: datetime) -> datetime:
+
+    from datetime import timezone as _tz  # локальный алиас, чтобы не путаться
+
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        # Наивную дату трактуем как «московскую»
+        local_dt = dt.replace(tzinfo=MSK_TZ)
+    else:
+        # Любую aware-дату сначала приводим к Москве
+        local_dt = dt.astimezone(MSK_TZ)
+
+    # Для внутренних расчётов и планировщика используем всегда UTC
+    return local_dt.astimezone(_tz.utc)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
