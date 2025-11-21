@@ -977,15 +977,19 @@ async def mark_membership(chat_id: int, user_id: int) -> None:
                 {"c": chat_id, "u": user_id},
             )
 
+# --- Проверяет подписку пользователя в локальной базе данных ---
 async def is_member_local(chat_id: int, user_id: int) -> bool:
-    async with Session() as s:
-        r = await s.execute(
-            _sqltext(
-                "SELECT 1 FROM channel_memberships WHERE chat_id=:c AND user_id=:u"
-            ),
-            {"c": chat_id, "u": user_id},
-        )
-        return r.first() is not None
+    try:
+        async with session_scope() as s:
+            # 🔧 ИСПРАВЛЕННЫЙ SQL ДЛЯ POSTGRESQL
+            res = await s.execute(
+                text("SELECT 1 FROM channel_memberships WHERE chat_id = :chat_id AND user_id = :user_id"),
+                {"chat_id": chat_id, "user_id": user_id}
+            )
+            return res.scalar() is not None
+    except Exception as e:
+        print(f"⚠️ Ошибка проверки локальной подписки: {e}")
+        return False
 
 # создать все таблицы по ORM-моделям (если их ещё нет)
 async def init_db():
@@ -1083,9 +1087,13 @@ async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
 
 async def check_membership_on_all(bot, user_id:int, giveaway_id:int):
     async with session_scope() as s:
-        res = await s.execute(text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id=:gid"),{"gid":giveaway_id})
+        res = await s.execute(
+            text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id = :gid"),
+            {"gid": giveaway_id}
+        )
         rows = res.all()
-    details=[]; all_ok=True
+    
+    details = []; all_ok = True
     for title, chat_id in rows:
         # 1) Быстрый путь: уже знаем, что он вступил (одобренный join-request)
         ok = await is_member_local(int(chat_id), int(user_id))
@@ -4184,10 +4192,10 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
             
             print(f"✅ Розыгрыш активен, продолжаем...")
             
-            # Получаем участников - ИСПРАВЛЕННЫЙ ЗАПРОС
+            # Получаем участников - ИСПРАВЛЕННЫЙ ЗАПРОС ДЛЯ POSTGRESQL
             print(f"🔍 Ищем участников розыгрыша {gid}")
             res = await s.execute(
-                stext("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
+                text("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
                 {"gid": gid}
             )
             entries = res.all()
@@ -4195,6 +4203,9 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
             
             if not entries:
                 print("❌ Нет участников для этого розыгрыша")
+                # Обновляем статус розыгрыша даже если нет участников
+                gw.status = GiveawayStatus.FINISHED
+                await s.commit()
                 return
             
             # Проверяем финальное членство
@@ -4204,12 +4215,13 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
                 print(f"🔍 Проверка {i+1}/{len(entries)}: user_id={uid}, ticket={ticket_code}")
                 
                 try:
+                    # 🔧 ИСПОЛЬЗУЕМ ВАШУ СУЩЕСТВУЮЩУЮ ФУНКЦИЮ
                     ok, details = await check_membership_on_all(bot_instance, uid, gid)
                     print(f"📝 Результат проверки user {uid}: {ok}")
                     
-                    # ИСПРАВЛЕННЫЙ UPDATE - используем True/False вместо 1/0
+                    # 🔧 ИСПРАВЛЕННЫЙ UPDATE ДЛЯ POSTGRESQL - используем True/False вместо 1/0
                     await s.execute(
-                        stext("UPDATE entries SET final_ok = :ok, final_checked_at = :ts WHERE id = :eid"),
+                        text("UPDATE entries SET final_ok = :ok, final_checked_at = :ts WHERE id = :eid"),
                         {"ok": ok, "ts": datetime.now(timezone.utc), "eid": entry_id}
                     )
                     
@@ -4226,6 +4238,7 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
             print(f"🎯 Участников прошли проверку: {len(eligible)}")
             
             # Детерминированный выбор победителей
+            winners = []
             if eligible and gw.winners_count > 0:
                 winners_count = min(gw.winners_count, len(eligible))
                 print(f"🎲 Выбираем {winners_count} победителей из {len(eligible)} участников")
@@ -4233,6 +4246,7 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
                 secret = gw.secret or "default_secret_for_testing"
                 print(f"🔑 Используем секрет: {secret[:10]}...")
                 
+                # 🔧 ИСПОЛЬЗУЕМ ВАШУ СУЩЕСТВУЮЩУЮ ФУНКЦИЮ
                 winners = deterministic_draw(secret, gid, eligible, winners_count)
                 print(f"🎉 Выбрано победителей: {len(winners)}")
                 
@@ -4241,7 +4255,7 @@ async def finalize_and_draw_job(gid: int, bot_instance: Bot):
                 rank = 1
                 for uid, r, h in winners:
                     await s.execute(
-                        stext("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
+                        text("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
                         {"g": gid, "u": uid, "r": rank, "h": h}
                     )
                     print(f"🏆 Сохранен победитель {uid} с рангом {rank}")

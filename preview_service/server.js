@@ -979,7 +979,6 @@ app.post('/api/results', async (req, res) => {
   try {
     const { gid, init_data } = req.body;
 
-    // Извлекаем user_id из init_data
     const parsedInitData = _tgCheckMiniAppInitData(init_data);
     if (!parsedInitData || !parsedInitData.user_parsed) {
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
@@ -994,7 +993,29 @@ app.post('/api/results', async (req, res) => {
 
     console.log(`[RESULTS] USER_EXTRACTED: id=${userId}, gid=${giveawayId}`);
 
-    // Проксируем запрос к внутреннему API бота
+    // 🔧 ПРОВЕРЯЕМ СТАТУС РОЗЫГРЫША
+    const statusCheck = await pool.query(
+      'SELECT status FROM giveaways WHERE id = $1',
+      [giveawayId]
+    );
+    
+    if (statusCheck.rows.length === 0) {
+      return res.json({ ok: false, reason: 'giveaway_not_found' });
+    }
+    
+    const giveawayStatus = statusCheck.rows[0].status;
+    console.log(`[RESULTS] Giveaway status: ${giveawayStatus}`);
+    
+    // 🔧 ЕСЛИ РОЗЫГРЫШ ЕЩЕ НЕ ЗАВЕРШЕН - ВОЗВРАЩАЕМ СООБЩЕНИЕ
+    if (!['completed', 'finished'].includes(giveawayStatus)) {
+      return res.json({ 
+        ok: true, 
+        finished: false,
+        message: "Розыгрыш еще не завершен. Результаты будут доступны после окончания."
+      });
+    }
+
+    // Проксируем запрос к боту
     const response = await fetch(`${BOT_INTERNAL_URL}/api/giveaway_results`, {
       method: 'POST',
       headers: {
@@ -1009,6 +1030,13 @@ app.post('/api/results', async (req, res) => {
 
     if (response.ok) {
       const resultData = await response.json();
+      
+      // 🔧 ДОБАВЛЯЕМ ФЛАГ "НЕТ ПОБЕДИТЕЛЕЙ"
+      if (resultData.winners && resultData.winners.length === 0) {
+        resultData.noWinners = true;
+        resultData.message = "Победителей в этом розыгрыше нет";
+      }
+      
       res.json(resultData);
     } else {
       console.log(`[RESULTS] Internal API error: ${response.status}`);

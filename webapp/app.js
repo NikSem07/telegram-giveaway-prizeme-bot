@@ -608,25 +608,85 @@ function initializeResultsPage() {
 // Функция загрузки результатов
 async function loadResults(gid) {
   try {
+    console.log("[RESULTS] 🔄 Начинаем загрузку результатов для gid:", gid);
+    
     const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
     if (!init_data) {
-      throw new Error("No initData");
+      throw new Error("Не удалось получить данные авторизации");
     }
     
-    console.log("[RESULTS] Loading results for gid:", gid);
-    
     const results = await api("/api/results", { gid, init_data });
-    console.log("[RESULTS] Results response:", results);
+    console.log("[RESULTS] 📊 Получены результаты:", results);
     
     if (results.ok) {
-      displayResults(results);
+      // 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: УБИРАЕМ ЦИКЛИЧЕСКУЮ ПЕРЕЗАГРУЗКУ
+      if (results.finished === false) {
+        // Розыгрыш еще не завершен - показываем сообщение
+        showNotFinished(results.message || "Розыгрыш еще не завершен");
+      } else if (results.noWinners || (results.winners && results.winners.length === 0)) {
+        // Нет победителей - показываем соответствующий экран
+        showNoWinners(results);
+      } else {
+        // Есть победители - показываем обычный экран
+        displayResults(results);
+      }
     } else {
-      throw new Error(results.reason || "Failed to load results");
+      throw new Error(results.reason || "Не удалось загрузить результаты");
     }
     
   } catch (err) {
-    console.error("[RESULTS] Error loading results:", err);
+    console.error("[RESULTS] ❌ Ошибка загрузки результатов:", err);
     showError(err.message);
+  }
+}
+
+// ФУНКЦИЯ ДЛЯ "РОЗЫГРЫШ НЕ ЗАВЕРШЕН":
+function showNotFinished(message) {
+  hide("#screen-loading");
+  show("#screen-results");
+  
+  $("#giveaway-title").textContent = "Розыгрыш еще не завершен";
+  $("#giveaway-description").textContent = message || "Ожидайте определения победителей";
+  
+  const winnerStatusElement = $("#winner-status");
+  winnerStatusElement.innerHTML = `
+    <div class="status-message status-not-finished">
+      ⏳ Розыгрыш еще не завершен<br><br>
+      ${message || "Результаты будут доступны после окончания розыгрыша."}
+    </div>
+  `;
+  
+  $("#winners-section").style.display = 'none';
+  $("#no-winners").style.display = 'none';
+  
+  // УБИРАЕМ КНОПКУ "НАЗАД" ЕСЛИ НУЖНО
+  $("#btn-back").style.display = 'block';
+}
+
+// ФУНКЦИЯ ДЛЯ "НЕТ ПОБЕДИТЕЛЕЙ":
+function showNoWinners(data) {
+  hide("#screen-loading");
+  show("#screen-results");
+  
+  $("#giveaway-title").textContent = data.giveaway?.title || "Розыгрыш завершен";
+  $("#giveaway-description").textContent = data.giveaway?.description || "Описание отсутствует";
+  $("#participants-count").textContent = data.giveaway?.participants_count || 0;
+  $("#winners-count").textContent = data.giveaway?.winners_count || 0;
+  
+  const winnerStatusElement = $("#winner-status");
+  winnerStatusElement.innerHTML = `
+    <div class="status-message status-no-winners">
+      🎉 Розыгрыш завершен!<br><br>
+      К сожалению, победителей в этом розыгрыше нет.
+    </div>
+  `;
+  
+  $("#winners-section").style.display = 'none';
+  $("#no-winners").style.display = 'block';
+  
+  if (data.user?.ticket_code) {
+    $("#user-ticket").style.display = 'block';
+    $("#ticket-code").textContent = data.user.ticket_code;
   }
 }
 
