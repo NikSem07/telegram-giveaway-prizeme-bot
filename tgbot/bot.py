@@ -1746,8 +1746,7 @@ async def cmd_admin_draw(m: Message):
     print(f"🎯 Запуск finalize_and_draw_job для розыгрыша {gid}")
     await m.answer(f"🔄 Запускаю ручное определение победителей для розыгрыша {gid}...")
     
-    # Запускаем функцию с передачей bot
-    await finalize_and_draw_job(gid, bot)
+    await finalize_and_draw_job(gid)
     
     print(f"✅ finalize_and_draw_job завершена для {gid}")
     await m.answer("✅ Функция finalize_and_draw_job завершена. Проверьте логи.")
@@ -2540,7 +2539,7 @@ async def edit_apply(cq: CallbackQuery, state: FSMContext):
                     scheduler.add_job(
                         func=finalize_and_draw_job,
                         trigger=DateTrigger(run_date=new_value),
-                        args=[gid, bot],
+                        args=[gid],
                         id=f"final_{gid}",
                         replace_existing=True,
                     )
@@ -3779,7 +3778,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
         scheduler.add_job(
             func=finalize_and_draw_job,
             trigger=DateTrigger(run_date=run_dt),
-            args=[gid, bot],
+            args=[gid],
             id=f"final_{gid}",
             replace_existing=True,
         )
@@ -5193,7 +5192,7 @@ async def main():
                         scheduler.add_job(
                             func=finalize_and_draw_job,
                             trigger=DateTrigger(run_date=end_at_normalized),
-                            args=[gid, bot],
+                            args=[gid],
                             id=f"final_{gid}",
                             replace_existing=True,
                         )
