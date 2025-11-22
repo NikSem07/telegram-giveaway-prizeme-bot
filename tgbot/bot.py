@@ -4192,7 +4192,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         all_entries = res.fetchall()
         print(f"📋 Найдено предварительных билетов (prelim_ok=true): {len(all_entries)}")
 
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Если вообще нет билетов — сразу фиксируем "без победителей"
         if not all_entries:
