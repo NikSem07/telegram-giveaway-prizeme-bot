@@ -4158,121 +4158,175 @@ async def user_join(cq:CallbackQuery):
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
 async def finalize_and_draw_job(gid: int, bot_instance: Bot):
-    """УЛУЧШЕННАЯ ВЕРСИЯ - ДЕТАЛЬНАЯ ДИАГНОСТИКА БАЗЫ ДАННЫХ"""
-    print(f"🎯 FINALIZE_AND_DRAW_JOB СТАРТ для розыгрыша {gid}")
+    """УЛЬТРА-ВЕРСИЯ с максимальным логированием и редактированием постов"""
+    print(f"🎯🎯🎯 FINALIZE_AND_DRAW_JOB ВЫЗВАНА для розыгрыша {gid}")
+    logging.info(f"🎯🎯🎯 FINALIZE_AND_DRAW_JOB ВЫЗВАНА для розыгрыша {gid}")
+    
+    # Принудительная запись в файл
+    try:
+        with open("/tmp/finalize_debug.log", "a") as f:
+            f.write(f"{datetime.now()}: FINALIZE_AND_DRAW_JOB STARTED for {gid}\n")
+    except:
+        pass
+    
+    # Проверка что функция вообще выполняется
+    print(f"🔍 ШАГ 1: Функция запущена, gid={gid}, bot_instance={bot_instance is not None}")
     
     try:
+        print(f"🔍 ШАГ 2: Пытаемся открыть сессию БД")
         async with session_scope() as s:
-            # 1. ПРОВЕРЯЕМ РОЗЫГРЫШ
+            print(f"🔍 ШАГ 3: Сессия открыта, ищем розыгрыш {gid}")
+            
             gw = await s.get(Giveaway, gid)
-            if not gw or gw.status != GiveawayStatus.ACTIVE:
-                print(f"❌ Розыгрыш {gid} не найден или не активен")
+            print(f"🔍 ШАГ 4: Результат поиска розыгрыша: {gw is not None}")
+            
+            if not gw:
+                print(f"❌ Розыгрыш {gid} не найден в БД")
                 return
             
-            print(f"✅ Розыгрыш найден: '{gw.internal_title}'")
-
-            # 2. 🔧 ДЕТАЛЬНАЯ ДИАГНОСТИКА ВСЕХ ЗАПИСЕЙ
-            print(f"🔍 ДИАГНОСТИКА: Ищем ВСЕ записи для gid={gid}")
+            print(f"📊 Розыгрыш найден: '{gw.internal_title}', статус: {gw.status}")
             
-            # Получаем ВСЕ записи для диагностики
-            all_entries_result = await s.execute(
-                text("SELECT user_id, id, ticket_code, prelim_ok, final_ok FROM entries WHERE giveaway_id = :gid"),
+            if gw.status != GiveawayStatus.ACTIVE:
+                print(f"⚠️ Статус розыгрыша {gw.status}, а не ACTIVE - выходим")
+                return
+            
+            print(f"✅ Розыгрыш активен, продолжаем...")
+            
+            # Получаем участников - ИСПРАВЛЕННЫЙ ЗАПРОС ДЛЯ POSTGRESQL
+            print(f"🔍 Ищем участников розыгрыша {gid}")
+            res = await s.execute(
+                text("SELECT user_id, id, ticket_code FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
                 {"gid": gid}
             )
-            all_entries = all_entries_result.all()
-            print(f"🔍 ВСЕГО записей в БД: {len(all_entries)}")
+            entries = res.all()
+            print(f"📋 Найдено участников: {len(entries)}")
             
-            # Логируем каждую запись для диагностики
-            for i, (user_id, entry_id, ticket, prelim_ok, final_ok) in enumerate(all_entries):
-                print(f"🔍 Запись {i+1}: user_id={user_id}, ticket={ticket}, prelim_ok={prelim_ok}, final_ok={final_ok}")
-            
-            # Фильтруем записи с prelim_ok = true
-            eligible_entries = [e for e in all_entries if e[3] == True]  # prelim_ok
-            print(f"🔍 Участников с prelim_ok=true: {len(eligible_entries)}")
-            
-            # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: если нет участников с prelim_ok=true, используем ВСЕ записи
-            if not eligible_entries and all_entries:
-                print(f"⚠️ ВНИМАНИЕ: Нет участников с prelim_ok=true, но есть {len(all_entries)} записей")
-                print(f"🔍 Используем ВСЕ записи для розыгрыша")
-                eligible_entries = all_entries
-            
-            if not eligible_entries:
+            if not entries:
                 print("❌ Нет участников для этого розыгрыша")
+                # Обновляем статус розыгрыша даже если нет участников
                 gw.status = GiveawayStatus.FINISHED
                 await s.commit()
                 return
-
-            # 3. 🔧 ПРОВЕРКА ПОДПИСКИ
-            print(f"🔍 Начинаем проверку подписки для {len(eligible_entries)} участников")
-            eligible_users = []
             
-            for user_id, entry_id, ticket_code, prelim_ok, final_ok in eligible_entries:
-                print(f"🔍 Проверка user_id={user_id}, ticket={ticket_code}, prelim_ok={prelim_ok}")
+            # Проверяем финальное членство
+            print(f"🔍 Начинаем проверку подписки для {len(entries)} участников")
+            eligible = []
+            for i, (uid, entry_id, ticket_code) in enumerate(entries):
+                print(f"🔍 Проверка {i+1}/{len(entries)}: user_id={uid}, ticket={ticket_code}")
                 
                 try:
-                    # 🔧 ИСПОЛЬЗУЕМ ВАШУ ФУНКЦИЮ
-                    ok, details = await check_membership_on_all(bot_instance, user_id, gid)
-                    print(f"📝 Результат проверки user {user_id}: {ok}, details: {details}")
+                    # 🔧 ИСПОЛЬЗУЕМ ВАШУ СУЩЕСТВУЮЩУЮ ФУНКЦИЮ
+                    ok, details = await check_membership_on_all(bot_instance, uid, gid)
+                    print(f"📝 Результат проверки user {uid}: {ok}")
                     
-                    # 🔧 ОБНОВЛЯЕМ ЗАПИСЬ
+                    # 🔧 ИСПРАВЛЕННЫЙ UPDATE ДЛЯ POSTGRESQL - используем True/False вместо 1/0
                     await s.execute(
-                        text("UPDATE entries SET final_ok = :ok, final_checked_at = NOW() WHERE id = :eid"),
-                        {"ok": ok, "eid": entry_id}
+                        text("UPDATE entries SET final_ok = :ok, final_checked_at = :ts WHERE id = :eid"),
+                        {"ok": ok, "ts": datetime.now(timezone.utc), "eid": entry_id}
                     )
                     
                     if ok:
-                        eligible_users.append(user_id)
-                        print(f"✅ User {user_id} прошел проверку")
+                        eligible.append(uid)
+                        print(f"✅ User {uid} прошел проверку")
                     else:
-                        print(f"❌ User {user_id} НЕ прошел проверку: {details}")
+                        print(f"❌ User {uid} НЕ прошел проверку")
                         
                 except Exception as e:
-                    print(f"🚨 Ошибка при проверке user {user_id}: {e}")
+                    print(f"🚨 Ошибка при проверке user {uid}: {e}")
                     continue
-
-            print(f"🎯 Участников прошли проверку: {len(eligible_users)}")
-
-            # 4. 🔧 ВЫБОР ПОБЕДИТЕЛЕЙ
+            
+            print(f"🎯 Участников прошли проверку: {len(eligible)}")
+            
+            # Детерминированный выбор победителей
             winners = []
-            if eligible_users and gw.winners_count > 0:
-                winners_count = min(gw.winners_count, len(eligible_users))
-                print(f"🎲 Выбираем {winners_count} победителей из {len(eligible_users)} участников")
+            if eligible and gw.winners_count > 0:
+                winners_count = min(gw.winners_count, len(eligible))
+                print(f"🎲 Выбираем {winners_count} победителей из {len(eligible)} участников")
                 
-                secret = gw.secret or "default_secret"
-                winners = deterministic_draw(secret, gid, eligible_users, winners_count)
+                secret = gw.secret or "default_secret_for_testing"
+                print(f"🔑 Используем секрет: {secret[:10]}...")
+                
+                # 🔧 ИСПОЛЬЗУЕМ ВАШУ СУЩЕСТВУЮЩУЮ ФУНКЦИЮ
+                winners = deterministic_draw(secret, gid, eligible, winners_count)
                 print(f"🎉 Выбрано победителей: {len(winners)}")
                 
                 # Сохраняем победителей
+                print(f"💾 Сохраняем победителей в БД")
                 rank = 1
                 for uid, r, h in winners:
                     await s.execute(
-                        text("INSERT INTO winners (giveaway_id, user_id, rank, hash_used) VALUES (:g, :u, :r, :h)"),
+                        text("INSERT INTO winners(giveaway_id, user_id, rank, hash_used) VALUES(:g,:u,:r,:h)"),
                         {"g": gid, "u": uid, "r": rank, "h": h}
                     )
                     print(f"🏆 Сохранен победитель {uid} с рангом {rank}")
                     rank += 1
             else:
-                print("❌ Не удалось выбрать победителей")
-
-            # 5. 🔧 ОБНОВЛЯЕМ СТАТУС
+                winners = []
+                print("❌ Не удалось выбрать победителей - нет подходящих участников")
+            
+            # Обновляем статус розыгрыша
+            print(f"🔄 Обновляем статус розыгрыша на FINISHED")
             gw.status = GiveawayStatus.FINISHED
+            
             await s.commit()
-            print(f"💾 Коммит выполнен")
+            print(f"💾 Коммит в БД выполнен")
             
     except Exception as e:
-        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        print(f"🚨🚨🚨 КРИТИЧЕСКАЯ ОШИБКА В finalize_and_draw_job: {e}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"TRACEBACK: {error_traceback}")
+        
+        # Запись ошибки в файл
+        try:
+            with open("/tmp/finalize_error.log", "a") as f:
+                f.write(f"{datetime.now()}: ERROR in finalize_and_draw_job for {gid}\n")
+                f.write(f"Error: {e}\n")
+                f.write(f"Traceback: {error_traceback}\n")
+        except:
+            pass
+        return
+    
+    # Уведомления
+    try:
+        print(f"📨 Запускаем уведомления")
+        await notify_organizer(gid, winners, len(eligible), bot_instance)
+        await notify_participants(gid, winners, [(uid, "") for uid in eligible], bot_instance)
+        print(f"✅ Уведомления отправлены")
+    except Exception as e:
+        print(f"❌ Ошибка в уведомлениях: {e}")
+
+    # Редактирование постов после завершения
+    print(f"🔍 ДИАГНОСТИКА: ДО вызова edit_giveaway_post для {gid}")
+    try:
+        print(f"📝 Запускаем редактирование постов для {gid}")
+
+        # Детальная диагностика перед редактированием
+        async with session_scope() as s:
+            gw_diag = await s.get(Giveaway, gid)
+            if gw_diag:
+                media_type, media_file_id = unpack_media(gw_diag.photo_file_id)
+                print(f"🔍 ДИАГНОСТИКА РОЗЫГРЫША {gid}:")
+                print(f"🔍 - Название: {gw_diag.internal_title}")
+                print(f"🔍 - Медиа тип: {media_type}")
+                print(f"🔍 - File ID: {media_file_id is not None}")
+                print(f"🔍 - Есть медиа: {media_file_id is not None}")
+
+        result = await edit_giveaway_post(gid, bot_instance)
+        print(f"✅ Редактирование постов завершено для {gid}, результат: {result}")
+    except Exception as e:
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА при редактировании постов: {e}")
         import traceback
         print(f"TRACEBACK: {traceback.format_exc()}")
-        return
 
-    # 6. 🔧 УВЕДОМЛЕНИЯ
+    print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {gid}")
+    
+    # Финальная запись в файл
     try:
-        await edit_giveaway_post(gid, bot_instance)
-        print(f"✅ Редактирование постов завершено")
-    except Exception as e:
-        print(f"❌ Ошибка при редактировании постов: {e}")
-
-    print(f"✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {gid}")
+        with open("/tmp/finalize_debug.log", "a") as f:
+            f.write(f"{datetime.now()}: FINALIZE_AND_DRAW_JOB COMPLETED for {gid}\n")
+    except:
+        pass
 
 
 async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_instance: Bot):
