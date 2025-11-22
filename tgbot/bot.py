@@ -5200,7 +5200,7 @@ async def main():
                         logging.info(f"🔄 Restored scheduler job for giveaway {gid} at {end_at_normalized}")
                     else:
                         # Время прошло - запускаем немедленно
-                        asyncio.create_task(finalize_and_draw_job(gid, bot))
+                        asyncio.create_task(finalize_and_draw_job(gid))
                         logging.info(f"🚨 Time passed, immediate finalize for {gid}")
                         
                 except Exception as e:
