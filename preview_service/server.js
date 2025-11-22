@@ -301,6 +301,23 @@ async function _isMemberLocal(chatId, userId) {
   }
 }
 
+function convertUTCtoMSK(utcDateString) {
+    try {
+        if (!utcDateString) return null;
+        
+        // Создаем дату из UTC строки
+        const utcDate = new Date(utcDateString);
+        if (isNaN(utcDate.getTime())) return null;
+        
+        // MSK = UTC+3
+        const mskDate = new Date(utcDate.getTime() + (3 * 60 * 60 * 1000));
+        return mskDate;
+    } catch (error) {
+        console.log(`[TIMEZONE] Error converting UTC to MSK: ${error}`);
+        return null;
+    }
+}
+
 // Валидация Telegram WebApp initData (упрощенная версия)
 function _tgCheckMiniAppInitData(initData) {
   try {

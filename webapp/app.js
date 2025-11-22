@@ -188,77 +188,81 @@ async function api(path, body) {
 
 // Функция для обновления счетчика времени
 function updateCountdown(endAtUtc, elementId) {
-  const countdownElement = document.getElementById(elementId);
-  if (!countdownElement) {
-    console.warn(`[COUNTDOWN] Элемент с ID '${elementId}' не найден.`);
-    return;
-  }
-
-  // Универсальный парсер даты окончания
-  function parseEndTime(value) {
-    if (!value) return null;
-
-    // Если уже Date – используем как есть
-    if (value instanceof Date) return value;
-
-    let raw = String(value).trim();
-    if (!raw) return null;
-
-    // 1) Первая попытка – как есть
-    let d = new Date(raw);
-    if (!isNaN(d.getTime())) return d;
-
-    // 2) Формат "2025-11-20 20:00:00" → ISO
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
-      d = new Date(raw.replace(' ', 'T') + 'Z');
-      if (!isNaN(d.getTime())) return d;
+    const countdownElement = document.getElementById(elementId);
+    if (!countdownElement) {
+        console.warn(`[COUNTDOWN] Элемент с ID '${elementId}' не найден.`);
+        return;
     }
 
-    // 3) Формат "2025-11-20T20:00:00" → добавляем Z
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
-      d = new Date(raw + 'Z');
-      if (!isNaN(d.getTime())) return d;
+    // ИСПОЛЬЗУЕМ ФИКСИРОВАННУЮ ВЕРСИЮ ПАРСЕРА:
+    function parseEndTime(value) {
+        if (!value) return null;
+
+        // Если уже Date – используем как есть
+        if (value instanceof Date) return value;
+
+        let raw = String(value).trim();
+        if (!raw) return null;
+
+        // 1) Пробуем как есть
+        let d = new Date(raw);
+        if (!isNaN(d.getTime())) return d;
+
+        // 2) Формат "2025-11-20 20:00:00" → ISO
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
+            d = new Date(raw.replace(' ', 'T') + 'Z');
+            if (!isNaN(d.getTime())) return d;
+        }
+
+        // 3) Формат "2025-11-20T20:00:00" → добавляем Z
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
+            d = new Date(raw + 'Z');
+            if (!isNaN(d.getTime())) return d;
+        }
+
+        // 4) ФИКС: конвертируем UTC в MSK
+        const mskDate = convertUTCtoMSK(raw);
+        if (mskDate) return mskDate;
+
+        return null;
     }
 
-    return null;
-  }
-
-  const endTime = parseEndTime(endAtUtc);
-  if (!endTime) {
-    console.warn('[COUNTDOWN] Не удалось разобрать дату окончания:', endAtUtc);
-    countdownElement.textContent = 'Дата окончания не указана';
-    return;
-  }
-
-  function formatTimeLeft() {
-    const now = new Date();
-    const timeLeft = endTime.getTime() - now.getTime();
-
-    if (!isFinite(timeLeft)) {
-      countdownElement.textContent = 'Дата окончания не указана';
-      return;
+    const endTime = parseEndTime(endAtUtc);
+    if (!endTime) {
+        console.warn('[COUNTDOWN] Не удалось разобрать дату окончания:', endAtUtc);
+        countdownElement.textContent = 'Дата окончания не указана';
+        return;
     }
 
-    if (timeLeft <= 0) {
-      countdownElement.textContent = 'Розыгрыш завершён';
-      return;
+    function formatTimeLeft() {
+        const now = new Date();
+        const timeLeft = endTime.getTime() - now.getTime();
+
+        if (!isFinite(timeLeft)) {
+            countdownElement.textContent = 'Дата окончания не указана';
+            return;
+        }
+
+        if (timeLeft <= 0) {
+            countdownElement.textContent = 'Розыгрыш завершён';
+            return;
+        }
+
+        const totalSeconds = Math.floor(timeLeft / 1000);
+        const days = Math.floor(totalSeconds / (60 * 60 * 24));
+        const hours = Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60));
+        const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+        const seconds = totalSeconds % 60;
+
+        countdownElement.textContent =
+            `${days} дн., ${String(hours).padStart(2, '0')}:` +
+            `${String(minutes).padStart(2, '0')}:` +
+            `${String(seconds).padStart(2, '0')}`;
     }
 
-    const totalSeconds = Math.floor(timeLeft / 1000);
-    const days = Math.floor(totalSeconds / (60 * 60 * 24));
-    const hours = Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60));
-    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
-    const seconds = totalSeconds % 60;
-
-    countdownElement.textContent =
-      `${days} дн., ${String(hours).padStart(2, '0')}:` +
-      `${String(minutes).padStart(2, '0')}:` +
-      `${String(seconds).padStart(2, '0')}`;
-  }
-
-  // Первый расчёт + обновление раз в секунду
-  formatTimeLeft();
-  setInterval(formatTimeLeft, 1000);
+    // Первый расчёт + обновление раз в секунду
+    formatTimeLeft();
+    setInterval(formatTimeLeft, 1000);
 }
 
 // Функция для проверки, нужно ли открывать экран результатов
@@ -619,15 +623,16 @@ async function loadResults(gid) {
     console.log("[RESULTS] 📊 Получены результаты:", results);
     
     if (results.ok) {
-      // 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: УБИРАЕМ ЦИКЛИЧЕСКУЮ ПЕРЕЗАГРУЗКУ
+      // 🔧 ФИКС: УБИРАЕМ ЦИКЛИЧЕСКУЮ ПЕРЕЗАГРУЗКУ
+      // Вместо автоматического редиректа - просто показываем статус
       if (results.finished === false) {
-        // Розыгрыш еще не завершен - показываем сообщение
+        // Розыгрыш еще не завершен - показываем сообщение БЕЗ перезагрузки
         showNotFinished(results.message || "Розыгрыш еще не завершен");
       } else if (results.noWinners || (results.winners && results.winners.length === 0)) {
-        // Нет победителей - показываем соответствующий экран
+        // Нет победителей
         showNoWinners(results);
       } else {
-        // Есть победители - показываем обычный экран
+        // Есть победители
         displayResults(results);
       }
     } else {

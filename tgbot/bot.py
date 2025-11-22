@@ -4157,19 +4157,18 @@ async def user_join(cq:CallbackQuery):
                     continue
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
 
-async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
+async def finalize_and_draw_job(giveaway_id: int):
     """
-    Финализация розыгрыша:
-    1) Берём всех, у кого есть предварительный билет (prelim_ok = true).
-    2) Для каждого ещё раз проверяем подписку на ВСЕ каналы/группы.
-    3) Из прошедших финальную проверку случайно выбираем winners_count победителей.
-    4) Перезаписываем таблицу winners и проставляем final_ok только победителям.
-    5) Если в итоге нет ни одного победителя — считаем, что «победителей нет».
+    ФИКСИРОВАННАЯ ВЕРСИЯ: убрана передача bot как параметра
     """
     print(f"🎯 FINALIZE_AND_DRAW_JOB ► старт для розыгрыша {giveaway_id}")
 
+    # Получаем бот из глобального контекста
+    from bot import bot  # Импортируем глобальный экземпляр бота
+    
     async with Session() as s:
         # ---------- 1. Загружаем розыгрыш ----------
+        # ФИКС: передаем giveaway_id как число, а не bot object
         gw = await s.get(Giveaway, giveaway_id)
         if not gw:
             print(f"❌ Розыгрыш {giveaway_id} не найден в БД")
@@ -4183,7 +4182,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
 
         # ---------- 2. Все, у кого есть билет (prelim_ok = true) ----------
         res = await s.execute(
-            stext("""
+            text("""
                 SELECT user_id, ticket_code
                 FROM entries
                 WHERE giveaway_id = :gid
@@ -4201,12 +4200,12 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
             print(f"⚠️ Для розыгрыша {gw.id} нет ни одного предварительного билета")
             # Чистим winners на всякий случай
             await s.execute(
-                stext("DELETE FROM winners WHERE giveaway_id = :gid"),
+                text("DELETE FROM winners WHERE giveaway_id = :gid"),
                 {"gid": gw.id}
             )
             # Обновляем final_ok
             await s.execute(
-                stext("""
+                text("""
                     UPDATE entries
                     SET final_ok = false,
                         final_checked_at = :ts
@@ -4225,6 +4224,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
             user_id = row[0]
             ticket_code = row[1]
 
+            # ФИКС: передаем глобальный bot, а не как параметр
             is_ok, debug_reason = await check_membership_on_all(bot, s, gw.id, user_id)
             print(
                 f"   • user={user_id} ticket={ticket_code} -> "
@@ -4242,12 +4242,12 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
 
             # Чистим winners
             await s.execute(
-                stext("DELETE FROM winners WHERE giveaway_id = :gid"),
+                text("DELETE FROM winners WHERE giveaway_id = :gid"),
                 {"gid": gw.id}
             )
             # Все final_ok = false
             await s.execute(
-                stext("""
+                text("""
                     UPDATE entries
                     SET final_ok = false,
                         final_checked_at = :ts
@@ -4270,7 +4270,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
 
         # ---------- 6. Перезаписываем таблицу winners ----------
         await s.execute(
-            stext("DELETE FROM winners WHERE giveaway_id = :gid"),
+            text("DELETE FROM winners WHERE giveaway_id = :gid"),
             {"gid": gw.id}
         )
 
@@ -4281,7 +4281,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
             ).hexdigest()
 
             await s.execute(
-                stext("""
+                text("""
                     INSERT INTO winners (giveaway_id, user_id, rank, hash_used)
                     VALUES (:gid, :uid, :rank, :hash_used)
                 """),
@@ -4292,7 +4292,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
 
         # ---------- 7. Обновляем final_ok: false для всех, true только для победителей ----------
         await s.execute(
-            stext("""
+            text("""
                 UPDATE entries
                 SET final_ok = false,
                     final_checked_at = :ts
@@ -4303,7 +4303,7 @@ async def finalize_and_draw_job(bot: Bot, giveaway_id: int):
 
         for uid in winners_user_ids:
             await s.execute(
-                stext("""
+                text("""
                     UPDATE entries
                     SET final_ok = true,
                         final_checked_at = :ts
