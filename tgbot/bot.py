@@ -4318,8 +4318,24 @@ async def finalize_and_draw_job(giveaway_id: int):
         print(f"✅ Розыгрыш {gw.id} успешно завершён, победителей: {len(winners_tuples)}")
 
     # ---------- 9. После коммита — уведомления и правки постов ----------
-    await notify_participants(giveaway_id, winners_tuples, eligible_entries, bot)
-    await edit_giveaway_post(bot, giveaway_id)
+    try:
+        await notify_organizer(giveaway_id, winners_tuples, len(eligible_entries), bot)
+        print(f"✅ Организатор уведомлен для розыгрыша {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка уведомления организатора: {e}")
+
+    try:
+        await notify_participants(giveaway_id, winners_tuples, eligible_entries, bot)
+        print(f"✅ Участники уведомлены для розыгрыша {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка уведомления участников: {e}")
+
+    try:
+        await edit_giveaway_post(giveaway_id, bot)
+        print(f"✅ Посты в каналах обновлены для розыгрыша {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка обновления постов: {e}")
+
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {giveaway_id}")
 
 
@@ -4397,19 +4413,22 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
             
             winners_list_text = ", ".join(winner_usernames) if winner_usernames else "победители не определены"
             
-            # Получаем билеты участников из базы
+            print(f"🔍 Получаем билеты участников для розыгрыша {gid}")
             participant_tickets = {}
-            res = await s.execute(stext(
-                "SELECT user_id, ticket_code FROM entries WHERE giveaway_id = :gid AND final_ok = true"
-            ), {"gid": gid})
+            res = await s.execute(
+                text("SELECT user_id, ticket_code FROM entries WHERE giveaway_id = :gid"),
+                {"gid": gid}
+            )
             for row in res.all():
                 participant_tickets[row[0]] = row[1]
+            print(f"🔍 Найдено билетов в базе: {len(participant_tickets)}")
             
             # Уведомляем всех участников
             notified_count = 0
             for user_id, _ in eligible_entries:
                 try:
                     ticket_code = participant_tickets.get(user_id, "неизвестен")
+                    print(f"🔍 Участник {user_id}, билет: {ticket_code}")
                     
                     if user_id in winner_ids:
                         # Победитель
@@ -4445,7 +4464,6 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
         
     except Exception as e:
         print(f"❌ Ошибка уведомления участников для розыгрыша {gid}: {e}")
-
 
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
