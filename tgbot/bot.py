@@ -4263,7 +4263,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         winners_to_pick = min(gw.winners_count or 1, len(user_ids))
         print(f"🎲 Определяем {winners_to_pick} победителей из {len(user_ids)} участников")
 
-        winners_user_ids = deterministic_draw(user_ids, winners_to_pick)
+        winners_user_ids = deterministic_draw("giveaway_secret", gw.id, user_ids, winners_to_pick)
 
         # ---------- 6. Перезаписываем таблицу winners ----------
         await s.execute(
