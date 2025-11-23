@@ -4222,9 +4222,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         for row in all_entries:
             user_id = row[0]
             ticket_code = row[1]
-
-            # ФИКС: передаем глобальный bot, а не как параметр
-            is_ok, debug_reason = await check_membership_on_all(bot, s, gw.id, user_id)
+            is_ok, debug_reason = await check_membership_on_all(bot, user_id, gw.id)
             print(
                 f"   • user={user_id} ticket={ticket_code} -> "
                 f"{'OK' if is_ok else 'FAIL'} ({debug_reason})"
