@@ -4263,7 +4263,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         winners_to_pick = min(gw.winners_count or 1, len(user_ids))
         print(f"🎲 Определяем {winners_to_pick} победителей из {len(user_ids)} участников")
 
-        winners_user_ids = deterministic_draw("giveaway_secret", gw.id, user_ids, winners_to_pick)
+        winners_tuples = deterministic_draw("giveaway_secret", gw.id, user_ids, winners_to_pick)
 
         # ---------- 6. Перезаписываем таблицу winners ----------
         await s.execute(
@@ -4271,21 +4271,21 @@ async def finalize_and_draw_job(giveaway_id: int):
             {"gid": gw.id}
         )
 
-        rank = 1
-        for uid in winners_user_ids:
-            hash_used = hashlib.sha256(
-                f"{gw.id}:{uid}:{now_utc.isoformat()}".encode("utf-8")
-            ).hexdigest()
-
+        for winner_tuple in winners_tuples:
+            # ✅ РАСПАКОВЫВАЕМ КОРТЕЖ: (user_id, rank, hash_used_from_draw)
+            user_id = winner_tuple[0]
+            rank = winner_tuple[1] 
+            hash_used_from_draw = winner_tuple[2]
+            
+            # Используем хэш из deterministic_draw вместо генерации нового
             await s.execute(
                 text("""
                     INSERT INTO winners (giveaway_id, user_id, rank, hash_used)
                     VALUES (:gid, :uid, :rank, :hash_used)
                 """),
-                {"gid": gw.id, "uid": uid, "rank": rank, "hash_used": hash_used}
+                {"gid": gw.id, "uid": user_id, "rank": rank, "hash_used": hash_used_from_draw}
             )
-            print(f"   🏅 Победитель #{rank}: user_id={uid}")
-            rank += 1
+            print(f"   🏅 Победитель #{rank}: user_id={user_id}")
 
         # ---------- 7. Обновляем final_ok: false для всех, true только для победителей ----------
         await s.execute(
@@ -4298,16 +4298,17 @@ async def finalize_and_draw_job(giveaway_id: int):
             {"gid": gw.id, "ts": now_utc}
         )
 
-        for uid in winners_user_ids:
+        for winner_tuple in winners_tuples:
+            user_id = winner_tuple[0]  # Извлекаем user_id из кортежа
             await s.execute(
                 text("""
                     UPDATE entries
                     SET final_ok = true,
                         final_checked_at = :ts
                     WHERE giveaway_id = :gid
-                      AND user_id = :uid
+                    AND user_id = :uid
                 """),
-                {"gid": gw.id, "uid": uid, "ts": now_utc}
+                {"gid": gw.id, "uid": user_id, "ts": now_utc}
             )
 
         # ---------- 8. Фиксируем статус розыгрыша и коммит ----------
