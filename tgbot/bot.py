@@ -4315,7 +4315,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         gw.status = GiveawayStatus.FINISHED
         await s.commit()
 
-        print(f"✅ Розыгрыш {gw.id} успешно завершён, победителей: {len(winners_user_ids)}")
+        print(f"✅ Розыгрыш {gw.id} успешно завершён, победителей: {len(winners_tuples)}")
 
     # ---------- 9. После коммита — уведомления и правки постов ----------
     await notify_participants(bot, giveaway_id)
