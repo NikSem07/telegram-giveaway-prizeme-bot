@@ -4318,7 +4318,7 @@ async def finalize_and_draw_job(giveaway_id: int):
         print(f"✅ Розыгрыш {gw.id} успешно завершён, победителей: {len(winners_tuples)}")
 
     # ---------- 9. После коммита — уведомления и правки постов ----------
-    await notify_participants(bot, giveaway_id)
+    await notify_participants(giveaway_id, winners_tuples, eligible_entries, bot)
     await edit_giveaway_post(bot, giveaway_id)
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {giveaway_id}")
 
