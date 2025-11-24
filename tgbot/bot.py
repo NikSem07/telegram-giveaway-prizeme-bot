@@ -4488,19 +4488,13 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
     # Правильная обработка времени
     end_at_utc = gw.end_at_utc
     if end_at_utc:
-        # Если время без временной зоны - добавляем UTC
-        if end_at_utc.tzinfo is None:
-            end_at_utc = end_at_utc.replace(tzinfo=timezone.utc)
-        
-        # 🔧 ИСПРАВЛЕНИЕ: Конвертируем UTC → MSK правильно
-        msk_tz = timezone(timedelta(hours=3))
-        end_at_msk = end_at_utc.astimezone(msk_tz)
-        end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
-        
         print(f"🔍 ВРЕМЯ В _compose_finished_post_text:")
-        print(f"🔍 - Исходное UTC: {end_at_utc}")
-        print(f"🔍 - Конвертированное MSK: {end_at_msk}")
-        print(f"🔍 - Отображаем: {end_at_str}")
+        print(f"🔍 - Исходное значение из БД: {end_at_utc}")
+        
+        # Время УЖЕ хранится в MSK - используем как есть БЕЗ конвертации
+        end_at_str = end_at_utc.strftime("%H:%M, %d.%m.%Y")
+        
+        print(f"🔍 - Используем как есть (уже MSK): {end_at_str}")
     else:
         end_at_str = "не указана"
         print(f"🔍 ВРЕМЯ: не указано")
