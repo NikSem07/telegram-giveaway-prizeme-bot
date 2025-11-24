@@ -4483,20 +4483,27 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count: int) -> str:
     """
     Формирует текст поста после завершения розыгрыша с жирным форматированием
-    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени БЕЗ НАЗВАНИЯ РОЗЫГРЫША
+    ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени БЕЗ ДВОЙНОЙ КОНВЕРТАЦИИ
     """
-    # Правильное преобразование времени UTC → MSK
+    # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Правильная обработка времени
     end_at_utc = gw.end_at_utc
-    if end_at_utc.tzinfo is None:
-        end_at_utc = end_at_utc.replace(tzinfo=timezone.utc)
-    
-    end_at_msk = end_at_utc.astimezone(MSK_TZ)
-    end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
-    
-    print(f"🔍 ВРЕМЯ В _compose_finished_post_text:")
-    print(f"🔍 - UTC: {end_at_utc}")
-    print(f"🔍 - MSK: {end_at_msk}")
-    print(f"🔍 - Отображаем: {end_at_str}")
+    if end_at_utc:
+        # Если время без временной зоны - добавляем UTC
+        if end_at_utc.tzinfo is None:
+            end_at_utc = end_at_utc.replace(tzinfo=timezone.utc)
+        
+        # 🔧 ИСПРАВЛЕНИЕ: Конвертируем UTC → MSK правильно
+        msk_tz = timezone(timedelta(hours=3))
+        end_at_msk = end_at_utc.astimezone(msk_tz)
+        end_at_str = end_at_msk.strftime("%H:%M, %d.%m.%Y")
+        
+        print(f"🔍 ВРЕМЯ В _compose_finished_post_text:")
+        print(f"🔍 - Исходное UTC: {end_at_utc}")
+        print(f"🔍 - Конвертированное MSK: {end_at_msk}")
+        print(f"🔍 - Отображаем: {end_at_str}")
+    else:
+        end_at_str = "не указана"
+        print(f"🔍 ВРЕМЯ: не указано")
 
     lines = []
     
@@ -4546,8 +4553,9 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
 
             # Получаем количество участников
             print(f"🔍 Ищем количество участников для розыгрыша {giveaway_id}")
+            # 🔧 ИСПРАВЛЕНИЕ: Используем prelim_ok вместо final_ok
             participants_res = await s.execute(
-                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
+                text("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
                 {"gid": giveaway_id}
             )
             participants_count = participants_res.scalar_one() or 0

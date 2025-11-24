@@ -144,13 +144,20 @@ async function checkGiveawayCompletion(gid) {
 // Проверка, нужно ли сразу открывать результаты
 function checkImmediateResults() {
   try {
+    // Проверяем, не находимся ли мы уже на results
+    if (window.location.pathname === '/miniapp/results') {
+      console.log("[IMMEDIATE-RESULTS] Already on results page, skipping redirect");
+      return false;
+    }
+    
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
     
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
       console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results for gid:", gid);
-      window.location.href = `/miniapp/results?gid=${gid}`;
+      // Используем replace вместо href чтобы избежать истории навигации
+      window.location.replace(`/miniapp/results?gid=${gid}`);
       return true;
     }
     
@@ -159,7 +166,8 @@ function checkImmediateResults() {
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
       console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results from initData, gid:", gid);
-      window.location.href = `/miniapp/results?gid=${gid}`;
+      // Используем replace вместо href
+      window.location.replace(`/miniapp/results?gid=${gid}`);
       return true;
     }
   } catch (e) {
@@ -533,8 +541,8 @@ function initializeCurrentPage() {
     console.error('❌ Cannot initialize Telegram WebApp');
   }
 
-  // Проверяем немедленный редирект на результаты
-  if (checkImmediateResults()) {
+  // Проверяем немедленный редирект на результаты ТОЛЬКО если мы НЕ на странице результатов
+  if (path !== '/miniapp/results' && checkImmediateResults()) {
     return;
   }
   
