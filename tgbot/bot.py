@@ -4485,7 +4485,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
     Формирует текст поста после завершения розыгрыша с жирным форматированием
     ИСПРАВЛЕННАЯ ВЕРСИЯ: правильное отображение времени БЕЗ ДВОЙНОЙ КОНВЕРТАЦИИ
     """
-    # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Правильная обработка времени
+    # Правильная обработка времени
     end_at_utc = gw.end_at_utc
     if end_at_utc:
         # Если время без временной зоны - добавляем UTC
@@ -5438,7 +5438,7 @@ def make_internal_app():
                 # 3) Получаем список победителей с их билетами
                 winners_res = await s.execute(
                     stext("""
-                        SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code 
+                        SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code, w.user_id
                         FROM winners w
                         LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
                         LEFT JOIN users u ON u.user_id = w.user_id
@@ -5453,12 +5453,12 @@ def make_internal_app():
                 user_is_winner = False
                 user_winner_rank = None
                 user_ticket = None
-                
+
                 for winner in winners:
-                    if winner.user_id == user_id:
+                    if winner[3] == user_id:
                         user_is_winner = True
-                        user_winner_rank = winner.rank
-                        user_ticket = winner.ticket_code
+                        user_winner_rank = winner[0]
+                        user_ticket = winner[2]
                         break
 
                 # 5) Получаем билет пользователя (если участвовал)
@@ -5473,13 +5473,15 @@ def make_internal_app():
                 # 6) Формируем список победителей для отображения
                 winners_list = []
                 for winner in winners:
-                    winners_list.append({
-                        "rank": winner.rank,
-                        "user_id": winner.user_id,
-                        "ticket_code": winner.ticket_code,
-                        "username": winner.username,
-                        "is_current_user": winner.user_id == user_id
-                    })
+                    # Безопасное извлечение атрибутов из строки результата
+                    winner_data = {
+                        "rank": winner[0], 
+                        "username": winner[1], 
+                        "ticket_code": winner[2], 
+                        "user_id": winner[3], 
+                        "is_current_user": winner[3] == user_id  
+                    }
+                    winners_list.append(winner_data)
 
                 response_data = {
                     "ok": True,
