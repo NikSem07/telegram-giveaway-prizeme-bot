@@ -1168,6 +1168,9 @@ async def _send_media(chat_id: int, kind: str|None, fid: str|None):
         return await bot.send_video(chat_id, fid)
     return None
 
+
+# --- Добавление канала ---
+
 async def save_shared_chat(
     *,
     owner_user_id: int,
@@ -1176,38 +1179,57 @@ async def save_shared_chat(
     chat_type: str,
     bot_role: str
 ) -> bool:
-    """
-    Возвращает True, если вставка сделана впервые; False, если такой канал уже был.
-    """
-    # is_private = True для групп/супергрупп, False для каналов
+
     is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
 
-    async with Session() as s:
-        async with s.begin():
-            # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем правильный синтаксис PostgreSQL
-            # Пробуем вставить; если дубликат — просто игнор
-            result = await s.execute(
-                text("""
-                INSERT INTO organizer_channels
-                    (owner_user_id, chat_id, title, is_private, bot_role)
-                VALUES (:user_id, :chat_id, :title, :is_private, :role)
-                ON CONFLICT (owner_user_id, chat_id) DO NOTHING
-                """),
-                {
-                    "user_id": owner_user_id, 
-                    "chat_id": chat_id, 
-                    "title": title, 
-                    "is_private": is_private,  # 🔧 ИСПРАВЛЕНО: убрано int()
-                    "role": bot_role
-                }
-            )
-            
-        async with Session() as s2:
-            res = await s2.execute(
-                text("SELECT 1 FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
+    try:
+        async with session_scope() as s:
+            # Сначала проверяем существование
+            existing = await s.execute(
+                text("SELECT id FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
                 {"user_id": owner_user_id, "chat_id": chat_id}
             )
-            return res.scalar() is not None
+            existing_row = existing.first()
+            
+            if existing_row:
+                # Обновляем существующую запись
+                await s.execute(
+                    text("""
+                    UPDATE organizer_channels 
+                    SET title = :title, is_private = :is_private, bot_role = :role, status = 'ok'
+                    WHERE owner_user_id = :user_id AND chat_id = :chat_id
+                    """),
+                    {
+                        "title": title,
+                        "is_private": is_private,
+                        "role": bot_role,
+                        "user_id": owner_user_id,
+                        "chat_id": chat_id
+                    }
+                )
+                return False  # Не новая запись
+            else:
+                # Вставляем новую запись
+                await s.execute(
+                    text("""
+                    INSERT INTO organizer_channels
+                        (owner_user_id, chat_id, title, is_private, bot_role, status, added_at)
+                    VALUES (:user_id, :chat_id, :title, :is_private, :role, 'ok', :added_at)
+                    """),
+                    {
+                        "user_id": owner_user_id,
+                        "chat_id": chat_id,
+                        "title": title,
+                        "is_private": is_private,
+                        "role": bot_role,
+                        "added_at": datetime.now(timezone.utc)
+                    }
+                )
+                return True  # Новая запись
+                
+    except Exception as e:
+        logging.error(f"Error in save_shared_chat: {e}")
+        return False
 
 # ----------------- FSM -----------------
 class CreateFlow(StatesGroup):
