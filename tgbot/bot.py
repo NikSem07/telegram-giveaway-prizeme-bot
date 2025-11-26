@@ -3124,7 +3124,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 
     cap = (f"<b>{gw.internal_title}</b>\n\n{gw.public_description}\n\n"
            f"Статус: {gw.status}\nПобедителей: {gw.winners_count}\n"
-           f"Дата окончания: {(gw.end_at_utc+timedelta(hours=3)).strftime('%H:%M %d.%m.%Y MSK')}")
+           f"Дата окончания: {gw.end_at_utc.strftime('%H:%M %d.%m.%Y MSK')}")
 
     kind, fid = unpack_media(gw.photo_file_id)
 
