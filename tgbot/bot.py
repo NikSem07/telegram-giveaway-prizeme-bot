@@ -1184,28 +1184,30 @@ async def save_shared_chat(
 
     async with Session() as s:
         async with s.begin():
-            # пробуем вставить; если дубликат — просто игнор
-            await s.execute(
-                """
+            # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем правильный синтаксис PostgreSQL
+            # Пробуем вставить; если дубликат — просто игнор
+            result = await s.execute(
+                text("""
                 INSERT INTO organizer_channels
                     (owner_user_id, chat_id, title, is_private, bot_role)
                 VALUES (:user_id, :chat_id, :title, :is_private, :role)
                 ON CONFLICT (owner_user_id, chat_id) DO NOTHING
-                """,
+                """),
                 {
                     "user_id": owner_user_id, 
                     "chat_id": chat_id, 
                     "title": title, 
-                    "is_private": int(is_private), 
+                    "is_private": is_private,  # 🔧 ИСПРАВЛЕНО: убрано int()
                     "role": bot_role
                 }
             )
-        # проверим, появилась ли запись
-        res = await s.execute(
-            "SELECT 1 FROM organizer_channels WHERE owner_user_id=? AND chat_id=?",
-            (owner_user_id, chat_id)
-        )
-        return res.scalar() is not None
+            
+        async with Session() as s2:
+            res = await s2.execute(
+                text("SELECT 1 FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
+                {"user_id": owner_user_id, "chat_id": chat_id}
+            )
+            return res.scalar() is not None
 
 # ----------------- FSM -----------------
 class CreateFlow(StatesGroup):
@@ -1379,48 +1381,13 @@ async def on_chat_shared(m: Message, state: FSMContext):
     title = chat.title or getattr(chat, "first_name", None) or "Без названия"
     username = getattr(chat, "username", None)
     
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное определение типа чата для групп
-    if chat.type == "channel":
-        is_private = 0 if username else 1
-    else:
-        # Для групп и супергрупп
-        is_private = 1  # Группы всегда считаем приватными
-
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи перед вставкой
-    async with Session() as s:
-        # Сначала проверяем, существует ли уже такой канал у пользователя
-        existing = await s.execute(
-            stext("SELECT id FROM organizer_channels WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
-            {"user_id": m.from_user.id, "chat_id": chat.id}  # ✅ ИСПРАВЛЕНО: именованные параметры
-        )
-        existing_row = existing.first()
-        
-        if existing_row:
-            # Канал уже существует - просто обновляем статус на 'ok' если нужно
-            await s.execute(
-                stext("UPDATE organizer_channels SET status='ok', bot_role=:role, title=:title WHERE id=:id"),
-                {"role": role, "title": title, "id": existing_row[0]}  # ✅ ИСПРАВЛЕНО: именованные параметры
-            )
-            is_new = False
-        else:
-            # Канала нет - создаем новую запись
-            await s.execute(
-                stext(
-                    "INSERT INTO organizer_channels("
-                    "owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at"
-                    ") VALUES (:user_id, :chat_id, :username, :title, :is_private, :role, 'ok', :added_at)"
-                ),
-                {
-                    "user_id": m.from_user.id, 
-                    "chat_id": chat.id, 
-                    "username": username, 
-                    "title": title, 
-                    "is_private": int(is_private), 
-                    "role": role,
-                    "added_at": datetime.now(timezone.utc)
-                }  # ✅ ИСПРАВЛЕНО: именованные параметры
-            )
-            is_new = True
+    is_new = await save_shared_chat(
+        owner_user_id=m.from_user.id,
+        chat_id=chat.id,
+        title=title,
+        chat_type=chat.type,
+        bot_role=role
+    )
 
     kind = "канал" if chat.type == "channel" else "группа"
     action_text = "подключён" if is_new else "обновлён"
@@ -1437,13 +1404,13 @@ async def on_chat_shared(m: Message, state: FSMContext):
         async with session_scope() as s:
             gw = await s.get(Giveaway, event_id)
             res = await s.execute(
-                stext("SELECT id, title FROM organizer_channels WHERE owner_user_id=:u AND status='ok'"),
-                {"u": gw.owner_user_id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+                text("SELECT id, title FROM organizer_channels WHERE owner_user_id = :u AND status = 'ok'"),
+                {"u": gw.owner_user_id}
             )
             channels = [(r[0], r[1]) for r in res.all()]
             res = await s.execute(
-                stext("SELECT channel_id FROM giveaway_channels WHERE giveaway_id=:g"),
-                {"g": event_id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+                text("SELECT channel_id FROM giveaway_channels WHERE giveaway_id = :g"),
+                {"g": event_id}
             )
             attached_ids = {r[0] for r in res.fetchall()}
         
