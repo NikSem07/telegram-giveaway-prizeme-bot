@@ -2581,7 +2581,31 @@ async def edit_fix(cq: CallbackQuery, state: FSMContext):
     elif setting_type == "desc":
         await state.set_state(EditFlow.EDIT_DESC)
         await cq.message.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
-    # ... для остальных типов
+    elif setting_type == "endat":
+        await state.set_state(EditFlow.EDIT_ENDAT)
+        await cq.message.answer("Введите новое время окончания в формате ЧЧ:ММ ДД.ММ.ГГГГ (например, 20:00 15.12.2024):")
+    elif setting_type == "winners":
+        await state.set_state(EditFlow.EDIT_WINNERS)
+        await cq.message.answer("Введите новое количество победителей (от 1 до 50):")
+    elif setting_type == "media":
+        await state.set_state(EditFlow.EDIT_MEDIA)
+        await cq.message.answer(
+            "Хотите добавить медиа к розыгрышу?",
+            reply_markup=kb_media_choice()
+        )
+    else:
+        # Если тип не распознан, возвращаем в меню настроек
+        gid = data.get("editing_giveaway_id")
+        return_context = data.get("return_context", "settings")
+        await state.clear()
+        
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, gid)
+            await cq.message.answer(
+                f"Что вы хотите настроить в розыгрыше <b>{gw.internal_title}</b>",
+                reply_markup=kb_settings_menu(gid, gw.internal_title, return_context),
+                parse_mode="HTML"
+            )
     
     await cq.answer()
 
