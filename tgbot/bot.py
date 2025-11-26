@@ -2589,10 +2589,7 @@ async def edit_fix(cq: CallbackQuery, state: FSMContext):
         await cq.message.answer("Введите новое количество победителей (от 1 до 50):")
     elif setting_type == "media":
         await state.set_state(EditFlow.EDIT_MEDIA)
-        await cq.message.answer(
-            "Хотите добавить медиа к розыгрышу?",
-            reply_markup=kb_media_choice()
-        )
+        await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
     else:
         # Если тип не распознан, возвращаем в меню настроек
         gid = data.get("editing_giveaway_id")
