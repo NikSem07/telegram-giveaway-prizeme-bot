@@ -240,13 +240,10 @@ def build_connect_invite_kb(event_id: int) -> InlineKeyboardMarkup:
 # Экран с уже подключенными каналами и действиями
 def build_connect_channels_text(
     event_title: str | None = None,
-    attached: list[tuple[str, str | None, int]] | None = None,  # (title, username, chat_id)
+    attached: list[tuple[str, str | None, int]] | None = None,
 ) -> str:
     """
-    Собирает "серый" текстовый блок.
-    attached — список уже прикреплённых к текущему розыгрышу каналов/групп:
-               (title, username_or_None, chat_id)
-    Если есть username — делаем кликабельную ссылку, иначе просто название.
+    Собирает "серый" текстовый блок БЕЗ кликабельных ссылок на каналы
     """
     title = (
         f"🔗 Подключение канала к розыгрышу \"{event_title}\""
@@ -265,10 +262,8 @@ def build_connect_channels_text(
 
     if attached:
         for i, (t, uname, _cid) in enumerate(attached, start=1):
-            if uname:
-                lines.append(f"{i}. <a href=\"https://t.me/{uname}\">{t}</a>")
-            else:
-                lines.append(f"{i}. {t}")
+            # ИЗМЕНЕНИЕ: показываем только название канала, без ссылки
+            lines.append(f"{i}. {t}")
     else:
         lines.append("— пока нет")
 
@@ -2269,7 +2264,9 @@ async def handle_edit_desc(m: Message, state: FSMContext):
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    await state.update_data(new_value=new_desc, display_value=new_desc[:100] + "..." if len(new_desc) > 100 else new_desc)
+    display_text = safe_html_text(new_desc, max_length=2500)
+    
+    await state.update_data(new_value=new_desc, display_value=display_text)
     await state.set_state(EditFlow.CONFIRM_EDIT)
     
     kb = InlineKeyboardBuilder()
@@ -2277,12 +2274,12 @@ async def handle_edit_desc(m: Message, state: FSMContext):
     kb.button(text="✏️ Исправить", callback_data="edit:fix") 
     kb.button(text="❌ Отмена", callback_data="edit:cancel")
     kb.adjust(1)
-    
-    preview_text = new_desc[:100] + ("..." if len(new_desc) > 100 else "")
+
     await m.answer(
-        f"Описание розыгрыша изменено на: <b>{preview_text}</b>",
+        f"Описание розыгрыша изменено на:\n\n{display_text}",
         reply_markup=kb.as_markup(),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 # Обработчик для редактирования даты окончания
