@@ -6,9 +6,9 @@
   <title>PrizeMe — Успех</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- ОСНОВНЫЕ СТИЛИ -->
-  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
+  <link rel="stylesheet" href="styles.css?v=MULTI-PAGE-V2"/>
   <!-- СТИЛИ ДЛЯ ЭКРАНА SUCCESS -->
-  <link rel="stylesheet" href="/miniapp-static/success.css?v=OPTIMIZED-V3"/>
+  <link rel="stylesheet" href="success.css?v=OPTIMIZED-V4"/>
   <style>
     /* INLINE STYLES FOR IMMEDIATE APPLICATION */
     body, html {
@@ -26,11 +26,6 @@
     .WebAppHeader {
       background: #1551e5 !important;
     }
-    
-    /* Force blue background for all potential header elements */
-    [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
-      background: #1551e5 !important;
-    }
   </style>
 </head>
 <body style="margin: 0; padding: 0; background: #1551e5; min-height: 100vh;">
@@ -38,8 +33,7 @@
     <section id="screen-success" style="background: #1551e5; margin: 0; padding: 0;">
       <!-- Изображение с коробкой -->
       <div class="success-image">
-        <img src="/miniapp-static/images/success-image.png" alt="Поздравляем" 
-             onerror="console.log('Failed to load success image')" />
+        <img src="assets/images/success-image.png" alt="Поздравляем" />
       </div>
       
       <!-- Основной текст -->
@@ -78,8 +72,7 @@
       <!-- Блок с билетом -->
       <div class="ticket-card">
         <div class="ticket-icon">
-          <img src="/miniapp-static/icons/ticket-icon.svg" alt="Билет" 
-               onerror="console.log('Failed to load ticket icon')" />
+          <img src="assets/icons/ticket-icon.svg" alt="Билет" />
         </div>
         <div class="ticket-content">
           <div class="ticket-title">Ваш билет в розыгрыше:</div>
@@ -104,15 +97,14 @@
         <button class="app-button" onclick="goToApp()">
           <span>Перейти в приложение</span>
           <div class="button-icon">
-            <img src="/miniapp-static/icons/arrow-icon.svg" alt="Стрелка" 
-                 onerror="console.log('Failed to load arrow icon')" />
+            <img src="assets/icons/arrow-icon.svg" alt="Стрелка" />
           </div>
         </button>
       </div>
     </section>
   </div>
   
-  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V2"></script>
+  <script src="app.js?v=MULTI-PAGE-V2"></script>
   <script>
     // Принудительно устанавливаем синий фон и контролируем Telegram header
     document.addEventListener('DOMContentLoaded', function() {
@@ -124,45 +116,20 @@
       
       // Control Telegram WebApp header
       if (window.Telegram && Telegram.WebApp) {
-        // Expand to full screen to minimize header impact
         Telegram.WebApp.expand();
         
-        // Set header color (if supported)
         if (Telegram.WebApp.setHeaderColor) {
           Telegram.WebApp.setHeaderColor('#1551e5');
         }
         
-        // Set background color (if supported)
         if (Telegram.WebApp.setBackgroundColor) {
           Telegram.WebApp.setBackgroundColor('#1551e5');
         }
       }
-      
-      // Force all header-like elements to be blue
-      const headerSelectors = [
-        '.tg-head', '.WebAppHeader', '.tg-header', 
-        '[class*="header"]', '[class*="Header"]',
-        '[class*="head"]', '[class*="Head"]'
-      ];
-      
-      headerSelectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-          el.style.backgroundColor = '#1551e5';
-          el.style.background = '#1551e5';
-        });
-      });
-      
-      // Debug image loading
-      const images = document.querySelectorAll('img');
-      images.forEach(img => {
-        img.addEventListener('load', () => console.log('Image loaded:', img.src));
-        img.addEventListener('error', () => console.log('Image failed:', img.src));
-      });
     });
     
     function goToApp() {
-      window.location.href = '/miniapp/home_participant';
+      window.location.href = 'home_participant.html';
     }
     
     function openChannel(url) {
