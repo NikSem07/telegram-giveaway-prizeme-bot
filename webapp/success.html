@@ -89,25 +89,27 @@
       </div>
       
       <!-- Блок организаторов -->
-      <div class="organizers-block">
-        <h3>Организаторы розыгрыша</h3>
-        <div class="channels-list" id="channels-list">
-          <!-- Каналы будут добавлены динамически -->
-        </div>
-        <div class="organizers-note">
-          Вы должны быть подписаны на все каналы до конца розыгрыша
-        </div>
-      </div>
-      
-      <!-- Кнопка перехода в приложение -->
-      <div class="app-button-container">
-        <button class="app-button" onclick="goToApp()">
-          <span>Перейти в приложение</span>
-          <div class="button-icon">
-            <img src="/miniapp-static/assets/icons/arrow-icon.svg" alt="Стрелка" 
-                 onerror="console.log('Failed to load arrow icon')" />
+      <div class="bottom-section">
+        <div class="organizers-block">
+          <h3>Организаторы розыгрыша</h3>
+          <div class="channels-list" id="channels-list">
+            <!-- Каналы будут добавлены динамически -->
           </div>
-        </button>
+          <div class="organizers-note">
+            Вы должны быть подписаны на все каналы до конца розыгрыша
+          </div>
+        </div>
+
+        <!-- Кнопка перехода в приложение -->
+        <div class="app-button-container">
+          <button class="app-button" onclick="goToApp()">
+            <span>Перейти в приложение</span>
+            <div class="button-icon">
+              <img src="/miniapp-static/assets/icons/arrow-icon.svg" alt="Стрелка" 
+                   onerror="console.log('Failed to load arrow icon')" />
+            </div>
+          </button>
+        </div>
       </div>
     </section>
   </div>

@@ -47,6 +47,7 @@ body {
   background: var(--back-big-shape, #1551e5) !important;
 }
 
+/* Общий лэйаут: нижний блок тянется до низа */
 #screen-success {
   padding: 0;
   margin: 0;
@@ -54,6 +55,20 @@ body {
   color: var(--main-text-dark, #ffffff);
   min-height: 100vh;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Нижняя тёмная зона: организаторы + кнопка */
+.bottom-section {
+  margin-top: 24px;
+  background: var(--background-dark, #1c1c1c);
+  border-radius: 20px 20px 0 0;
+  padding: 18px 16px 24px;
+  flex: 1;                    /* ВАЖНО: растягиваем до низа */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .wrap {
@@ -168,11 +183,12 @@ body {
   background: var(--shapes-dark, #2e2e2e);
   border-radius: 10px;
   padding: 14px;
-  margin: 20px 16px 0; /* боковые 16px, снизу 0 — как у блоков каналов */
+  margin: 20px 16px 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  min-height: 58px;
+  height: 58px;                 /* как у .channel-card */
+  box-sizing: border-box;
 }
 
 .ticket-icon {
@@ -190,51 +206,47 @@ body {
   display: block;
 }
 
-/* КОНТЕНТ БИЛЕТА — СЕТКА */
+/* Контент билета: первая строка = текст + номер, ниже описание */
 .ticket-content {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
-  grid-template-areas:
-    "title number"
-    "descr descr";
-  row-gap: 2px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  row-gap: 2px;
 }
 
 .ticket-title {
-  grid-area: title;
   font-size: 14px;
   font-weight: 400;
   color: var(--main-text-dark, #ffffff);
+  margin-right: 4px;            /* маленький зазор перед номером */
+  white-space: nowrap;
 }
 
 .ticket-number {
-  grid-area: number;
-  justify-self: flex-end;
-  font-size: 18px;
+  font-size: 18px;              /* РАЗМЕР ШРИФТА СОХРАНЁН */
   font-weight: 900;
   color: var(--main-text-dark, #ffffff);
   font-family: 'Roboto', monospace;
   letter-spacing: 1px;
-  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .ticket-description {
-  grid-area: descr;
+  flex-basis: 100%;             /* строка под ними */
   font-size: 12px;
   font-weight: 300;
   color: var(--back-text-dark, #a9a9a9);
-  line-height: 1.4;
+  line-height: 1.2;
+  margin-top: 2px;
 }
 
 /* Блок организаторов */
 .organizers-block {
-  background: var(--background-dark, #1c1c1c);
-  border-radius: 20px 20px 0 0;
-  padding: 18px 16px 12px;
-  margin: 24px 0 0; /* без боковых отступов — на всю ширину */
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin: 0 0 12px;
 }
 
 .organizers-block h3 {
@@ -334,9 +346,9 @@ body {
 .app-button-container {
   display: flex;
   justify-content: center;
-  margin: 0;
-  padding: 0 16px 24px;
-  background: var(--background-dark, #1c1c1c); /* тот же фон, что у organizers-block */
+  margin-top: 16px;
+  padding: 0;
+  background: transparent;      /* фон тоже у bottom-section */
 }
 
 .app-button {
@@ -401,8 +413,13 @@ body {
     min-height: 58px;
     margin: 20px 16px 0;
   }
-  
+
+  .bottom-section {
+    margin-top: 20px;
+    padding: 16px 16px 20px;
+  }
+
   .organizers-block {
-    margin: 20px 0 0;
+    margin: 0 0 10px;
   }
 }
