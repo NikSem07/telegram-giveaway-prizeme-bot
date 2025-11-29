@@ -8,14 +8,27 @@
   <!-- ОСНОВНЫЕ СТИЛИ -->
   <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
   <!-- СТИЛИ ДЛЯ ЭКРАНА SUCCESS -->
-  <link rel="stylesheet" href="/miniapp-static/success.css?v=OPTIMIZED-V1"/>
+  <link rel="stylesheet" href="/miniapp-static/success.css?v=OPTIMIZED-V2"/>
+  <style>
+    /* INLINE STYLES FOR IMMEDIATE APPLICATION */
+    body, html {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #1551e5 !important;
+      min-height: 100vh !important;
+    }
+    
+    .tg-head {
+      display: none !important;
+    }
+  </style>
 </head>
-<body>
-  <div class="wrap">
-    <section id="screen-success">
+<body style="margin: 0; padding: 0; background: #1551e5; min-height: 100vh;">
+  <div class="wrap" style="background: #1551e5; margin: 0; padding: 0;">
+    <section id="screen-success" style="background: #1551e5; margin: 0; padding: 0;">
       <!-- Изображение с коробкой -->
       <div class="success-image">
-        <img src="/miniapp-static/images/success-image.png" alt="Поздравляем" />
+        <img src="/miniapp-static/images/success-image.png" alt="Поздравляем" onerror="this.style.display='none'" />
       </div>
       
       <!-- Основной текст -->
@@ -54,7 +67,7 @@
       <!-- Блок с билетом -->
       <div class="ticket-card">
         <div class="ticket-icon">
-          <img src="/miniapp-static/icons/ticket-icon.svg" alt="Билет" />
+          <img src="/miniapp-static/icons/ticket-icon.svg" alt="Билет" onerror="this.style.display='none'" />
         </div>
         <div class="ticket-content">
           <div class="ticket-title">Ваш билет в розыгрыше:</div>
@@ -79,7 +92,7 @@
         <button class="app-button" onclick="goToApp()">
           <span>Перейти в приложение</span>
           <div class="button-icon">
-            <img src="/miniapp-static/icons/arrow-icon.svg" alt="Стрелка" />
+            <img src="/miniapp-static/icons/arrow-icon.svg" alt="Стрелка" onerror="this.style.display='none'" />
           </div>
         </button>
       </div>
@@ -88,11 +101,22 @@
   
   <script src="/miniapp-static/app.js?v=MULTI-PAGE-V2"></script>
   <script>
+    // Принудительно устанавливаем синий фон
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.style.backgroundColor = '#1551e5';
+      document.body.style.background = '#1551e5';
+      document.documentElement.style.backgroundColor = '#1551e5';
+      document.documentElement.style.background = '#1551e5';
+      
+      // Скрываем Telegram header если есть
+      const tgHeader = document.querySelector('.tg-head');
+      if (tgHeader) tgHeader.style.display = 'none';
+    });
+    
     function goToApp() {
       window.location.href = '/miniapp/home_participant';
     }
     
-    // Функция для открытия канала
     function openChannel(url) {
       try {
         if (window.Telegram?.WebApp?.openTelegramLink) {
