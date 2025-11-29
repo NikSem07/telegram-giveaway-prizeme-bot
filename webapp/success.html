@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>PrizeMe — Успех</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- ОСНОВНЫЕ СТИЛИ -->
   <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
+  <!-- СТИЛИ ДЛЯ ЭКРАНА SUCCESS -->
+  <link rel="stylesheet" href="/miniapp-static/success.css?v=OPTIMIZED-V1"/>
 </head>
 <body>
   <div class="wrap">
     <section id="screen-success">
       <!-- Изображение с коробкой -->
       <div class="success-image">
-        <img src="/miniapp-static/images/box-image.png" alt="Поздравляем" />
+        <img src="/miniapp-static/images/success-image.png" alt="Поздравляем" />
       </div>
       
       <!-- Основной текст -->
@@ -51,10 +54,7 @@
       <!-- Блок с билетом -->
       <div class="ticket-card">
         <div class="ticket-icon">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
-            <path d="M15 5V7M15 11V13M15 17V19M5 5C3.89543 5 3 5.89543 3 7V10C4.10457 10 5 10.8954 5 12C5 13.1046 4.10457 14 3 14V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V14C19.8954 14 19 13.1046 19 12C19 10.8954 19.8954 10 21 10V7C21 5.89543 20.1046 5 19 5H5Z" 
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <img src="/miniapp-static/icons/ticket-icon.svg" alt="Билет" />
         </div>
         <div class="ticket-content">
           <div class="ticket-title">Ваш билет в розыгрыше:</div>
@@ -79,10 +79,7 @@
         <button class="app-button" onclick="goToApp()">
           <span>Перейти в приложение</span>
           <div class="button-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" 
-                    stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img src="/miniapp-static/icons/arrow-icon.svg" alt="Стрелка" />
           </div>
         </button>
       </div>
