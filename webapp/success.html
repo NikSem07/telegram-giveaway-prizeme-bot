@@ -131,4 +131,185 @@
     }
   </script>
 </body>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Успех</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- ОСНОВНЫЕ СТИЛИ -->
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
+  <!-- СТИЛИ ДЛЯ ЭКРАНА SUCCESS -->
+  <link rel="stylesheet" href="/miniapp-static/success.css?v=OPTIMIZED-V3"/>
+  <style>
+    /* INLINE STYLES FOR IMMEDIATE APPLICATION */
+    body, html {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #1551e5 !important;
+      min-height: 100vh !important;
+    }
+    
+    /* Telegram WebApp Header Control */
+    .tg-head {
+      background: #1551e5 !important;
+    }
+    
+    .WebAppHeader {
+      background: #1551e5 !important;
+    }
+    
+    /* Force blue background for all potential header elements */
+    [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
+      background: #1551e5 !important;
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background: #1551e5; min-height: 100vh;">
+  <div class="wrap" style="background: #1551e5; margin: 0; padding: 0;">
+    <section id="screen-success" style="background: #1551e5; margin: 0; padding: 0;">
+      <!-- Изображение с коробкой -->
+      <div class="success-image">
+        <img src="/miniapp-static/images/success-image.png" alt="Поздравляем" 
+             onerror="console.log('Failed to load success image')" />
+      </div>
+      
+      <!-- Основной текст -->
+      <div class="main-text-push">
+        <h1>Поздравляем</h1>
+      </div>
+      
+      <div class="text-push">
+        <p>Вы успешно выполнили все условия и принимаете участие в розыгрыше</p>
+      </div>
+      
+      <!-- Счетчик времени (4 квадрата) -->
+      <div class="countdown-container">
+        <div class="countdown-grid">
+          <div class="countdown-item days">
+            <div class="countdown-value" id="countdown-days">00</div>
+            <div class="countdown-label">дней</div>
+          </div>
+          <div class="countdown-item hours">
+            <div class="countdown-value" id="countdown-hours">00</div>
+            <div class="countdown-label">час</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item minutes">
+            <div class="countdown-value" id="countdown-minutes">00</div>
+            <div class="countdown-label">мин.</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item seconds">
+            <div class="countdown-value" id="countdown-seconds">00</div>
+            <div class="countdown-label">сек.</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Блок с билетом -->
+      <div class="ticket-card">
+        <div class="ticket-icon">
+          <img src="/miniapp-static/icons/ticket-icon.svg" alt="Билет" 
+               onerror="console.log('Failed to load ticket icon')" />
+        </div>
+        <div class="ticket-content">
+          <div class="ticket-title">Ваш билет в розыгрыше:</div>
+          <div class="ticket-number" id="ticket-number">XXXXXX</div>
+          <div class="ticket-description">1 билет равняется 1 шансу на победу</div>
+        </div>
+      </div>
+      
+      <!-- Блок организаторов -->
+      <div class="organizers-block">
+        <h3>Организаторы розыгрыша</h3>
+        <div class="channels-list" id="channels-list">
+          <!-- Каналы будут добавлены динамически -->
+        </div>
+        <div class="organizers-note">
+          Вы должны быть подписаны на все каналы до конца розыгрыша
+        </div>
+      </div>
+      
+      <!-- Кнопка перехода в приложение -->
+      <div class="app-button-container">
+        <button class="app-button" onclick="goToApp()">
+          <span>Перейти в приложение</span>
+          <div class="button-icon">
+            <img src="/miniapp-static/icons/arrow-icon.svg" alt="Стрелка" 
+                 onerror="console.log('Failed to load arrow icon')" />
+          </div>
+        </button>
+      </div>
+    </section>
+  </div>
+  
+  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V2"></script>
+  <script>
+    // Принудительно устанавливаем синий фон и контролируем Telegram header
+    document.addEventListener('DOMContentLoaded', function() {
+      // Force blue background
+      document.body.style.backgroundColor = '#1551e5';
+      document.body.style.background = '#1551e5';
+      document.documentElement.style.backgroundColor = '#1551e5';
+      document.documentElement.style.background = '#1551e5';
+      
+      // Control Telegram WebApp header
+      if (window.Telegram && Telegram.WebApp) {
+        // Expand to full screen to minimize header impact
+        Telegram.WebApp.expand();
+        
+        // Set header color (if supported)
+        if (Telegram.WebApp.setHeaderColor) {
+          Telegram.WebApp.setHeaderColor('#1551e5');
+        }
+        
+        // Set background color (if supported)
+        if (Telegram.WebApp.setBackgroundColor) {
+          Telegram.WebApp.setBackgroundColor('#1551e5');
+        }
+      }
+      
+      // Force all header-like elements to be blue
+      const headerSelectors = [
+        '.tg-head', '.WebAppHeader', '.tg-header', 
+        '[class*="header"]', '[class*="Header"]',
+        '[class*="head"]', '[class*="Head"]'
+      ];
+      
+      headerSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          el.style.backgroundColor = '#1551e5';
+          el.style.background = '#1551e5';
+        });
+      });
+      
+      // Debug image loading
+      const images = document.querySelectorAll('img');
+      images.forEach(img => {
+        img.addEventListener('load', () => console.log('Image loaded:', img.src));
+        img.addEventListener('error', () => console.log('Image failed:', img.src));
+      });
+    });
+    
+    function goToApp() {
+      window.location.href = '/miniapp/home_participant';
+    }
+    
+    function openChannel(url) {
+      try {
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+          Telegram.WebApp.openTelegramLink(url);
+        } else {
+          window.open(url, '_blank');
+        }
+      } catch (error) {
+        console.log('Error opening channel:', error);
+        window.open(url, '_blank');
+      }
+    }
+  </script>
+</body>
 </html>
