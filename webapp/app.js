@@ -621,8 +621,19 @@ async function loadChannelsInfo(gid) {
     const checkData = await api("/api/check", { gid, init_data });
     console.log('[CHANNELS] Check data:', checkData);
 
-    if (checkData.ok && checkData.need) {
-      displayChannels(checkData.need);
+    if (!checkData.ok) {
+      return;
+    }
+
+    // Если есть need (пользователь не подписан) — показываем их.
+    // Если need пустой — показываем полный список organizer-каналов.
+    const channelsSource =
+      (checkData.need && checkData.need.length > 0)
+        ? checkData.need
+        : (checkData.channels || []);
+
+    if (channelsSource && channelsSource.length > 0) {
+      displayChannels(channelsSource);
     }
   } catch (error) {
     console.error('[CHANNELS] Error loading channels:', error);
@@ -639,21 +650,29 @@ function displayChannels(channels) {
   channels.forEach(channel => {
     const channelCard = document.createElement('div');
     channelCard.className = 'channel-card';
-    
-    // Создаем аватарку (первая буква названия)
-    const firstLetter = channel.title ? channel.title.charAt(0).toUpperCase() : 'C';
-    
+
+    const title = channel.title || 'Канал';
+    const username = channel.username
+      ? String(channel.username).replace(/^@/, '')
+      : null;
+
+    // URL: либо пришёл с бэка, либо собираем из username, иначе заглушка "#"
+    const url = channel.url || (username ? `https://t.me/${username}` : '#');
+
+    // Аватарка — первая буква названия
+    const firstLetter = title.charAt(0).toUpperCase();
+
     channelCard.innerHTML = `
       <div class="channel-avatar">${firstLetter}</div>
       <div class="channel-info">
-        <div class="channel-name">${channel.title || 'Канал'}</div>
-        ${channel.username ? `<div class="channel-username">@${channel.username}</div>` : ''}
+        <div class="channel-name">${title}</div>
+        ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
-      <button class="channel-button" onclick="openChannel('${channel.url || '#'}')">
+      <button class="channel-button" onclick="openChannel('${url}')">
         Перейти
       </button>
     `;
-    
+
     channelsList.appendChild(channelCard);
   });
 }

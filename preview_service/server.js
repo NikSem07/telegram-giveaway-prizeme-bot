@@ -640,11 +640,19 @@ app.post('/api/check', async (req, res) => {
       ORDER BY gc.id
     `, [giveawayId]);
 
-    const channels = channelsResult.rows.map(row => ({
-      chat_id: row.chat_id,
-      title: row.title,
-      username: row.username
-    }));
+    const channels = channelsResult.rows.map(row => {
+      const usernameClean = row.username ? row.username.replace(/^@/, '') : null;
+      const url = usernameClean
+        ? `https://t.me/${usernameClean}`
+        : (row.chat_id ? `https://t.me/${row.chat_id}` : null);
+
+      return {
+        chat_id: row.chat_id,
+        title: row.title,
+        username: usernameClean,
+        url
+      };
+    });
 
     // Получаем время окончания розыгрыша
     const giveawayResult = await pool.query(
@@ -811,7 +819,8 @@ app.post('/api/check', async (req, res) => {
       ticket: ticket,
       is_new_ticket: isNewTicket,
       end_at_utc: endAtUtc,
-      details: details
+      details: details,
+      channels: channels 
     });
 
   } catch (error) {
