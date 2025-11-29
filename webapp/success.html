@@ -5,35 +5,109 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>PrizeMe — Успех</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V2"/>
 </head>
 <body>
   <div class="wrap">
-    <section id="screen-ok">
-      <div class="success-container">
-        <div class="success-icon">🎉</div>
-        <h2>Успешно!</h2>
-        <p>Вы принимаете участие в данном розыгрыше</p>
-        
-        <div class="ticket-section">
-          <h3>Ваш билет:</h3>
-          <div class="ticket-code" id="ticket">XXXXXX</div>
+    <section id="screen-success">
+      <!-- Изображение с коробкой -->
+      <div class="success-image">
+        <img src="/miniapp-static/images/box-image.png" alt="Поздравляем" />
+      </div>
+      
+      <!-- Основной текст -->
+      <div class="main-text-push">
+        <h1>Поздравляем</h1>
+      </div>
+      
+      <div class="text-push">
+        <p>Вы успешно выполнили все условия и принимаете участие в розыгрыше</p>
+      </div>
+      
+      <!-- Счетчик времени (4 квадрата) -->
+      <div class="countdown-container">
+        <div class="countdown-grid">
+          <div class="countdown-item days">
+            <div class="countdown-value" id="countdown-days">00</div>
+            <div class="countdown-label">дней</div>
+          </div>
+          <div class="countdown-item hours">
+            <div class="countdown-value" id="countdown-hours">00</div>
+            <div class="countdown-label">час</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item minutes">
+            <div class="countdown-value" id="countdown-minutes">00</div>
+            <div class="countdown-label">мин.</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item seconds">
+            <div class="countdown-value" id="countdown-seconds">00</div>
+            <div class="countdown-label">сек.</div>
+          </div>
         </div>
-        
-        <div class="time-info">
-          <p>До завершения розыгрыша</p>
-          <div class="timer" id="countdown">загрузка...</div>
+      </div>
+      
+      <!-- Блок с билетом -->
+      <div class="ticket-card">
+        <div class="ticket-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+            <path d="M15 5V7M15 11V13M15 17V19M5 5C3.89543 5 3 5.89543 3 7V10C4.10457 10 5 10.8954 5 12C5 13.1046 4.10457 14 3 14V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V14C19.8954 14 19 13.1046 19 12C19 10.8954 19.8954 10 21 10V7C21 5.89543 20.1046 5 19 5H5Z" 
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
-        
-        <button class="btn-secondary" onclick="showGiveawayInfo()">Подробнее о розыгрыше</button>
-        <button class="btn-secondary" onclick="showOtherGiveaways()">Другие розыгрыши</button>
+        <div class="ticket-content">
+          <div class="ticket-title">Ваш билет в розыгрыше:</div>
+          <div class="ticket-number" id="ticket-number">XXXXXX</div>
+          <div class="ticket-description">1 билет равняется 1 шансу на победу</div>
+        </div>
+      </div>
+      
+      <!-- Блок организаторов -->
+      <div class="organizers-block">
+        <h3>Организаторы розыгрыша</h3>
+        <div class="channels-list" id="channels-list">
+          <!-- Каналы будут добавлены динамически -->
+        </div>
+        <div class="organizers-note">
+          Вы должны быть подписаны на все каналы до конца розыгрыша
+        </div>
+      </div>
+      
+      <!-- Кнопка перехода в приложение -->
+      <div class="app-button-container">
+        <button class="app-button" onclick="goToApp()">
+          <span>Перейти в приложение</span>
+          <div class="button-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" 
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </button>
       </div>
     </section>
   </div>
-  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
+  
+  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V2"></script>
   <script>
-    function showGiveawayInfo() { alert('Информация о розыгрыше будет здесь'); }
-    function showOtherGiveaways() { alert('Список других розыгрышей будет здесь'); }
+    function goToApp() {
+      window.location.href = '/miniapp/home_participant';
+    }
+    
+    // Функция для открытия канала
+    function openChannel(url) {
+      try {
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+          Telegram.WebApp.openTelegramLink(url);
+        } else {
+          window.open(url, '_blank');
+        }
+      } catch (error) {
+        console.log('Error opening channel:', error);
+        window.open(url, '_blank');
+      }
+    }
   </script>
 </body>
 </html>

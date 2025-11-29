@@ -488,17 +488,28 @@ function initializeNeedSubscriptionPage() {
 
 // Инициализация для экрана "Успех"
 function initializeSuccessPage() {
-  console.log("[MULTI-PAGE] Initializing success page");
+  console.log("[SUCCESS] Initializing new success page");
   
   const ticket = sessionStorage.getItem('prizeme_ticket');
   const endAt = sessionStorage.getItem('prizeme_end_at');
+  const gid = sessionStorage.getItem('prizeme_gid');
   
+  // Устанавливаем номер билета
   if (ticket) {
-    $("#ticket").textContent = ticket;
+    const ticketElement = document.getElementById('ticket-number');
+    if (ticketElement) {
+      ticketElement.textContent = ticket;
+    }
   }
   
+  // Запускаем обновленный счетчик
   if (endAt) {
-    updateCountdown(endAt, 'countdown');
+    updateNewCountdown(endAt);
+  }
+  
+  // Загружаем информацию о каналах
+  if (gid) {
+    loadChannelsInfo(gid);
   }
   
   // Очищаем storage после использования
@@ -506,6 +517,160 @@ function initializeSuccessPage() {
   sessionStorage.removeItem('prizeme_end_at');
   sessionStorage.removeItem('prizeme_gid');
   sessionStorage.removeItem('prizeme_init_data');
+}
+
+// Новая функция для счетчика с 4 квадратами
+function updateNewCountdown(endAtUtc) {
+  const daysElement = document.getElementById('countdown-days');
+  const hoursElement = document.getElementById('countdown-hours');
+  const minutesElement = document.getElementById('countdown-minutes');
+  const secondsElement = document.getElementById('countdown-seconds');
+  
+  if (!daysElement || !hoursElement || !minutesElement || !secondsElement) {
+    console.warn('[COUNTDOWN] One or more countdown elements not found');
+    return;
+  }
+
+  function parseEndTime(value) {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+
+    let raw = String(value).trim();
+    if (!raw) return null;
+
+    // 1) Пробуем как есть
+    let d = new Date(raw);
+    if (!isNaN(d.getTime())) return d;
+
+    // 2) Формат "2025-11-20 20:00:00" → ISO
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
+      d = new Date(raw.replace(' ', 'T') + 'Z');
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // 3) Формат "2025-11-20T20:00:00" → добавляем Z
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
+      d = new Date(raw + 'Z');
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // 4) ФИКС: конвертируем UTC в MSK
+    const mskDate = convertUTCtoMSK(raw);
+    if (mskDate) return mskDate;
+
+    return null;
+  }
+
+  const endTime = parseEndTime(endAtUtc);
+  if (!endTime) {
+    console.warn('[COUNTDOWN] Не удалось разобрать дату окончания:', endAtUtc);
+    daysElement.textContent = '00';
+    hoursElement.textContent = '00';
+    minutesElement.textContent = '00';
+    secondsElement.textContent = '00';
+    return;
+  }
+
+  function formatTimeLeft() {
+    const now = new Date();
+    const timeLeft = endTime.getTime() - now.getTime();
+
+    if (!isFinite(timeLeft)) {
+      daysElement.textContent = '00';
+      hoursElement.textContent = '00';
+      minutesElement.textContent = '00';
+      secondsElement.textContent = '00';
+      return;
+    }
+
+    if (timeLeft <= 0) {
+      daysElement.textContent = '00';
+      hoursElement.textContent = '00';
+      minutesElement.textContent = '00';
+      secondsElement.textContent = '00';
+      return;
+    }
+
+    const totalSeconds = Math.floor(timeLeft / 1000);
+    const days = Math.floor(totalSeconds / (60 * 60 * 24));
+    const hours = Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60));
+    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+    const seconds = totalSeconds % 60;
+
+    daysElement.textContent = String(days).padStart(2, '0');
+    hoursElement.textContent = String(hours).padStart(2, '0');
+    minutesElement.textContent = String(minutes).padStart(2, '0');
+    secondsElement.textContent = String(seconds).padStart(2, '0');
+  }
+
+  // Первый расчёт + обновление раз в секунду
+  formatTimeLeft();
+  setInterval(formatTimeLeft, 1000);
+}
+
+// Функция для загрузки информации о каналах
+async function loadChannelsInfo(gid) {
+  try {
+    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) {
+      console.warn('[CHANNELS] No init data available');
+      return;
+    }
+
+    // Получаем информацию о розыгрыше через API check
+    const checkData = await api("/api/check", { gid, init_data });
+    console.log('[CHANNELS] Check data:', checkData);
+
+    if (checkData.ok && checkData.need) {
+      displayChannels(checkData.need);
+    }
+  } catch (error) {
+    console.error('[CHANNELS] Error loading channels:', error);
+  }
+}
+
+// Функция для отображения каналов
+function displayChannels(channels) {
+  const channelsList = document.getElementById('channels-list');
+  if (!channelsList) return;
+
+  channelsList.innerHTML = '';
+
+  channels.forEach(channel => {
+    const channelCard = document.createElement('div');
+    channelCard.className = 'channel-card';
+    
+    // Создаем аватарку (первая буква названия)
+    const firstLetter = channel.title ? channel.title.charAt(0).toUpperCase() : 'C';
+    
+    channelCard.innerHTML = `
+      <div class="channel-avatar">${firstLetter}</div>
+      <div class="channel-info">
+        <div class="channel-name">${channel.title || 'Канал'}</div>
+        ${channel.username ? `<div class="channel-username">@${channel.username}</div>` : ''}
+      </div>
+      <button class="channel-button" onclick="openChannel('${channel.url || '#'}')">
+        Перейти
+      </button>
+    `;
+    
+    channelsList.appendChild(channelCard);
+  });
+}
+
+// Функция конвертации UTC в MSK (добавьте если нет)
+function convertUTCtoMSK(utcDateString) {
+  try {
+    if (!utcDateString) return null;
+    const utcDate = new Date(utcDateString);
+    if (isNaN(utcDate.getTime())) return null;
+    // MSK = UTC+3
+    const mskDate = new Date(utcDate.getTime() + (3 * 60 * 60 * 1000));
+    return mskDate;
+  } catch (error) {
+    console.log(`[TIMEZONE] Error converting UTC to MSK: ${error}`);
+    return null;
+  }
 }
 
 // Инициализация для экрана "Уже участвуете"
