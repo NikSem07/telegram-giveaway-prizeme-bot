@@ -168,7 +168,7 @@ body {
   background: var(--shapes-dark, #2e2e2e);
   border-radius: 10px;
   padding: 14px;
-  margin: 20px 16px;
+  margin: 20px 16px 0; /* боковые 16px, снизу 0 — как у блоков каналов */
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -190,28 +190,39 @@ body {
   display: block;
 }
 
+/* КОНТЕНТ БИЛЕТА — СЕТКА */
 .ticket-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "title number"
+    "descr descr";
+  row-gap: 2px;
+  align-items: center;
 }
 
 .ticket-title {
+  grid-area: title;
   font-size: 14px;
   font-weight: 400;
   color: var(--main-text-dark, #ffffff);
 }
 
 .ticket-number {
+  grid-area: number;
+  justify-self: flex-end;
   font-size: 18px;
   font-weight: 900;
   color: var(--main-text-dark, #ffffff);
   font-family: 'Roboto', monospace;
   letter-spacing: 1px;
+  margin-left: 8px;
 }
 
 .ticket-description {
+  grid-area: descr;
   font-size: 12px;
   font-weight: 300;
   color: var(--back-text-dark, #a9a9a9);
@@ -221,9 +232,9 @@ body {
 /* Блок организаторов */
 .organizers-block {
   background: var(--background-dark, #1c1c1c);
-  border-radius: 20px;
-  padding: 18px 16px;
-  margin: 20px 16px;
+  border-radius: 20px 20px 0 0;
+  padding: 18px 16px 12px;
+  margin: 24px 0 0; /* без боковых отступов — на всю ширину */
 }
 
 .organizers-block h3 {
@@ -323,8 +334,9 @@ body {
 .app-button-container {
   display: flex;
   justify-content: center;
-  margin: 20px 0;
-  padding: 0 16px;
+  margin: 0;
+  padding: 0 16px 24px;
+  background: var(--background-dark, #1c1c1c); /* тот же фон, что у organizers-block */
 }
 
 .app-button {
@@ -387,10 +399,10 @@ body {
   
   .ticket-card {
     min-height: 58px;
-    margin: 20px 16px;
+    margin: 20px 16px 0;
   }
   
   .organizers-block {
-    margin: 20px 16px;
+    margin: 20px 0 0;
   }
 }
