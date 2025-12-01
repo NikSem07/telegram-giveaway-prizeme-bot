@@ -121,7 +121,7 @@ body {
   margin: 0;
   color: var(--main-text-dark, #ffffff);
   opacity: 0.9;
-  max-width: 274px;
+  max-width: 320px;
   margin: 0 auto;
 }
 
@@ -417,10 +417,5 @@ body {
   .bottom-section {
     margin-top: 20px;
     padding: 16px 16px 20px;
-  }
-
-  .organizers-block {
-    padding-top: 20px;
-    margin-top: auto;
   }
 }
