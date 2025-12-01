@@ -16,12 +16,12 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--back-big-shape, #1551e5) !important;
+  background: linear-gradient(to bottom, #1551e5 80%, #1c1c1c 100%) !important;
   min-height: 100vh;
 }
 
 body {
-  background: var(--back-big-shape, #1551e5) !important;
+  background: transparent !important;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
@@ -51,7 +51,7 @@ body {
 #screen-success {
   padding: 0;
   margin: 0;
-  background: var(--back-big-shape, #1551e5);
+  background: transparent !important;
   color: var(--main-text-dark, #ffffff);
   min-height: 100vh;
   width: 100%;
@@ -72,7 +72,7 @@ body {
 }
 
 .wrap {
-  background: var(--back-big-shape, #1551e5) !important;
+  background: transparent !important;
   margin: 0;
   padding: 0;
   max-width: none;
