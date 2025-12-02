@@ -589,11 +589,6 @@ button:hover{filter:brightness(1.1)}
   text-align: center;
 }
 
-.loading-card {
-  text-align: center;
-  padding: 40px 20px;
-}
-
 /* Переключалка видна ТОЛЬКО на главных страницах */
 .mode-switcher-container {
   display: none;
