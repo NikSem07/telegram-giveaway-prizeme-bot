@@ -9,12 +9,9 @@ body.loading-page {
   font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
-/* Центрируем контент по вертикали и горизонтали */
+/* Контент идёт сверху, без вертикального центрирования */
 #screen-loading {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: #0f1115;
 }
 
@@ -23,50 +20,52 @@ body.loading-page {
   margin: 0 auto;
 }
 
-/* Колонка из анимации + текста */
+/* Колонка из картинки + текста */
 .loading-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 24px;
 }
 
-/* Квадрат под анимацию */
-.loading-animation {
-  width: 160px;
-  height: 160px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #161a20;
+/* Картинка — те же пропорции и отступы, что success-image */
+.loading-image {
+  text-align: center;
+  margin: 24px 0 8px;
+  padding-top: 6px;
 }
 
-/* Видео растягивается на весь квадрат */
-.loading-animation video {
-  width: 100%;
-  height: 100%;
-  display: block;
+.loading-image img {
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
   object-fit: cover;
+  display: block;
+  margin: 0 auto;
 }
 
-/* Текст под анимацией */
+/* Текст под картинкой — в одну строку, max-width 320px */
 .loading-title {
   font-size: 28px;
   font-weight: 500; /* Roboto Medium */
   text-align: center;
-  max-width: 260px;
+  max-width: 320px;
   line-height: 1.2;
+  margin: 8px 16px 0;
 }
 
 /* Адаптив под маленькие экраны */
 @media (max-width: 480px) {
-  .loading-animation {
-    width: 150px;
-    height: 150px;
+  .loading-image {
+    margin: 28px 0 8px;
+  }
+
+  .loading-image img {
+    width: 180px;
+    height: 180px;
   }
 
   .loading-title {
     font-size: 24px;
-    max-width: 240px;
+    max-width: 320px;
   }
 }
