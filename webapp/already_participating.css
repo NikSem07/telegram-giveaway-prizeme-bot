@@ -1,0 +1,439 @@
+/* ALREADY PARTICIPATING PAGE STYLES */
+:root {
+  --background-dark: rgba(28, 28, 28, 1);
+  --background-light: rgba(255, 255, 255, 1);
+  --top-dark: rgba(49, 49, 51, 1);
+  --top-light: rgba(217, 217, 217, 1);
+  --shapes-dark: rgba(46, 46, 46, 1);
+  --elements-dark: rgba(115, 115, 117, 1);
+  --main-text-dark: rgba(250, 250, 250, 1);
+  --back-text-dark: rgba(169, 169, 169, 1);
+  --back-big-shape: rgba(21, 81, 229, 1);
+  --back-shape: rgba(10, 56, 169, 1);
+}
+
+/* ===== ОСНОВНЫЕ СТИЛИ ЭКРАНА ALREADY ===== */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(to bottom, #1551e5 80%, #1c1c1c 100%) !important;
+  min-height: 100vh;
+}
+
+body {
+  background: transparent !important;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+/* TELEGRAM HEADER */
+.tg-head {
+  background: var(--back-big-shape, #1551e5) !important;
+}
+
+.tg-head-root {
+  background: var(--back-big-shape, #1551e5) !important;
+}
+
+.tg-header {
+  background: var(--back-big-shape, #1551e5) !important;
+}
+
+.WebAppHeader {
+  background: var(--back-big-shape, #1551e5) !important;
+}
+
+.tg-nav-bar {
+  background: var(--back-big-shape, #1551e5) !important;
+}
+
+/* Лэйаут */
+#screen-already {
+  padding: 0;
+  margin: 0;
+  background: transparent !important;
+  color: var(--main-text-dark, #ffffff);
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.wrap {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  padding-top: 0 !important;
+}
+
+/* Картинка (та же геометрия, что success-image) */
+.success-image {
+  text-align: center;
+  margin: 24px 0 8px;
+  padding-top: 6px;
+}
+
+.success-image img {
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Заголовок */
+.main-text-push {
+  text-align: center;
+  margin: 8px 0;
+  padding: 0 16px;
+}
+
+.main-text-push h1 {
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--main-text-dark, #ffffff);
+}
+
+/* Подзаголовок */
+.text-push {
+  text-align: center;
+  margin: 0 0 10px;
+  padding: 0 16px;
+}
+
+.text-push p {
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--main-text-dark, #ffffff);
+  opacity: 0.9;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+/* Счетчик времени */
+.countdown-container {
+  margin: 10px 0 10px;
+  padding: 0 16px;
+}
+
+.countdown-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.countdown-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.countdown-value {
+  width: 48px;
+  height: 48px;
+  background: #3394fd;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  font-family: 'Roboto', monospace;
+}
+
+.countdown-item.days .countdown-value {
+  width: 72px;
+}
+
+.countdown-label {
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--top-light, #d9d9d9);
+  text-align: center;
+}
+
+.countdown-separator {
+  font-size: 22px;
+  font-weight: 900;
+  color: #3394fd;
+  margin: 0 -6px;
+  padding-bottom: 12px;
+}
+
+/* Блок с билетом */
+.ticket-card {
+  background: var(--shapes-dark, #2e2e2e);
+  border-radius: 10px;
+  padding: 14px;
+  margin: 12px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  box-sizing: border-box;
+}
+
+.ticket-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ticket-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ticket-content {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
+}
+
+.ticket-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--main-text-dark, #ffffff);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.ticket-number {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--main-text-dark, #ffffff);
+  font-family: 'Roboto', monospace;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.ticket-description {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--back-text-dark, #a9a9a9);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+/* Блок организаторов */
+.bottom-section {
+  margin-top: 24px;
+  background: var(--background-dark, #1c1c1c);
+  border-radius: 20px 20px 0 0;
+  padding: 18px 16px 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.organizers-block {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.organizers-block h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--main-text-dark, #ffffff);
+  margin: 0 0 12px;
+  text-align: left;
+}
+
+.channels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.channel-card {
+  background: var(--shapes-dark, #2e2e2e);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 58px;
+}
+
+.channel-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--elements-dark, #737375);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--main-text-dark, #ffffff);
+  font-size: 18px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.channel-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.channel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.channel-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--main-text-dark, #ffffff);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-username {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--back-text-dark, #a9a9a9);
+}
+
+.channel-button {
+  background: var(--back-big-shape, #1551e5);
+  border: none;
+  border-radius: 5px;
+  padding: 8px 12px;
+  color: var(--main-text-dark, #ffffff);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+  min-width: 89px;
+}
+
+.channel-button:hover {
+  background: var(--back-shape, #0a38a9);
+}
+
+.organizers-note {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--back-text-dark, #a9a9a9);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* Кнопка "В приложение" */
+.app-button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 0;
+  background: transparent;
+}
+
+.app-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--back-big-shape, #1551e5);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  color: var(--main-text-dark, #ffffff);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.app-button:hover {
+  background: var(--back-shape, #0a38a9);
+}
+
+.button-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  padding: 1px;
+  background: linear-gradient(135deg, #0A38A9, #758FCF, #FFFFFF);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.button-icon-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #0A38A9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-icon-inner img {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+/* Адаптивность */
+@media (max-width: 480px) {
+  .success-image {
+    margin: 28px 0 8px;
+  }
+
+  .success-image img {
+    width: 180px;
+    height: 180px;
+  }
+
+  .main-text-push h1 {
+    font-size: 24px;
+  }
+
+  .countdown-value {
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+
+  .countdown-item.days .countdown-value {
+    width: 70px;
+  }
+
+  .ticket-card {
+    min-height: 58px;
+    margin: 16px 16px 0;
+  }
+
+  .bottom-section {
+    margin-top: 20px;
+    padding: 16px 16px 20px;
+  }
+}

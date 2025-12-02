@@ -4,36 +4,190 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>PrizeMe — Уже участвуете</title>
+
+  <!-- Прелоад картинки билета -->
+  <link
+    rel="preload"
+    as="image"
+    href="/miniapp-static/assets/images/ticket-image.webp"
+    type="image/webp"
+  />
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- БАЗОВЫЕ СТИЛИ ПРИЛОЖЕНИЯ -->
   <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+
+  <!-- СТИЛИ ДЛЯ ЭКРАНА "УЖЕ УЧАСТВУЕТЕ" -->
+  <link rel="stylesheet" href="/miniapp-static/already_participating.css?v=V1"/>
+
+  <style>
+    /* INLINE: чтобы фон не мигал до загрузки CSS */
+    body, html {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #1551e5 !important;
+      min-height: 100vh !important;
+    }
+
+    /* Цвет шапки Telegram = цвет фона */
+    .tg-head {
+      background: #1551e5 !important;
+    }
+
+    .WebAppHeader {
+      background: #1551e5 !important;
+    }
+
+    [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
+      background: #1551e5 !important;
+    }
+  </style>
 </head>
-<body>
-  <div class="wrap">
-    <section id="screen-already">
-      <div class="success-container">
-        <div class="success-icon">🎫</div>
-        <h2>Вы уже участвуете в розыгрыше!</h2>
-        <p>Не отписывайтесь от каналов до окончания розыгрыша</p>
-        
-        <div class="ticket-section">
-          <h3>Ваш билет:</h3>
-          <div class="ticket-code" id="already-ticket">XXXXXX</div>
+
+<body style="margin: 0; padding: 0; background: #1551e5; min-height: 100vh;">
+  <div class="wrap" style="background: #1551e5; margin: 0; padding: 0;">
+    <section id="screen-already" style="background: #1551e5; margin: 0; padding: 0;">
+
+      <!-- Картинка билета -->
+      <div class="success-image">
+        <img
+          src="/miniapp-static/assets/images/ticket-image.webp"
+          alt="Уже участвуете"
+          onerror="console.log('Failed to load already image')"
+        />
+      </div>
+
+      <!-- Заголовок -->
+      <div class="main-text-push">
+        <h1>Уже участвуете</h1>
+      </div>
+
+      <!-- Описание в 2 строки -->
+      <div class="text-push">
+        <p>Вы уже получили свой билет для участия в этом розыгрыше</p>
+      </div>
+
+      <!-- Счетчик времени (как на success) -->
+      <div class="countdown-container">
+        <div class="countdown-grid">
+          <div class="countdown-item days">
+            <div class="countdown-value" id="countdown-days">00</div>
+            <div class="countdown-label">дней</div>
+          </div>
+          <div class="countdown-item hours">
+            <div class="countdown-value" id="countdown-hours">00</div>
+            <div class="countdown-label">час</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item minutes">
+            <div class="countdown-value" id="countdown-minutes">00</div>
+            <div class="countdown-label">мин.</div>
+          </div>
+          <div class="countdown-separator">:</div>
+          <div class="countdown-item seconds">
+            <div class="countdown-value" id="countdown-seconds">00</div>
+            <div class="countdown-label">сек.</div>
+          </div>
         </div>
-        
-        <div class="time-info">
-          <p>До завершения розыгрыша</p>
-          <div class="timer" id="countdown-already">загрузка...</div>
+      </div>
+
+      <!-- Блок с билетом — 1 в 1 как на success -->
+      <div class="ticket-card">
+        <div class="ticket-icon">
+          <img
+            src="/miniapp-static/assets/icons/ticket-icon.svg"
+            alt="Билет"
+            onerror="console.log('Failed to load ticket icon')"
+          />
         </div>
-        
-        <button class="btn-secondary" onclick="showGiveawayInfo()">Подробнее о розыгрыше</button>
-        <button class="btn-secondary" onclick="showOtherGiveaways()">Другие розыгрыши</button>
+        <div class="ticket-content">
+          <div class="ticket-title">Ваш билет в розыгрыше:</div>
+          <div class="ticket-number" id="ticket-number">XXXXXX</div>
+          <div class="ticket-description">1 билет равняется 1 шансу на победу</div>
+        </div>
+      </div>
+
+      <!-- Нижний блок с организаторами и кнопкой -->
+      <div class="bottom-section">
+        <div class="organizers-block">
+          <h3>Организаторы розыгрыша</h3>
+          <div class="channels-list" id="channels-list">
+            <!-- Каналы подставляет app.js -->
+          </div>
+          <div class="organizers-note">
+            Вы должны быть подписаны на все каналы до конца розыгрыша
+          </div>
+        </div>
+
+        <div class="app-button-container">
+          <button class="app-button" onclick="goToApp()">
+            <span>В приложение</span>
+            <div class="button-icon">
+              <span class="button-icon-inner">
+                <img
+                  src="/miniapp-static/assets/icons/arrow-icon.svg"
+                  alt="Стрелка"
+                  onerror="console.log('Failed to load arrow icon')"
+                />
+              </span>
+            </div>
+          </button>
+        </div>
       </div>
     </section>
   </div>
+
   <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
   <script>
-    function showGiveawayInfo() { alert('Информация о розыгрыше будет здесь'); }
-    function showOtherGiveaways() { alert('Список других розыгрышей будет здесь'); }
+    // Те же настройки, что и на success
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.style.backgroundColor = '#1551e5';
+      document.body.style.background = '#1551e5';
+      document.documentElement.style.backgroundColor = '#1551e5';
+      document.documentElement.style.background = '#1551e5';
+
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+
+        if (Telegram.WebApp.setHeaderColor) {
+          Telegram.WebApp.setHeaderColor('#1551e5');
+        }
+        if (Telegram.WebApp.setBackgroundColor) {
+          Telegram.WebApp.setBackgroundColor('#1551e5');
+        }
+      }
+
+      const headerSelectors = [
+        '.tg-head', '.WebAppHeader', '.tg-header',
+        '[class*="header"]', '[class*="Header"]',
+        '[class*="head"]', '[class*="Head"]'
+      ];
+
+      headerSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          el.style.backgroundColor = '#1551e5';
+          el.style.background = '#1551e5';
+        });
+      });
+    });
+
+    function goToApp() {
+      window.location.href = '/miniapp/home_participant';
+    }
+
+    function openChannel(url) {
+      try {
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+          Telegram.WebApp.openTelegramLink(url);
+        } else {
+          window.open(url, '_blank');
+        }
+      } catch (error) {
+        console.log('Error opening channel:', error);
+        window.open(url, '_blank');
+      }
+    }
   </script>
 </body>
 </html>
