@@ -694,20 +694,29 @@ function convertUTCtoMSK(utcDateString) {
 
 // Инициализация для экрана "Уже участвуете"
 function initializeAlreadyPage() {
-  console.log("[MULTI-PAGE] Initializing already page");
-  
+  console.log("[ALREADY] Initializing already page");
+
   const ticket = sessionStorage.getItem('prizeme_ticket');
   const endAt = sessionStorage.getItem('prizeme_end_at');
-  
-  if (ticket) {
-    $("#already-ticket").textContent = ticket;
+  const gid    = sessionStorage.getItem('prizeme_gid');
+
+  // 1. Номер билета — те же ID, что на success
+  const ticketElement = document.getElementById('ticket-number');
+  if (ticket && ticketElement) {
+    ticketElement.textContent = ticket;
   }
-  
+
+  // 2. Таймер в 4 квадрата (как на success)
   if (endAt) {
-    updateCountdown(endAt, 'countdown-already');
+    updateNewCountdown(endAt);
   }
-  
-  // Очищаем storage после использования
+
+  // 3. Блок организаторов — грузим те же данные, что на success
+  if (gid) {
+    loadChannelsInfo(gid);
+  }
+
+  // 4. После инициализации чистим сторедж
   sessionStorage.removeItem('prizeme_ticket');
   sessionStorage.removeItem('prizeme_end_at');
   sessionStorage.removeItem('prizeme_gid');
