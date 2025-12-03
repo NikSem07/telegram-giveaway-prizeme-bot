@@ -828,6 +828,152 @@ function initializeAlreadyPage() {
   sessionStorage.removeItem('prizeme_init_data');
 }
 
+// =========================
+// ЭКРАН РЕЗУЛЬТАТОВ — ПОБЕДА
+// =========================
+
+function initializeResultsWinPage() {
+  console.log("[RESULTS-WIN] Initializing results win page");
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const gid = urlParams.get('gid');
+
+  // Пробуем сначала взять результаты из sessionStorage,
+  // которые мог положить results.html перед редиректом.
+  let stored = null;
+  try {
+    const raw = sessionStorage.getItem('prizeme_results');
+    if (raw) {
+      stored = JSON.parse(raw);
+      console.log("[RESULTS-WIN] Using stored results from sessionStorage");
+    }
+  } catch (e) {
+    console.log("[RESULTS-WIN] Failed to parse stored results:", e);
+  }
+
+  if (stored) {
+    renderResultsWin(stored);
+    return;
+  }
+
+  // Если в storage ничего нет — фоллбек, грузим результаты напрямую
+  if (!gid) {
+    console.warn("[RESULTS-WIN] No gid in URL and no stored results");
+    showWinError("Не удалось загрузить результаты розыгрыша");
+    return;
+  }
+
+  fetchResultsForWin(gid);
+}
+
+async function fetchResultsForWin(gid) {
+  try {
+    console.log("[RESULTS-WIN] Fetching results for gid:", gid);
+
+    const init_data =
+      (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+
+    if (!init_data) {
+      throw new Error("Не удалось получить данные авторизации");
+    }
+
+    const results = await api("/api/results", { gid, init_data });
+    console.log("[RESULTS-WIN] API /api/results response:", results);
+
+    if (!results.ok) {
+      throw new Error(results.reason || "Не удалось загрузить результаты");
+    }
+
+    // Сохраняем на всякий случай
+    try {
+      sessionStorage.setItem("prizeme_results", JSON.stringify(results));
+    } catch (e) {
+      console.log("[RESULTS-WIN] Cannot store results in sessionStorage:", e);
+    }
+
+    // Если вдруг пользователь НЕ победитель — логируем,
+    // позже сюда можно добавить редирект на results_lose
+    if (!results.user || !results.user.is_winner) {
+      console.log("[RESULTS-WIN] User is not a winner according to results");
+    }
+
+    renderResultsWin(results);
+  } catch (err) {
+    console.error("[RESULTS-WIN] Error fetching results:", err);
+    showWinError(err.message || "Ошибка загрузки результатов");
+  }
+}
+
+function renderResultsWin(data) {
+  console.log("[RESULTS-WIN] Rendering results win screen with data:", data);
+
+  // Название розыгрыша
+  const titleEl = document.getElementById("results-win-giveaway-title");
+  if (titleEl) {
+    titleEl.textContent = (data.giveaway && data.giveaway.title) || "Розыгрыш";
+  }
+
+  // Список победителей
+  const winnersList = document.getElementById("winners-list");
+  if (!winnersList) {
+    console.warn("[RESULTS-WIN] #winners-list not found");
+    return;
+  }
+
+  winnersList.innerHTML = "";
+
+  const winners = Array.isArray(data.winners) ? data.winners : [];
+
+  if (!winners.length) {
+    const empty = document.createElement("div");
+    empty.className = "winner-card";
+    empty.innerHTML = `
+      <div class="winner-avatar"></div>
+      <div class="winner-info">
+        <div class="winner-name">Победители не найдены</div>
+        <div class="winner-ticket"></div>
+      </div>
+    `;
+    winnersList.appendChild(empty);
+    return;
+  }
+
+  winners.forEach((winner) => {
+    const nickname =
+      winner.username ||
+      winner.display_name ||
+      `Победитель #${winner.rank || ""}`.trim();
+
+    // Логика текста для билета:
+    // для текущего пользователя — "Ваш билет", для остальных — "Билет"
+    const isCurrentUser = !!winner.is_current_user;
+    const ticketCode = winner.ticket_code || "";
+    const ticketLabel = isCurrentUser ? "Ваш билет" : "Билет";
+
+    const card = document.createElement("div");
+    card.className = "winner-card";
+
+    card.innerHTML = `
+      <div class="winner-avatar"></div>
+      <div class="winner-info">
+        <div class="winner-name">${nickname}</div>
+        <div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>
+      </div>
+    `;
+
+    winnersList.appendChild(card);
+  });
+}
+
+function showWinError(message) {
+  console.log("[RESULTS-WIN] showWinError:", message);
+  const titleEl = document.getElementById("results-win-giveaway-title");
+  if (titleEl) {
+    titleEl.textContent = message || "Ошибка загрузки результатов";
+  }
+}
+
+
 // Определяем текущую страницу и инициализируем соответствующую логику
 function initializeCurrentPage() {
   const path = window.location.pathname;
@@ -862,6 +1008,9 @@ function initializeCurrentPage() {
       break;
     case '/miniapp/results':
       initializeResultsPage();
+      break;
+    case '/miniapp/results_win':
+      initializeResultsWinPage();
       break;
     default:
       window.location.href = '/miniapp/';

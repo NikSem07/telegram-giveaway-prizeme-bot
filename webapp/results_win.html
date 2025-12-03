@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Результаты (победа)</title>
+
+  <!-- Прелоад картинки -->
+  <link
+    rel="preload"
+    as="image"
+    href="/miniapp-static/assets/images/cup-image.webp"
+    type="image/webp"
+  />
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- БАЗОВЫЕ СТИЛИ (общие для мини-аппа) -->
+  <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+
+  <!-- СТИЛИ ЭКРАНА RESULTS WIN -->
+  <link rel="stylesheet" href="/miniapp-static/results_win.css?v=V1"/>
+</head>
+
+<body>
+  <div class="wrap">
+    <section id="screen-results-win">
+
+      <!-- Картинка (как на success) -->
+      <div class="success-image">
+        <img
+          src="/miniapp-static/assets/images/cup-image.webp"
+          alt="Вы победили"
+          onerror="console.log('Failed to load cup image')"
+        />
+      </div>
+
+      <!-- Основной заголовок -->
+      <div class="main-text-push">
+        <h1>Вы победили</h1>
+      </div>
+
+      <!-- Блок с названием розыгрыша -->
+      <div class="text-push">
+        <p class="win-text-line1">
+          Поздравляем! Вы победили в розыгрыше
+        </p>
+        <p
+          class="win-text-line2"
+          id="results-win-giveaway-title"
+        >
+          <!-- сюда подставляем название розыгрыша -->
+        </p>
+      </div>
+
+      <!-- Блок с пояснением про организатора -->
+      <div class="text-push text-push-secondary">
+        <p class="info-text">
+          Организатор розыгрыша свяжется с&nbsp;Вами
+          для вручения приза.
+        </p>
+      </div>
+
+      <!-- НИЖНИЙ БЛОК "ПОБЕДИТЕЛИ" -->
+      <div class="bottom-section">
+        <div class="organizers-block winners-block">
+          <h3>Победители</h3>
+          <div class="channels-list" id="winners-list">
+            <!-- Карточки победителей появятся из app.js -->
+          </div>
+        </div>
+
+        <!-- Кнопка перехода в приложение -->
+        <div class="app-button-container">
+          <button class="app-button app-button-light" onclick="goToAppFromResultsWin()">
+            <span>В приложение</span>
+            <div class="button-icon button-icon-light">
+              <span class="button-icon-inner button-icon-inner-light">
+                <img
+                  src="/miniapp-static/assets/icons/arrow-icon.svg"
+                  alt="Стрелка"
+                  onerror="console.log('Failed to load arrow icon')"
+                />
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
+  <script>
+    // Настраиваем зелёную шапку Telegram под градиент
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+
+        if (Telegram.WebApp.setHeaderColor) {
+          Telegram.WebApp.setHeaderColor('#00E31A');
+        }
+        if (Telegram.WebApp.setBackgroundColor) {
+          Telegram.WebApp.setBackgroundColor('#00E31A');
+        }
+      }
+
+      const headerSelectors = [
+        '.tg-head', '.WebAppHeader', '.tg-header',
+        '[class*="header"]', '[class*="Header"]',
+        '[class*="head"]', '[class*="Head"]'
+      ];
+
+      headerSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          el.style.backgroundColor = '#00E31A';
+          el.style.background = '#00E31A';
+        });
+      });
+    });
+
+    // Локальный хелпер для кнопки
+    function goToAppFromResultsWin() {
+      window.location.href = '/miniapp/home_participant';
+    }
+  </script>
+</body>
+</html>
