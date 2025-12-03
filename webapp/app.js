@@ -943,7 +943,7 @@ function renderResultsWin(data) {
     return;
   }
 
-  winners.forEach((winner) => {
+  winners.forEach((winner, index) => {
     let nickname =
       winner.username ||
       winner.display_name ||
@@ -953,17 +953,50 @@ function renderResultsWin(data) {
       nickname = '@' + nickname.replace(/^@/, '');
     }
 
-    // Логика текста для билета:
-    // для текущего пользователя — "Ваш билет", для остальных — "Билет"
     const isCurrentUser = !!winner.is_current_user;
     const ticketCode = winner.ticket_code || "";
     const ticketLabel = "Номер билета";
+
+    // Позиция победителя: сначала пробуем rank, если его нет — индекс + 1
+    const position = winner.rank || (index + 1);
+
+    let avatarContent = "";
+
+    if (position === 1) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/gold-medal-image.webp"
+          alt="1 место"
+          class="winner-medal"
+        />
+      `;
+    } else if (position === 2) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/silver-medal-image.webp"
+          alt="2 место"
+          class="winner-medal"
+        />
+      `;
+    } else if (position === 3) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/bronze-medal-image.webp"
+          alt="3 место"
+          class="winner-medal"
+        />
+      `;
+    } else {
+      avatarContent = `<span class="winner-position">${position}</span>`;
+    }
 
     const card = document.createElement("div");
     card.className = "winner-card" + (isCurrentUser ? " current-user" : "");
 
     card.innerHTML = `
-      <div class="winner-avatar"></div>
+      <div class="winner-avatar">
+        ${avatarContent}
+      </div>
       <div class="winner-info">
         <div class="winner-name">${nickname}</div>
         <div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>

@@ -169,6 +169,24 @@ body {
   border-radius: 50%;
   background: #FFFFFF;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Картинка медали внутри круга */
+.winner-medal {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+/* Цифра позиции внутри круга */
+.winner-position {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1C1C1C;
 }
 
 /* Текст внутри карточки */
