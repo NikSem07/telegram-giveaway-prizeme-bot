@@ -158,17 +158,18 @@ function checkImmediateResults() {
 
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_win for gid:", gid);
-      window.location.replace(`/miniapp/results_win?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_lose for gid:", gid);
+      window.location.replace(`/miniapp/results_lose?gid=${gid}`);
       return true;
     }
 
     // Проверяем initData на случай запуска через startapp
     const initParam = tg.initDataUnsafe?.start_param;
+    
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_win from initData, gid:", gid);
-      window.location.replace(`/miniapp/results_win?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_lose from initData, gid:", gid);
+      window.location.replace(`/miniapp/results_lose?gid=${gid}`);
       return true;
     }
   } catch (e) {
