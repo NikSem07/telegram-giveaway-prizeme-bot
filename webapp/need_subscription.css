@@ -19,10 +19,10 @@ html, body {
   background: linear-gradient(
     to bottom,
     #FF6B02 0%,
-    #FF6B02 30%,
-    #994001 30%,
-    #994001 60%,
-    #1C1C1C 60%,
+    #FF6B02 10%,
+    #994001 10%,
+    #994001 40%,
+    #1C1C1C 40%,
     #1C1C1C 100%
   ) !important;
   min-height: 100vh;
@@ -262,7 +262,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: var(--back-big-shape, #FF6B02);
+  background: #1551e5;
   border: none;
   border-radius: 8px;
   padding: 8px 18px;
@@ -274,7 +274,7 @@ body {
 }
 
 .app-button:hover {
-  background: var(--back-shape, #994001);
+  background: #0a38a9;
 }
 
 .button-icon {
@@ -282,7 +282,7 @@ body {
   height: 24px;
   border-radius: 50%;
   padding: 1px;
-  background: linear-gradient(135deg, #FF6B02, #FFB36A, #FFFFFF);
+  background: linear-gradient(135deg, #0A38A9, #758FCF, #FFFFFF);
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -299,7 +299,7 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: #FF6B02;
+  background: #0A38A9;
   display: flex;
   align-items: center;
   justify-content: center;

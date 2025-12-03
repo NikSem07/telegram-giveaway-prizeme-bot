@@ -541,13 +541,14 @@ function renderNeedChannels(channels, needChannels) {
     const url = channel.url || (username ? `https://t.me/${username}` : '#');
     const firstLetter = title.charAt(0).toUpperCase();
 
+    const safeUrl = url.replace(/'/g, "\\'"); // чтобы не сломать HTML
+
+    const buttonHtml = isNeed
+      ? `<button class="channel-button subscribe" onclick="openChannel('${safeUrl}')">Подписаться</button>`
+      : `<button class="channel-button subscribed" disabled aria-disabled="true">Подписан</button>`;
+
     const card = document.createElement('div');
     card.className = 'channel-card';
-
-    const buttonLabel = isNeed ? 'Подписаться' : 'Подписан';
-    const buttonClasses = isNeed
-      ? 'channel-button subscribe'
-      : 'channel-button subscribed';
 
     card.innerHTML = `
       <div class="channel-avatar">${firstLetter}</div>
@@ -555,17 +556,8 @@ function renderNeedChannels(channels, needChannels) {
         <div class="channel-name">${title}</div>
         ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
-      <button class="${buttonClasses}" ${isNeed ? '' : 'disabled aria-disabled="true"'}>
-        ${buttonLabel}
-      </button>
+      ${buttonHtml}
     `;
-
-    if (isNeed) {
-      const btn = card.querySelector('button');
-      btn.addEventListener('click', () => {
-        openChannel(url);
-      });
-    }
 
     channelsList.appendChild(card);
   });
