@@ -1078,199 +1078,190 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// Добавляем новую функцию инициализации для экрана результатов
+// =========================
+// ЭКРАН РЕЗУЛЬТАТОВ — ПРОИГРЫШ
+// =========================
+
 function initializeResultsLosePage() {
-  console.log("[MULTI-PAGE] Initializing results page");
-  
-  // Показываем экран загрузки, скрываем остальные
-  hide("#screen-results");
-  hide("#screen-error");
-  show("#screen-loading");
-  
-  // Получаем параметры из URL
+  console.log("[RESULTS-LOSE] Initializing results lose page");
+
   const urlParams = new URLSearchParams(window.location.search);
   const gid = urlParams.get('gid');
-  
-  if (!gid) {
-    showError("Не указан идентификатор розыгрыша");
+
+  // Пробуем взять результаты из sessionStorage (как для win)
+  let stored = null;
+  try {
+    const raw = sessionStorage.getItem("prizeme_results");
+    if (raw) {
+      stored = JSON.parse(raw);
+      console.log("[RESULTS-LOSE] Using stored results from sessionStorage");
+    }
+  } catch (e) {
+    console.log("[RESULTS-LOSE] Failed to parse stored results:", e);
+  }
+
+  // Если есть сохранённые результаты и пользователь НЕ победитель — рендерим сразу
+  if (stored && stored.user && !stored.user.is_winner) {
+    renderResultsLose(stored);
     return;
   }
-  
-  // Загружаем результаты
-  loadResults(gid);
-  
-  // Настройка кнопок
-  $("#btn-back").onclick = () => {
-    window.history.back();
-  };
-  
-  $("#btn-retry").onclick = () => {
-    hide("#screen-error");
-    show("#screen-loading");
-    loadResults(gid);
-  };
+
+  if (!gid) {
+    console.warn("[RESULTS-LOSE] No gid in URL and no stored results");
+    showLoseError("Не удалось загрузить результаты розыгрыша");
+    return;
+  }
+
+  fetchResultsForLose(gid);
 }
 
-// Функция загрузки результатов
-async function loadResults(gid) {
+async function fetchResultsForLose(gid) {
   try {
-    console.log("[RESULTS] 🔄 Начинаем загрузку результатов для gid:", gid);
-    
-    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    console.log("[RESULTS-LOSE] Fetching results for gid:", gid);
+
+    const init_data =
+      (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+
     if (!init_data) {
       throw new Error("Не удалось получить данные авторизации");
     }
-    
+
     const results = await api("/api/results", { gid, init_data });
-    console.log("[RESULTS] 📊 Получены результаты:", results);
-    
-    if (results.ok) {
-      // 🔧 ФИКС: УБИРАЕМ ЦИКЛИЧЕСКУЮ ПЕРЕЗАГРУЗКУ
-      // Вместо автоматического редиректа - просто показываем статус
-      if (results.finished === false) {
-        // Розыгрыш еще не завершен - показываем сообщение БЕЗ перезагрузки
-        showNotFinished(results.message || "Розыгрыш еще не завершен");
-      } else if (results.noWinners || (results.winners && results.winners.length === 0)) {
-        // Нет победителей
-        showNoWinners(results);
-      } else {
-        // Есть победители
-        displayResults(results);
-      }
-    } else {
+    console.log("[RESULTS-LOSE] API /api/results response:", results);
+
+    if (!results.ok) {
       throw new Error(results.reason || "Не удалось загрузить результаты");
     }
-    
+
+    // Сохраняем результаты
+    try {
+      sessionStorage.setItem("prizeme_results", JSON.stringify(results));
+    } catch (e) {
+      console.log("[RESULTS-LOSE] Cannot store results in sessionStorage:", e);
+    }
+
+    // Если розыгрыш ещё не завершён
+    if (results.finished === false) {
+      showLoseError(results.message || "Розыгрыш ещё не завершен. Результаты будут позже.");
+      return;
+    }
+
+    // Если пользователь всё-таки победитель — отправляем на экран победы
+    if (results.user && results.user.is_winner) {
+      console.log("[RESULTS-LOSE] User is winner according to results, redirecting to results_win");
+      window.location.replace(`/miniapp/results_win?gid=${gid}`);
+      return;
+    }
+
+    renderResultsLose(results);
   } catch (err) {
-    console.error("[RESULTS] ❌ Ошибка загрузки результатов:", err);
-    showError(err.message);
+    console.error("[RESULTS-LOSE] Error fetching results:", err);
+    showLoseError(err.message || "Ошибка загрузки результатов");
   }
 }
 
-// ФУНКЦИЯ ДЛЯ "РОЗЫГРЫШ НЕ ЗАВЕРШЕН":
-function showNotFinished(message) {
-  hide("#screen-loading");
-  show("#screen-results");
-  
-  $("#giveaway-title").textContent = "Розыгрыш еще не завершен";
-  $("#giveaway-description").textContent = message || "Ожидайте определения победителей";
-  
-  const winnerStatusElement = $("#winner-status");
-  winnerStatusElement.innerHTML = `
-    <div class="status-message status-not-finished">
-      ⏳ Розыгрыш еще не завершен<br><br>
-      ${message || "Результаты будут доступны после окончания розыгрыша."}
-    </div>
-  `;
-  
-  $("#winners-section").style.display = 'none';
-  $("#no-winners").style.display = 'none';
-  
-  // УБИРАЕМ КНОПКУ "НАЗАД" ЕСЛИ НУЖНО
-  $("#btn-back").style.display = 'block';
-}
+function renderResultsLose(data) {
+  console.log("[RESULTS-LOSE] Rendering results lose screen with data:", data);
 
-// ФУНКЦИЯ ДЛЯ "НЕТ ПОБЕДИТЕЛЕЙ":
-function showNoWinners(data) {
-  hide("#screen-loading");
-  show("#screen-results");
-  
-  $("#giveaway-title").textContent = data.giveaway?.title || "Розыгрыш завершен";
-  $("#giveaway-description").textContent = data.giveaway?.description || "Описание отсутствует";
-  $("#participants-count").textContent = data.giveaway?.participants_count || 0;
-  $("#winners-count").textContent = data.giveaway?.winners_count || 0;
-  
-  const winnerStatusElement = $("#winner-status");
-  winnerStatusElement.innerHTML = `
-    <div class="status-message status-no-winners">
-      🎉 Розыгрыш завершен!<br><br>
-      К сожалению, победителей в этом розыгрыше нет.
-    </div>
-  `;
-  
-  $("#winners-section").style.display = 'none';
-  $("#no-winners").style.display = 'block';
-  
-  if (data.user?.ticket_code) {
-    $("#user-ticket").style.display = 'block';
-    $("#ticket-code").textContent = data.user.ticket_code;
+  // Название розыгрыша
+  const titleEl = document.getElementById("results-lose-giveaway-title");
+  if (titleEl) {
+    titleEl.textContent = (data.giveaway && data.giveaway.title) || "Розыгрыш";
   }
-}
 
-// Функция отображения результатов
-function displayResults(data) {
-  // Скрываем экран загрузки, показываем экран результатов
-  hide("#screen-loading");
-  show("#screen-results");
-  
-  // Заполняем информацию о розыгрыше
-  $("#giveaway-title").textContent = data.giveaway.title;
-  $("#giveaway-description").textContent = data.giveaway.description || "Описание отсутствует";
-  $("#participants-count").textContent = data.giveaway.participants_count;
-  $("#winners-count").textContent = data.giveaway.winners_count;
-  
-  // Отображаем статус пользователя
-  const userStatusElement = $("#user-status");
-  const winnerStatusElement = $("#winner-status");
-  
-  if (data.user.ticket_code) {
-    $("#user-ticket").style.display = 'block';
-    $("#ticket-code").textContent = data.user.ticket_code;
+  // Список победителей
+  const winnersList = document.getElementById("winners-list");
+  if (!winnersList) {
+    console.warn("[RESULTS-LOSE] #winners-list not found");
+    return;
   }
-  
-  if (data.user.is_winner) {
-    winnerStatusElement.innerHTML = `
-      <div class="status-message status-winner">
-        🎉 Поздравляем! Вы победитель! 🎉<br>
-        Ваше место: ${data.user.winner_rank}
+
+  winnersList.innerHTML = "";
+
+  const winners = Array.isArray(data.winners) ? data.winners : [];
+
+  if (!winners.length) {
+    const empty = document.createElement("div");
+    empty.className = "winner-card";
+    empty.innerHTML = `
+      <div class="winner-avatar"></div>
+      <div class="winner-info">
+        <div class="winner-name">Победители не найдены</div>
+        <div class="winner-ticket"></div>
       </div>
     `;
-  } else if (data.user.ticket_code) {
-    winnerStatusElement.innerHTML = `
-      <div class="status-message status-participant">
-        Спасибо за участие! К сожалению, вы не стали победителем в этом розыгрыше.
-      </div>
-    `;
-  } else {
-    winnerStatusElement.innerHTML = `
-      <div class="status-message status-participant">
-        Вы не участвовали в этом розыгрыше.
-      </div>
-    `;
+    winnersList.appendChild(empty);
+    return;
   }
-  
-  // Отображаем список победителей
-  const winnersListElement = $("#winners-list");
-  winnersListElement.innerHTML = "";
-  
-  if (data.winners && data.winners.length > 0) {
-    data.winners.forEach(winner => {
-      const winnerElement = document.createElement("div");
-      winnerElement.className = `winner-item ${winner.is_current_user ? 'current-user' : ''}`;
-      
-      winnerElement.innerHTML = `
-        <div class="winner-rank">${winner.rank}</div>
-        <div class="winner-info">
-          <div class="winner-ticket">${winner.ticket_code}</div>
-        </div>
-        ${winner.is_current_user ? '<div class="winner-badge">Вы</div>' : ''}
+
+  winners.forEach((winner, index) => {
+    let nickname =
+      winner.username ||
+      winner.display_name ||
+      `Победитель #${winner.rank || ""}`.trim();
+
+    if (nickname && !nickname.startsWith("@")) {
+      nickname = "@" + nickname.replace(/^@/, "");
+    }
+
+    const ticketCode = winner.ticket_code || "";
+    const ticketLabel = "Номер билета";
+
+    // Позиция победителя
+    const position = winner.rank || (index + 1);
+
+    let avatarContent = "";
+
+    if (position === 1) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/gold-medal-image.webp"
+          alt="1 место"
+          class="winner-medal"
+        />
       `;
-      
-      winnersListElement.appendChild(winnerElement);
-    });
-    
-    $("#winners-section").style.display = 'block';
-    $("#no-winners").style.display = 'none';
-  } else {
-    $("#winners-section").style.display = 'none';
-    $("#no-winners").style.display = 'block';
-  }
+    } else if (position === 2) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/silver-medal-image.webp"
+          alt="2 место"
+          class="winner-medal"
+        />
+      `;
+    } else if (position === 3) {
+      avatarContent = `
+        <img
+          src="/miniapp-static/assets/images/bronze-medal-image.webp"
+          alt="3 место"
+          class="winner-medal"
+        />
+      `;
+    } else {
+      avatarContent = `<span class="winner-position">${position}</span>`;
+    }
+
+    const card = document.createElement("div");
+    // Для экрана проигрыша — БЕЗ current-user, чтобы не было белой рамки
+    card.className = "winner-card";
+
+    card.innerHTML = `
+      <div class="winner-avatar">
+        ${avatarContent}
+      </div>
+      <div class="winner-info">
+        <div class="winner-name">${nickname}</div>
+        <div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>
+      </div>
+    `;
+
+    winnersList.appendChild(card);
+  });
 }
 
-// Функция показа ошибки
-function showError(message) {
-  hide("#screen-loading");
-  hide("#screen-results");
-  show("#screen-error");
-  $("#error-message").textContent = message;
+function showLoseError(message) {
+  console.log("[RESULTS-LOSE] showLoseError:", message);
+  const titleEl = document.getElementById("results-lose-giveaway-title");
+  if (titleEl) {
+    titleEl.textContent = message || "Ошибка загрузки результатов";
+  }
 }
