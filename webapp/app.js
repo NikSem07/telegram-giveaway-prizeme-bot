@@ -437,54 +437,140 @@ function initializeLoadingPage() {
 
 // Инициализация для экрана "Нужно подписаться"
 function initializeNeedSubscriptionPage() {
-  console.log("[MULTI-PAGE] Initializing need subscription page");
-  
-  const needData = JSON.parse(sessionStorage.getItem('prizeme_need_data') || '[]');
-  const error = sessionStorage.getItem('prizeme_error');
-  
-  const ul = $("#need-channels");
-  ul.innerHTML = "";
-  
-  if (error) {
-    ul.innerHTML = `<li class="err">Ошибка: ${error}. Нажмите «Проверить подписку».</li>`;
-  } else if (needData && needData.length > 0) {
-    needData.forEach((ch) => {
-      const title = ch.title || ch.username || "Канал";
-      const url = ch.url || (ch.username ? `https://t.me/${ch.username}` : "#");
-      const li = document.createElement("li");
-      li.className = "item";
-      
-      const a = document.createElement("a");
-      a.href = url; 
-      a.target = "_blank"; 
-      a.textContent = title;
-      a.className = "link";
-      
-      a.addEventListener("click", (e) => {
-        try {
-          if (Telegram?.WebApp?.openTelegramLink) { 
-            e.preventDefault(); 
-            Telegram.WebApp.openTelegramLink(url); 
-          }
-        } catch (err) {
-          console.log("[MULTI-PAGE] Open link error:", err);
-        }
-      });
-      
-      li.appendChild(a);
-      ul.appendChild(li);
-    });
-  } else {
-    ul.innerHTML = "<li class='item'>Все условия выполнены, но билет не выдан. Нажмите «Проверить подписку».</li>";
+  console.log("[NEED] Initializing need subscription page");
+
+  const gidFromStorage = sessionStorage.getItem('prizeme_gid');
+  const gid = gidFromStorage || getStartParam();
+  const error = sessionStorage.getItem('prizeme_error') || null;
+
+  let init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+  if (!init_data) {
+    try {
+      const storedInit = sessionStorage.getItem('prizeme_init_data');
+      if (storedInit) {
+        console.log("[NEED] Using init_data from sessionStorage.prizeme_init_data");
+        init_data = storedInit;
+      }
+    } catch (e) {
+      console.log("[NEED] sessionStorage init_data error:", e);
+    }
   }
 
-  $("#btn-recheck").onclick = () => {
-    console.log("[MULTI-PAGE] Manual recheck triggered");
-    sessionStorage.removeItem('prizeme_error');
-    sessionStorage.removeItem('prizeme_need_data');
-    window.location.href = '/miniapp/loading';
-  };
+  if (!gid || !init_data) {
+    console.warn("[NEED] No gid or init_data, cannot load channels");
+    const list = document.getElementById('channels-list');
+    if (list) {
+      list.innerHTML = '<div class="organizers-note">Не удалось загрузить список каналов. Попробуйте открыть розыгрыш заново.</div>';
+    }
+    return;
+  }
+
+  if (error) {
+    console.log("[NEED] Previous error:", error);
+    // Ошибку можно залогировать, UI мы не ломаем – просто продолжаем загрузку каналов
+  }
+
+  loadNeedSubscriptionChannels(gid, init_data);
 }
+
+// Хелпер для идентификации канала (для сравнения в списке need)
+function channelKey(ch) {
+  if (!ch) return null;
+  if (ch.id != null) return `id:${ch.id}`;
+  if (ch.username) return `u:${String(ch.username).replace(/^@/, '')}`;
+  if (ch.url) return `url:${ch.url}`;
+  return null;
+}
+
+// Загрузка информации о каналах для экрана "Нужно подписаться"
+async function loadNeedSubscriptionChannels(gid, init_data) {
+  try {
+    console.log("[NEED] Loading channels for gid:", gid);
+
+    const checkData = await api("/api/check", { gid, init_data });
+    console.log("[NEED] Check data:", checkData);
+
+    if (!checkData.ok) {
+      const list = document.getElementById('channels-list');
+      if (list) {
+        list.innerHTML = '<div class="organizers-note">Не удалось загрузить список каналов. Попробуйте позже.</div>';
+      }
+      return;
+    }
+
+    const allChannels =
+      (checkData.channels && checkData.channels.length > 0)
+        ? checkData.channels
+        : (checkData.need || []);
+
+    const needChannels = checkData.need || [];
+
+    renderNeedChannels(allChannels, needChannels);
+  } catch (err) {
+    console.error("[NEED] Error loading need subscription channels:", err);
+    const list = document.getElementById('channels-list');
+    if (list) {
+      list.innerHTML = '<div class="organizers-note">Произошла ошибка при загрузке каналов.</div>';
+    }
+  }
+}
+
+// Отрисовка каналов: "Подписаться" / "Подписан"
+function renderNeedChannels(channels, needChannels) {
+  const channelsList = document.getElementById('channels-list');
+  if (!channelsList) return;
+
+  channelsList.innerHTML = '';
+
+  // Множество ключей каналов, на которые пользователь еще НЕ подписан
+  const needKeys = new Set(
+    (needChannels || [])
+      .map(channelKey)
+      .filter(Boolean)
+  );
+
+  channels.forEach(channel => {
+    const key = channelKey(channel);
+    const isNeed = key ? needKeys.has(key) : false;
+
+    const title = channel.title || 'Канал';
+    const username = channel.username
+      ? String(channel.username).replace(/^@/, '')
+      : null;
+
+    const url = channel.url || (username ? `https://t.me/${username}` : '#');
+    const firstLetter = title.charAt(0).toUpperCase();
+
+    const card = document.createElement('div');
+    card.className = 'channel-card';
+
+    const buttonLabel = isNeed ? 'Подписаться' : 'Подписан';
+    const buttonClasses = isNeed
+      ? 'channel-button subscribe'
+      : 'channel-button subscribed';
+
+    card.innerHTML = `
+      <div class="channel-avatar">${firstLetter}</div>
+      <div class="channel-info">
+        <div class="channel-name">${title}</div>
+        ${username ? `<div class="channel-username">@${username}</div>` : ''}
+      </div>
+      <button class="${buttonClasses}" ${isNeed ? '' : 'disabled aria-disabled="true"'}>
+        ${buttonLabel}
+      </button>
+    `;
+
+    if (isNeed) {
+      const btn = card.querySelector('button');
+      btn.addEventListener('click', () => {
+        openChannel(url);
+      });
+    }
+
+    channelsList.appendChild(card);
+  });
+}
+
 
 // Инициализация для экрана "Успех"
 function initializeSuccessPage() {

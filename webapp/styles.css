@@ -10,16 +10,10 @@ h1{font-size:28px;margin:0 0 8px}
 .err{color:#fc5a5a}
 button{display:inline-block;padding:12px 18px;border-radius:10px;border:none;background:#4f46e5;color:#fff;font-weight:700;cursor:pointer}
 button:hover{filter:brightness(1.1)}
-.list{list-style:none;margin:0 0 16px;padding:0}
-.list .item{padding:10px 12px;border:1px dashed #394963;border-radius:10px;margin-bottom:10px}
 .link{color:#93c5fd;text-decoration:none}
 .link:hover{text-decoration:underline}
 .hide{display:none}
 .hide { display: none; }
-.btn { padding: 10px 16px; border-radius: 10px; border: none; }
-.ticket { font-weight: 700; font-size: 18px; margin-top: 8px; }
-#need-channels li { margin: 6px 0; }
-#need-channels a { text-decoration: none; }
 
 /* Стили для счетчика времени */
 .time-info {

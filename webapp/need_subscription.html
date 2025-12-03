@@ -4,20 +4,135 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>PrizeMe — Подписка</title>
+
+  <!-- Прелоад картинки -->
+  <link
+    rel="preload"
+    as="image"
+    href="/miniapp-static/assets/images/subscription-image.webp"
+    type="image/webp"
+  />
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- БАЗОВЫЕ СТИЛИ -->
   <link rel="stylesheet" href="/miniapp-static/styles.css?v=MULTI-PAGE-V1"/>
+  <!-- СТИЛИ ДЛЯ ЭКРАНА NEED SUBSCRIPTION -->
+  <link rel="stylesheet" href="/miniapp-static/need_subscription.css?v=V1"/>
+
+  <style>
+    /* INLINE: чтобы фон не мигал до загрузки CSS */
+    body, html {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #FF6B02 !important;
+      min-height: 100vh !important;
+    }
+
+    /* Цвет шапки Telegram = верхний цвет градиента */
+    .tg-head {
+      background: #FF6B02 !important;
+    }
+    .WebAppHeader {
+      background: #FF6B02 !important;
+    }
+    [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
+      background: #FF6B02 !important;
+    }
+  </style>
 </head>
-<body>
-  <div class="wrap">
-    <section id="screen-need">
-      <div class="card">
-        <h1>Вы не выполнили условия розыгрыша</h1>
-        <p>Нужно подписаться:</p>
-        <ul id="need-channels" class="list"></ul>
-        <button id="btn-recheck" class="btn">Проверить подписку</button>
+
+<body style="margin: 0; padding: 0; background: #FF6B02; min-height: 100vh;">
+  <div class="wrap" style="background: transparent; margin: 0; padding: 0;">
+    <section id="screen-need" style="background: transparent; margin: 0; padding: 0;">
+
+      <!-- Картинка -->
+      <div class="success-image">
+        <img
+          src="/miniapp-static/assets/images/subscription-image.webp"
+          alt="Нужно подписаться"
+          onerror="console.log('Failed to load subscription image')"
+        />
       </div>
+
+      <!-- Заголовок -->
+      <div class="main-text-push">
+        <h1>Нужно подписаться</h1>
+      </div>
+
+      <!-- Подзаголовок -->
+      <div class="text-push">
+        <p>Для участия в розыгрыши необходимо подписаться на все каналы / группы</p>
+      </div>
+
+      <!-- НИЖНИЙ БЛОК ОРГАНИЗАТОРОВ (как на success, но с новыми кнопками) -->
+      <div class="bottom-section">
+        <div class="organizers-block">
+          <h3>Организаторы розыгрыша</h3>
+          <div class="channels-list" id="channels-list">
+            <!-- Каналы будут добавлены динамически из app.js -->
+          </div>
+          <div class="organizers-note">
+            Вы должны быть подписаны на все каналы до конца розыгрыша
+          </div>
+        </div>
+
+        <!-- Кнопка перехода в приложение -->
+        <div class="app-button-container">
+          <button class="app-button" onclick="goToApp()">
+            <span>В приложение</span>
+            <div class="button-icon">
+              <span class="button-icon-inner">
+                <img
+                  src="/miniapp-static/assets/icons/arrow-icon.svg"
+                  alt="Стрелка"
+                  onerror="console.log('Failed to load arrow icon')"
+                />
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
+
     </section>
   </div>
+
   <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
+  <script>
+    // Оранжевый фон + контроль Telegram header
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.style.backgroundColor = '#FF6B02';
+      document.body.style.background = '#FF6B02';
+      document.documentElement.style.backgroundColor = '#FF6B02';
+      document.documentElement.style.background = '#FF6B02';
+
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+
+        if (Telegram.WebApp.setHeaderColor) {
+          Telegram.WebApp.setHeaderColor('#FF6B02');
+        }
+        if (Telegram.WebApp.setBackgroundColor) {
+          Telegram.WebApp.setBackgroundColor('#FF6B02');
+        }
+      }
+
+      const headerSelectors = [
+        '.tg-head', '.WebAppHeader', '.tg-header',
+        '[class*="header"]', '[class*="Header"]',
+        '[class*="head"]', '[class*="Head"]'
+      ];
+
+      headerSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          el.style.backgroundColor = '#FF6B02';
+          el.style.background = '#FF6B02';
+        });
+      });
+    });
+
+    function goToApp() {
+      window.location.href = '/miniapp/home_participant';
+    }
+  </script>
 </body>
 </html>
