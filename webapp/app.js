@@ -563,6 +563,33 @@ function renderNeedChannels(channels, needChannels) {
   });
 }
 
+// Глобальная функция открытия канала / группы Telegram
+function openChannel(url) {
+  try {
+    if (!url || url === '#') {
+      console.log('[LINK] Empty or invalid URL for openChannel:', url);
+      return;
+    }
+
+    // Если доступен WebApp API — открываем внутри Telegram
+    if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
+      Telegram.WebApp.openTelegramLink(url);
+    } else {
+      // Фоллбек — новое окно/вкладка
+      window.open(url, '_blank');
+    }
+  } catch (error) {
+    console.log('[LINK] Error opening channel:', error);
+    try {
+      if (url && url !== '#') {
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      console.log('[LINK] Fallback open error:', e);
+    }
+  }
+}
+
 
 // Инициализация для экрана "Успех"
 function initializeSuccessPage() {

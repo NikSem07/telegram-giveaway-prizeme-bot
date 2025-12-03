@@ -41,7 +41,7 @@
   </style>
 </head>
 
-<body style="margin: 0; padding: 0; background: #FF6B02; min-height: 100vh;">
+<body style="margin: 0; padding: 0; background: transparent; min-height: 100vh;">
   <div class="wrap" style="background: transparent; margin: 0; padding: 0;">
     <section id="screen-need" style="background: transparent; margin: 0; padding: 0;">
 
@@ -100,10 +100,7 @@
   <script>
     // Оранжевый фон + контроль Telegram header
     document.addEventListener('DOMContentLoaded', function() {
-      document.body.style.backgroundColor = '#FF6B02';
-      document.body.style.background = '#FF6B02';
-      document.documentElement.style.backgroundColor = '#FF6B02';
-      document.documentElement.style.background = '#FF6B02';
+      // НЕ трогаем body/html, чтобы не убивать градиент из CSS
 
       if (window.Telegram && Telegram.WebApp) {
         Telegram.WebApp.expand();
