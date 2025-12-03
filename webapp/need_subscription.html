@@ -20,25 +20,25 @@
   <link rel="stylesheet" href="/miniapp-static/need_subscription.css?v=V1"/>
 
   <style>
-    /* INLINE: чтобы фон не мигал до загрузки CSS */
-    body, html {
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #FF6B02 !important;
-      min-height: 100vh !important;
-    }
+      /* INLINE: чтобы не было отступов и сохранить цвет шапки Telegram */
+      body, html {
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 100vh !important;
+        /* ВАЖНО: фон не задаём здесь, чтобы не убивать градиент из need_subscription.css */
+      }
 
-    /* Цвет шапки Telegram = верхний цвет градиента */
-    .tg-head {
-      background: #FF6B02 !important;
-    }
-    .WebAppHeader {
-      background: #FF6B02 !important;
-    }
-    [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
-      background: #FF6B02 !important;
-    }
-  </style>
+      /* Цвет шапки Telegram = верхний цвет градиента */
+      .tg-head {
+        background: #FF6B02 !important;
+      }
+      .WebAppHeader {
+        background: #FF6B02 !important;
+      }
+      [class*="header"], [class*="Header"], [class*="head"], [class*="Head"] {
+        background: #FF6B02 !important;
+      }
+    </style>
 </head>
 
 <body style="margin: 0; padding: 0; background: transparent; min-height: 100vh;">
