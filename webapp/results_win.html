@@ -94,29 +94,29 @@
   <script>
     // Настраиваем зелёную шапку Telegram под градиент
     document.addEventListener('DOMContentLoaded', function () {
-      if (window.Telegram && Telegram.WebApp) {
+    if (window.Telegram && Telegram.WebApp) {
         Telegram.WebApp.expand();
 
         if (Telegram.WebApp.setHeaderColor) {
-          Telegram.WebApp.setHeaderColor('#00E31A');
+        Telegram.WebApp.setHeaderColor('#2E8656');
         }
         if (Telegram.WebApp.setBackgroundColor) {
-          Telegram.WebApp.setBackgroundColor('#00E31A');
+        Telegram.WebApp.setBackgroundColor('#2E8656');
         }
-      }
+    }
 
-      const headerSelectors = [
+    const headerSelectors = [
         '.tg-head', '.WebAppHeader', '.tg-header',
         '[class*="header"]', '[class*="Header"]',
         '[class*="head"]', '[class*="Head"]'
-      ];
+    ];
 
-      headerSelectors.forEach(selector => {
+    headerSelectors.forEach(selector => {
         document.querySelectorAll(selector).forEach(el => {
-          el.style.backgroundColor = '#00E31A';
-          el.style.background = '#00E31A';
+        el.style.backgroundColor = '#2E8656';
+        el.style.background = '#2E8656';
         });
-      });
+    });
     });
 
     // Локальный хелпер для кнопки

@@ -13,9 +13,10 @@ html, body {
   padding: 0;
   background: linear-gradient(
     180deg,
-    #00E31A 0%,
-    #00E31A 40%,
-    #007D0F 100%
+    #2E8656 0%,
+    #2E8656 5%,
+    #024B42 95%,
+    #024B42 100%
   ) !important;
   min-height: 100vh;
 }
@@ -118,7 +119,7 @@ body {
 /* НИЖНИЙ БЛОК — фон как у success */
 .bottom-section {
   margin-top: 24px;
-  background: var(--background-dark);
+  background: transparent;
   border-radius: 20px 20px 0 0;
   padding: 18px 16px 24px;
   flex: 1;
