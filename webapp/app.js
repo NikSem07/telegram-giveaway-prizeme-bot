@@ -144,38 +144,40 @@ async function checkGiveawayCompletion(gid) {
 // Проверка, нужно ли сразу открывать результаты
 function checkImmediateResults() {
   try {
-    // Проверяем, не находимся ли мы уже на results
-    if (window.location.pathname === '/miniapp/results') {
+    // Уже на одном из экранов результатов — ничего не делаем
+    if (
+      window.location.pathname === '/miniapp/results_win' ||
+      window.location.pathname === '/miniapp/results_lose'
+    ) {
       console.log("[IMMEDIATE-RESULTS] Already on results page, skipping redirect");
       return false;
     }
-    
+
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
-    
+
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results for gid:", gid);
-      // Используем replace вместо href чтобы избежать истории навигации
-      window.location.replace(`/miniapp/results?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_win for gid:", gid);
+      window.location.replace(`/miniapp/results_win?gid=${gid}`);
       return true;
     }
-    
-    // Проверяем initData для результатов
+
+    // Проверяем initData на случай запуска через startapp
     const initParam = tg.initDataUnsafe?.start_param;
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Immediately redirecting to results from initData, gid:", gid);
-      // Используем replace вместо href
-      window.location.replace(`/miniapp/results?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_win from initData, gid:", gid);
+      window.location.replace(`/miniapp/results_win?gid=${gid}`);
       return true;
     }
   } catch (e) {
     console.log("[IMMEDIATE-RESULTS] Error:", e);
   }
-  
+
   return false;
 }
+
 
 // Универсальный вызов API
 async function api(path, body) {
@@ -851,7 +853,7 @@ function initializeResultsWinPage() {
     console.log("[RESULTS-WIN] Failed to parse stored results:", e);
   }
 
-  if (stored) {
+  if (stored && stored.user && stored.user.is_winner) {
     renderResultsWin(stored);
     return;
   }
@@ -891,13 +893,16 @@ async function fetchResultsForWin(gid) {
       console.log("[RESULTS-WIN] Cannot store results in sessionStorage:", e);
     }
 
-    // Если вдруг пользователь НЕ победитель — логируем,
-    // позже сюда можно добавить редирект на results_lose
+    // Если пользователь НЕ победитель — сразу уводим на экран проигрыша
     if (!results.user || !results.user.is_winner) {
-      console.log("[RESULTS-WIN] User is not a winner according to results");
+      console.log("[RESULTS-WIN] User is not a winner according to results, redirecting to results_lose");
+      window.location.replace(`/miniapp/results_lose?gid=${gid}`);
+      return;
     }
 
+    // Иначе — отрисовываем экран победителя
     renderResultsWin(results);
+
   } catch (err) {
     console.error("[RESULTS-WIN] Error fetching results:", err);
     showWinError(err.message || "Ошибка загрузки результатов");
@@ -985,12 +990,17 @@ function initializeCurrentPage() {
     console.error('❌ Cannot initialize Telegram WebApp');
   }
 
-  // Проверяем немедленный редирект на результаты ТОЛЬКО если мы НЕ на странице результатов
-  if (path !== '/miniapp/results' && checkImmediateResults()) {
+  // Проверяем немедленный редирект на результаты,
+  // если мы НЕ уже на одном из экранов результатов
+  if (
+    path !== '/miniapp/results_win' &&
+    path !== '/miniapp/results_lose' &&
+    checkImmediateResults()
+  ) {
     return;
   }
-  
-  switch(path) {
+
+  switch (path) {
     case '/miniapp/':
       initializeMainPage();
       break;
@@ -1006,11 +1016,11 @@ function initializeCurrentPage() {
     case '/miniapp/already':
       initializeAlreadyPage();
       break;
-    case '/miniapp/results':
-      initializeResultsPage();
-      break;
     case '/miniapp/results_win':
       initializeResultsWinPage();
+      break;
+    case '/miniapp/results_lose':
+      initializeResultsLosePage();   // НОВОЕ имя функции, см. ниже
       break;
     default:
       window.location.href = '/miniapp/';
@@ -1032,7 +1042,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // Добавляем новую функцию инициализации для экрана результатов
-function initializeResultsPage() {
+function initializeResultsLosePage() {
   console.log("[MULTI-PAGE] Initializing results page");
   
   // Показываем экран загрузки, скрываем остальные

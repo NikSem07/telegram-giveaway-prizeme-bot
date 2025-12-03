@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты розыгрыша - PrizeMe</title>
+    <link rel="stylesheet" href="/miniapp-static/styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="wrap">
+        <!-- Экран результатов -->
+        <div id="screen-results" class="card">
+            <!-- Заголовок -->
+            <h1>🎉 Результаты розыгрыша</h1>
+            
+            <!-- Информация о розыгрыше -->
+            <div id="giveaway-info" class="time-info">
+                <h2 id="giveaway-title">Название розыгрыша</h2>
+                <p id="giveaway-description">Описание розыгрыша</p>
+                <div class="stats">
+                    <div>📊 Участников: <span id="participants-count">0</span></div>
+                    <div>🏆 Победителей: <span id="winners-count">0</span></div>
+                </div>
+            </div>
+
+            <!-- Статус пользователя -->
+            <div id="user-status" class="ticket-section">
+                <h3>Ваш результат</h3>
+                <div id="user-ticket" class="ticket-code" style="display: none;">
+                    Ваш билет: <span id="ticket-code"></span>
+                </div>
+                <div id="winner-status" class="status-message"></div>
+            </div>
+
+            <!-- Список победителей -->
+            <div id="winners-section">
+                <h3>🏆 Победители</h3>
+                <div id="winners-list" class="winners-container">
+                    <!-- Победители будут добавлены динамически -->
+                </div>
+            </div>
+
+            <!-- Сообщение об отсутствии победителей -->
+            <div id="no-winners" class="time-info" style="display: none;">
+                <p>Победители еще не определены или розыгрыш не завершен.</p>
+            </div>
+
+            <!-- Кнопка возврата -->
+            <button id="btn-back" class="btn-secondary">Назад</button>
+        </div>
+
+        <!-- Экран загрузки -->
+        <div id="screen-loading" class="card" style="text-align: center;">
+            <h2>Загрузка результатов...</h2>
+            <p>Пожалуйста, подождите</p>
+        </div>
+
+        <!-- Экран ошибки -->
+        <div id="screen-error" class="card" style="display: none; text-align: center;">
+            <h2>Ошибка</h2>
+            <p id="error-message">Не удалось загрузить результаты</p>
+            <button id="btn-retry" class="btn-secondary">Попробовать снова</button>
+        </div>
+    </div>
+
+    <script src="/miniapp-static/app.js"></script>
+</body>
+</html>

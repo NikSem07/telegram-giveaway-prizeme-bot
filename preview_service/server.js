@@ -521,12 +521,23 @@ app.get('/miniapp/already', (req, res) => {
   res.sendFile(path.join(__dirname, '../webapp/already_participating.html'));
 });
 
-app.get('/miniapp/results', (req, res) => {
-  const resultsPath = path.join(__dirname, '../webapp/results.html');
-  if (fs.existsSync(resultsPath)) {
-    res.sendFile(resultsPath);
+// Экран результатов для победителя
+app.get('/miniapp/results_win', (req, res) => {
+  const winPath = path.join(__dirname, '../webapp/results_win.html');
+  if (fs.existsSync(winPath)) {
+    res.sendFile(winPath);
   } else {
-    res.status(404).send('<h1>Страница результатов временно недоступна</h1>');
+    res.status(404).send('<h1>Экран результатов (победа) временно недоступен</h1>');
+  }
+});
+
+// Экран результатов для НЕ победителя
+app.get('/miniapp/results_lose', (req, res) => {
+  const losePath = path.join(__dirname, '../webapp/results_lose.html');
+  if (fs.existsSync(losePath)) {
+    res.sendFile(losePath);
+  } else {
+    res.status(404).send('<h1>Экран результатов (участие) временно недоступен</h1>');
   }
 });
 
