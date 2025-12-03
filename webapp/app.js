@@ -944,19 +944,23 @@ function renderResultsWin(data) {
   }
 
   winners.forEach((winner) => {
-    const nickname =
+    let nickname =
       winner.username ||
       winner.display_name ||
       `Победитель #${winner.rank || ""}`.trim();
+
+    if (nickname && !nickname.startsWith('@')) {
+      nickname = '@' + nickname.replace(/^@/, '');
+    }
 
     // Логика текста для билета:
     // для текущего пользователя — "Ваш билет", для остальных — "Билет"
     const isCurrentUser = !!winner.is_current_user;
     const ticketCode = winner.ticket_code || "";
-    const ticketLabel = isCurrentUser ? "Ваш билет" : "Билет";
+    const ticketLabel = "Номер билета";
 
     const card = document.createElement("div");
-    card.className = "winner-card";
+    card.className = "winner-card" + (isCurrentUser ? " current-user" : "");
 
     card.innerHTML = `
       <div class="winner-avatar"></div>

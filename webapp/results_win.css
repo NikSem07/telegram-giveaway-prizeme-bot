@@ -261,6 +261,12 @@ body {
   filter: brightness(0) saturate(100%) invert(20%) sepia(4%) saturate(998%) hue-rotate(210deg) brightness(97%) contrast(90%);
 }
 
+/* Белая рамка вокруг карточки текущего пользователя */
+.winner-card.current-user {
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 0 6px rgba(255,255,255,0.7);
+}
+
 /* Адаптивность */
 @media (max-width: 480px) {
   .success-image {
