@@ -1178,9 +1178,8 @@ async def save_shared_chat(
     is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
     
     try:
-        # 🔧 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Создаем aware datetime для PostgreSQL
-        from datetime import timezone
-        added_at_aware = datetime.now(timezone.utc)  # УЖЕ aware (UTC timezone)
+        # ✅ ПРАВИЛЬНО: aware datetime с timezone (UTC)
+        added_at_aware = datetime.now(timezone.utc)
         
         async with session_scope() as s:
             # Сначала проверяем существование
@@ -1209,7 +1208,7 @@ async def save_shared_chat(
                 logging.info(f"✅ Канал обновлен: {title} (chat_id={chat_id}) для user_id={owner_user_id}")
                 return False  # Не новая запись
             else:
-                # Вставляем новую запись с CORRECT aware datetime
+                # ✅ ПРАВИЛЬНО: Вставляем с aware datetime
                 await s.execute(
                     text("""
                     INSERT INTO organizer_channels
@@ -1222,7 +1221,7 @@ async def save_shared_chat(
                         "title": title,
                         "is_private": is_private,
                         "role": bot_role,
-                        "added_at": added_at_aware  # 🔧 ИСПРАВЛЕНО: aware datetime
+                        "added_at": added_at_aware
                     }
                 )
                 logging.info(f"✅ Новый канал добавлен: {title} (chat_id={chat_id}) для user_id={owner_user_id}")
@@ -1230,7 +1229,6 @@ async def save_shared_chat(
                 
     except Exception as e:
         logging.error(f"❌ Error in save_shared_chat: {e}")
-        # Детальное логирование для отладки
         import traceback
         logging.error(f"Traceback: {traceback.format_exc()}")
         return False
