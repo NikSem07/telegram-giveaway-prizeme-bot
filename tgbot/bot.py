@@ -5223,9 +5223,9 @@ async def show_finished_stats(message: Message, giveaway_id: int):
             await message.answer("Розыгрыш не найден.")
             return
 
-        # Количество уникальных участников
+        # Количество уникальных участников, прошедших предварительную проверку
         participants_res = await s.execute(
-            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
             {"gid": giveaway_id}
         )
         participants_count = participants_res.scalar_one() or 0
@@ -5288,9 +5288,9 @@ async def show_active_stats(message: Message, giveaway_id: int):
             await message.answer("Розыгрыш не найден.")
             return
 
-        # Количество уникальных участников
+        # Количество уникальных участников, прошедших предварительную проверку
         participants_res = await s.execute(
-            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND final_ok = true"),
+            stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
             {"gid": giveaway_id}
         )
         participants_count = participants_res.scalar_one() or 0
