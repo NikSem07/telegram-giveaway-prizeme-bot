@@ -3445,12 +3445,76 @@ async def event_status(cq: CallbackQuery):
     await cq.answer()
 
 
-# === ЗАГЛУШКА CSV ===
+# === Полноценный экспорт статистики в CSV файл ===
 
 @dp.callback_query(F.data.startswith("stats:csv:"))
 async def cb_csv_export(cq: CallbackQuery):
-    """Заглушка для выгрузки CSV"""
-    await cq.answer("📥 Функция выгрузки CSV в разработке", show_alert=True)
+    try:
+        # 1. Извлекаем ID розыгрыша из callback_data
+        giveaway_id = int(cq.data.split(":")[2])
+        user_id = cq.from_user.id
+        
+        # 2. Проверяем, что пользователь - организатор розыгрыша
+        if not await is_giveaway_organizer(user_id, giveaway_id):
+            await cq.answer("❌ Только организатор может выгрузить статистику", show_alert=True)
+            return
+        
+        # 3. Проверяем наличие участников
+        participant_count = await get_participant_count(giveaway_id)
+        if participant_count == 0:
+            await cq.answer("📭 В этом розыгрыше еще нет участников", show_alert=True)
+            return
+        
+        # 4. Уведомляем пользователя о начале генерации
+        await cq.answer(f"📊 Генерирую файл... Участников: {participant_count}", show_alert=False)
+        
+        # 5. Для больших розыгрышей отправляем отдельное сообщение
+        if participant_count > 1000:
+            progress_msg = await cq.message.answer(
+                f"⏳ Генерация CSV файла...\n"
+                f"Участников: {participant_count}\n"
+                f"Это займет несколько секунд..."
+            )
+        
+        # 6. Генерируем CSV файл
+        csv_file = await generate_csv_in_memory(giveaway_id)
+        
+        # 7. Получаем название розыгрыша для заголовка
+        giveaway_title = await get_giveaway_title(giveaway_id)
+        
+        # 8. Отправляем файл пользователю
+        await cq.message.reply_document(
+            csv_file,
+            caption=(
+                f"📊 <b>Статистика розыгрыша</b>\n"
+                f"<b>Название:</b> {giveaway_title}\n"
+                f"<b>ID розыгрыша:</b> {giveaway_id}\n"
+                f"<b>Участников:</b> {participant_count}\n\n"
+                f"<i>Файл в формате CSV. Откройте в Excel или Google Sheets.</i>"
+            ),
+            parse_mode="HTML"
+        )
+        
+        # 9. Удаляем сообщение о прогрессе (если было)
+        if participant_count > 1000:
+            try:
+                await progress_msg.delete()
+            except Exception:
+                pass
+        
+        # 10. Логируем успешную выгрузку
+        logging.info(f"✅ CSV экспортирован: giveaway_id={giveaway_id}, user_id={user_id}, участников={participant_count}")
+        
+    except ValueError as e:
+        await cq.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    except Exception as e:
+        logging.error(f"❌ Ошибка экспорта CSV: {e}", exc_info=True)
+        await cq.answer(
+            "❌ Произошла ошибка при генерации файла\n"
+            "Попробуйте позже или обратитесь в поддержку",
+            show_alert=True
+        )
+
 
 # ===== Карточка-превью медиа =====
 
@@ -4774,6 +4838,148 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
         print(f"TRACEBACK: {traceback.format_exc()}")
         return False
     
+# ============================================================================
+# CSV EXPORT FUNCTIONS
+# ============================================================================
+
+async def is_giveaway_organizer(user_id: int, giveaway_id: int) -> bool:
+    """Проверяет, является ли пользователь организатором розыгрыша"""
+    try:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, giveaway_id)
+            return gw and gw.owner_user_id == user_id
+    except Exception as e:
+        logging.error(f"Ошибка проверки организатора: {e}")
+        return False
+
+async def get_participant_count(giveaway_id: int) -> int:
+    """Получает количество участников розыгрыша"""
+    try:
+        async with session_scope() as s:
+            result = await s.execute(
+                text("SELECT COUNT(*) FROM entries WHERE giveaway_id = :gid"),
+                {"gid": giveaway_id}
+            )
+            return result.scalar_one() or 0
+    except Exception as e:
+        logging.error(f"Ошибка получения количества участников: {e}")
+        return 0
+
+async def get_giveaway_title(giveaway_id: int) -> str:
+    """Получает название розыгрыша для имени файла"""
+    try:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, giveaway_id)
+            if gw:
+                # Очищаем название от недопустимых символов
+                title = gw.internal_title
+                # Заменяем пробелы на подчеркивания и удаляем спецсимволы
+                safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
+                safe_title = safe_title.replace(" ", "_")
+                return safe_title[:50]  # Ограничиваем длину
+    except Exception as e:
+        logging.error(f"Ошибка получения названия розыгрыша: {e}")
+    return f"розыгрыш_{giveaway_id}"
+
+async def fetch_csv_data(giveaway_id: int):
+    """Получает данные для CSV из PostgreSQL"""
+    try:
+        async with session_scope() as s:
+            # 🔧 ИСПРАВЛЕННЫЙ SQL ДЛЯ POSTGRESQL
+            query = text("""
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY e.prelim_checked_at) as participant_number,
+                    e.ticket_code,
+                    e.user_id,
+                    COALESCE(u.username, 'нет_никнейма') as username,
+                    CASE 
+                        WHEN w.user_id IS NOT NULL THEN 'победитель' 
+                        ELSE 'участник' 
+                    END as status,
+                    COALESCE(w.rank::text, '') as winner_rank
+                FROM entries e
+                LEFT JOIN users u ON u.user_id = e.user_id
+                LEFT JOIN winners w ON w.giveaway_id = e.giveaway_id 
+                    AND w.user_id = e.user_id
+                WHERE e.giveaway_id = :gid
+                ORDER BY e.prelim_checked_at
+            """)
+            
+            result = await s.execute(query, {"gid": giveaway_id})
+            return result.fetchall()
+            
+    except Exception as e:
+        logging.error(f"Ошибка получения данных для CSV: {e}")
+        return []
+
+async def generate_csv_in_memory(giveaway_id: int):
+    """
+    Генерирует CSV файл в памяти с потоковой записью.
+    Возвращает BufferedInputFile для отправки через Telegram.
+    """
+    import csv
+    import io
+    import asyncio
+    
+    output = None
+    writer = None
+    
+    try:
+        # 1. Получаем данные
+        data = await fetch_csv_data(giveaway_id)
+        if not data:
+            raise ValueError("Нет данных для экспорта")
+        
+        # 2. Создаем StringIO буфер
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+        
+        # 3. Заголовки (используем русские, Excel поймет с BOM)
+        writer.writerow(['№ участника', 'Номер билета', 'ID пользователя', 'Никнейм', 'Статус', 'Место'])
+        
+        # 4. Потоковая запись данных
+        rows_written = 0
+        for row in data:
+            writer.writerow([
+                row.participant_number,
+                row.ticket_code,
+                row.user_id,
+                row.username,
+                row.status,
+                row.winner_rank
+            ])
+            rows_written += 1
+            
+            # Периодически даем контроль другим задачам
+            if rows_written % 100 == 0:
+                await asyncio.sleep(0.001)
+        
+        # 5. Конвертируем в bytes с BOM для корректного открытия в Excel
+        csv_content = output.getvalue()
+        # UTF-8 с BOM для Excel
+        csv_bytes = csv_content.encode('utf-8-sig')
+        
+        # 6. Получаем имя файла
+        title = await get_giveaway_title(giveaway_id)
+        filename = f"{title}_{giveaway_id}.csv"
+        
+        # 7. Создаем BufferedInputFile для Telegram
+        from aiogram.types import BufferedInputFile
+        return BufferedInputFile(csv_bytes, filename=filename)
+        
+    except Exception as e:
+        logging.error(f"Ошибка генерации CSV: {e}")
+        raise
+    finally:
+        # 🔥 КРИТИЧЕСКИ ВАЖНО: Явная очистка памяти
+        if output:
+            output.close()
+        if writer:
+            del writer
+        
+        # Принудительная сборка мусора
+        import gc
+        gc.collect()
 
 #--- Обработчик членов канала / группы ---
 @dp.my_chat_member()
