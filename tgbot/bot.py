@@ -4798,6 +4798,9 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     if has_media and preview_url:
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
                         try:
+                            # 🔄 ИСПРАВЛЕНИЕ: Определяем hidden_link ПЕРЕД использованием
+                            hidden_link = f'<a href="{preview_url}"> </a>'
+                            
                             # Используем сохраненную позицию медиа
                             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
                             
@@ -5246,6 +5249,9 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             key, s3_url = await file_id_to_public_url_via_s3(bot, fid, suggested)
             preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
+            # 🔄 ИСПРАВЛЕНИЕ: Определяем hidden_link ПЕРЕД использованием
+            hidden_link = f'<a href="{preview_url}"> </a>'
+            
             # Используем сохраненную позицию медиа
             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
             
