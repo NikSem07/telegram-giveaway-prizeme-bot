@@ -1153,9 +1153,9 @@ def kb_media_preview_with_memory(media_on_top: bool, giveaway_id: int = None) ->
     kb.button(text="Изменить изображение/gif/видео", callback_data="preview:change")
     
     if media_on_top:
-        kb.button(text="Показывать медиа сверху", callback_data="preview:move:down")
+        kb.button(text="Показывать медиа снизу", callback_data="preview:move:down")
     else:
-        kb.button(text="Показывать медиа снизу", callback_data="preview:move:up")
+        kb.button(text="Показывать медиа сверху", callback_data="preview:move:up")
     
     kb.button(text="➡️ Продолжить", callback_data="preview:continue")
     kb.adjust(1)
@@ -3990,8 +3990,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id, suggested)
                 preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-                # Используем сохраненную позицию медиа из БД
-                media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
+                # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Определяем hidden_link ПЕРЕД использованием
+                hidden_link = f'<a href="{preview_url}"> </a>'  # Пробел вместо невидимого символа
+                
+                # 🔄 ИСПРАВЛЕНИЕ: Используем сохраненную позицию медиа
+                media_position = getattr(gw, 'media_position', 'bottom')
                 
                 if media_position == "top":
                     full_text = f"{hidden_link}\n\n{preview_text}"
@@ -4002,7 +4005,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     is_disabled=False,
                     prefer_large_media=True,
                     prefer_small_media=False,
-                    show_above_text=(media_position == "top"),  # <-- ИЗМЕНИТЕ ЭТУ СТРОКУ
+                    show_above_text=(media_position == "top"),
                     url=preview_url
                 )
 
@@ -4017,6 +4020,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 )
                 message_ids[chat_id] = sent_msg.message_id
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
+
                 
             else:
                 # медиа нет — обычный текст + кнопка
