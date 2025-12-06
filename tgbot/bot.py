@@ -492,11 +492,11 @@ async def _fallback_preview_with_native_media(m: Message, state: FSMContext, kin
     caption = _compose_preview_text(title, prizes)
     # Порядок «сверху/снизу» в одном сообщении тут невозможен — это fallback.
     if kind == "photo":
-        msg = await m.answer_photo(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+        msg = await m.answer_photo(fid, caption=caption, reply_markup=kb_media_preview_with_memory(media_on_top=False))
     elif kind == "animation":
-        msg = await m.answer_animation(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+        msg = await m.answer_animation(fid, caption=caption, reply_markup=kb_media_preview_with_memory(media_on_top=False))
     else:
-        msg = await m.answer_video(fid, caption=caption, reply_markup=kb_media_preview(media_on_top=False))
+        msg = await m.answer_video(fid, caption=caption, reply_markup=kb_media_preview_with_memory(media_on_top=False))
 
     await state.update_data(
         media_preview_msg_id=msg.message_id,
@@ -627,8 +627,18 @@ async def render_link_preview_message(
       участники/призы/дата (с русским "N дней").
     """
     data = await state.get_data()
-    media     = data.get("media_url")
+    media = data.get("media_url")
+    
+    # Получаем позицию медиа: из state или из БД (при редактировании)
     media_top = bool(data.get("media_top") or False)
+    
+    # Если редактируем существующий розыгрыш, берем позицию из БД
+    editing_gid = data.get("editing_giveaway_id")
+    if editing_gid and not reedit:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, editing_gid)
+            if gw and gw.media_position:
+                media_top = (gw.media_position == "top")
 
     # title   = (data.get("title") or "").strip()
     prizes  = int(data.get("winners_count") or 0)
@@ -686,7 +696,7 @@ async def render_link_preview_message(
                 message_id=old_id,
                 text=full,
                 link_preview_options=lp,
-                reply_markup=kb_media_preview(media_top),
+                reply_markup=kb_media_preview_with_memory(media_top, editing_gid if editing_gid else None),
                 parse_mode="HTML",
             )
             return
@@ -704,7 +714,7 @@ async def render_link_preview_message(
     msg = await m.answer(
         full,
         link_preview_options=lp,
-        reply_markup=kb_media_preview(media_top),
+        reply_markup=kb_media_preview_with_memory(media_top, editing_gid if editing_gid else None),
         parse_mode="HTML",
     )
     await state.update_data(media_preview_msg_id=msg.message_id)
@@ -853,13 +863,21 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
 
         # 🔄 УСИЛЕННЫЙ LINK-PREVIEW (как в render_link_preview_message)
         hidden_link = f'<a href="{preview_url}"> </a>'  # Пробел вместо невидимого символа
-        full_text = f"{preview_text}\n\n{hidden_link}"
+        
+        # 🔄 ИСПРАВЛЕНИЕ: Используем сохраненную позицию медиа
+        # Получаем позицию медиа, по умолчанию "bottom" для обратной совместимости
+        media_position = getattr(gw, 'media_position', 'bottom')
+        
+        if media_position == "top":
+            full_text = f"{hidden_link}\n\n{preview_text}"
+        else:
+            full_text = f"{preview_text}\n\n{hidden_link}"
 
         lp = LinkPreviewOptions(
             is_disabled=False,
             prefer_large_media=True,
             prefer_small_media=False,
-            show_above_text=False,
+            show_above_text=(media_position == "top"),  # <-- ДИНАМИЧЕСКОЕ ЗНАЧЕНИЕ
             url=preview_url  # 🔄 ЯВНО указываем URL
         )
 
@@ -912,6 +930,7 @@ class Giveaway(Base):
     internal_title: Mapped[str] = mapped_column(String(100))
     public_description: Mapped[str] = mapped_column(String(3000))
     photo_file_id: Mapped[str|None] = mapped_column(String(512), nullable=True)
+    media_position: Mapped[str] = mapped_column(String(10), default='bottom')
     end_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     winners_count: Mapped[int] = mapped_column(Integer, default=1)
     commit_hash: Mapped[str|None] = mapped_column(String(128), nullable=True)
@@ -1125,13 +1144,19 @@ def deterministic_draw(secret:str, gid:int, user_ids:list[int], k:int):
     return winners
 
 #--- Клавиатура для предпросмотра С медиа ---
-def kb_media_preview(media_on_top: bool) -> InlineKeyboardMarkup:
+def kb_media_preview_with_memory(media_on_top: bool, giveaway_id: int = None) -> InlineKeyboardMarkup:
+    """
+    Улучшенная клавиатура с "эффектом памяти".
+    Если передан giveaway_id, показывает текущую сохраненную позицию.
+    """
     kb = InlineKeyboardBuilder()
     kb.button(text="Изменить изображение/gif/видео", callback_data="preview:change")
+    
     if media_on_top:
-        kb.button(text="Показывать медиа снизу", callback_data="preview:move:down")
+        kb.button(text="Показывать медиа сверху", callback_data="preview:move:down")
     else:
-        kb.button(text="Показывать медиа сверху", callback_data="preview:move:up")
+        kb.button(text="Показывать медиа снизу", callback_data="preview:move:up")
+    
     kb.button(text="➡️ Продолжить", callback_data="preview:continue")
     kb.adjust(1)
     return kb.as_markup()
@@ -3524,7 +3549,19 @@ async def preview_move_up(cq: CallbackQuery, state: FSMContext):
     if not data.get("media_url"):
         await cq.answer("Перемещение доступно только в режиме предпросмотра с рамкой.", show_alert=True)
         return
+    
+    # Сохраняем в state
     await state.update_data(media_top=True)
+    
+    # Если редактируем существующий розыгрыш, сохраняем в БД
+    editing_gid = data.get("editing_giveaway_id")
+    if editing_gid:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, editing_gid)
+            if gw:
+                gw.media_position = "top"
+                s.add(gw)
+    
     await render_link_preview_message(cq.message, state, reedit=True)
     await cq.answer()
 
@@ -3534,7 +3571,19 @@ async def preview_move_down(cq: CallbackQuery, state: FSMContext):
     if not data.get("media_url"):
         await cq.answer("Перемещение доступно только в режиме предпросмотра с рамкой.", show_alert=True)
         return
+    
+    # Сохраняем в state
     await state.update_data(media_top=False)
+    
+    # Если редактируем существующий розыгрыш, сохраняем в БД
+    editing_gid = data.get("editing_giveaway_id")
+    if editing_gid:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, editing_gid)
+            if gw:
+                gw.media_position = "bottom"
+                s.add(gw)
+    
     await render_link_preview_message(cq.message, state, reedit=True)
     await cq.answer()
 
@@ -3596,11 +3645,16 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
     # 1) создаём черновик и получаем его id
     async with session_scope() as s:
+        # Получаем позицию медиа из state
+        media_top = data.get("media_top", False)
+        media_position = "top" if media_top else "bottom"
+
         gw = Giveaway(
             owner_user_id=owner_id,
             internal_title=title,
-            public_description=desc,  # ← Просто html_text как раньше
+            public_description=desc,
             photo_file_id=photo_id,
+            media_position=media_position,
             end_at_utc=end_at,
             winners_count=winners,
             status=GiveawayStatus.DRAFT
@@ -3936,14 +3990,19 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id, suggested)
                 preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-                hidden_link = f'<a href="{preview_url}"> </a>' 
-                full_text = f"{preview_text}\n\n{hidden_link}"
+                # Используем сохраненную позицию медиа из БД
+                media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
+                
+                if media_position == "top":
+                    full_text = f"{hidden_link}\n\n{preview_text}"
+                else:
+                    full_text = f"{preview_text}\n\n{hidden_link}"
 
                 lp = LinkPreviewOptions(
                     is_disabled=False,
                     prefer_large_media=True,
                     prefer_small_media=False,
-                    show_above_text=False,
+                    show_above_text=(media_position == "top"),  # <-- ИЗМЕНИТЕ ЭТУ СТРОКУ
                     url=preview_url
                 )
 
@@ -4135,19 +4194,34 @@ async def cb_settings_date(cq: CallbackQuery, state: FSMContext):
     await cq.message.answer(format_endtime_prompt(), parse_mode="HTML")
     await cq.answer()
 
+
+# === Обработчик кнопки 'Медиа' в настройках ===
+
 @dp.callback_query(F.data.startswith("settings:media:"))
 async def cb_settings_media(cq: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Медиа' в настройках"""
     gid = int(cq.data.split(":")[2])
+    
+    # Получаем текущую позицию медиа из БД
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        current_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
     
     await state.update_data(
         editing_giveaway_id=gid,
         setting_type="media",
-        return_context="settings"
+        return_context="settings",
+        current_media_position=current_position  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
     )
     
     await state.set_state(EditFlow.EDIT_MEDIA)
-    await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
+    
+    # Показываем текущую позицию в сообщении
+    position_text = "сверху" if current_position == "top" else "снизу"
+    await cq.message.answer(
+        f"Текущая позиция медиа: <b>{position_text}</b>\n\n{MEDIA_QUESTION}", 
+        reply_markup=kb_yes_no(), 
+        parse_mode="HTML"
+    )
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("settings:winners:"))
@@ -4720,16 +4794,20 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     if has_media and preview_url:
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
                         try:
-                            # Формируем текст с hidden link для link-preview
-                            hidden_link = f'<a href="{preview_url}"> </a>'  # Пробел вместо невидимого символа
-                            full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
+                            # Используем сохраненную позицию медиа
+                            media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
+                            
+                            if media_position == "top":
+                                full_text_with_preview = f"{hidden_link}\n\n{cleaned_text}"
+                            else:
+                                full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
                             
                             # Настройки link-preview (как при публикации)
                             lp = LinkPreviewOptions(
                                 is_disabled=False,
                                 prefer_large_media=True,
                                 prefer_small_media=False,
-                                show_above_text=False,
+                                show_above_text=(media_position == "top"),
                                 url=preview_url
                             )
                             
@@ -5164,15 +5242,19 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             key, s3_url = await file_id_to_public_url_via_s3(bot, fid, suggested)
             preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-            # Формируем текст с hidden link
-            hidden_link = f'<a href="{preview_url}"> </a>'
-            full_text = f"{post_text}\n\n{hidden_link}"
+            # Используем сохраненную позицию медиа
+            media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
+            
+            if media_position == "top":
+                full_text = f"{hidden_link}\n\n{post_text}"
+            else:
+                full_text = f"{post_text}\n\n{hidden_link}"
 
             lp = LinkPreviewOptions(
                 is_disabled=False,
                 prefer_large_media=True,
                 prefer_small_media=False,
-                show_above_text=False,
+                show_above_text=(media_position == "top"),
                 url=preview_url
             )
 
