@@ -4603,8 +4603,21 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             f"Организатор свяжется с вами для вручения приза."
                         )
                         
-                        # Для победителей не добавляем кнопку "Результаты" - их результат уже известен
-                        await bot_instance.send_message(user_id, message_text, parse_mode="HTML")
+                        # 🔄 ДОБАВЛЕНО: Кнопка "Результаты" и для победителей для consistency
+                        kb = InlineKeyboardBuilder()
+                        global BOT_USERNAME
+                        url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
+                        kb.button(text="🎲 Результаты", url=url)
+                        kb.adjust(1)
+                        
+                        print(f"🔍 DEBUG: Создана кнопка 'Результаты' для победителя с URL: {url}")
+                        
+                        await bot_instance.send_message(
+                            user_id, 
+                            message_text, 
+                            parse_mode="HTML",
+                            reply_markup=kb.as_markup()
+                        )
                         
                     else:
                         # Участник (не победитель)
@@ -4617,14 +4630,16 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             f"Участвуйте в других розыгрышах!"
                         )
                         
-                        # 🔄 ДОБАВЛЕНО: Кнопка "Результаты" для участников
-                        # Используем ту же клавиатуру что и в посте (но в личных сообщениях можно WebApp)
-                        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-                        
+                        # Кнопка "Результаты" ДЛЯ УВЕДОМЛЕНИЯ
+                        # Используем ТОЧНО ТУ ЖЕ кнопку что и в опубликованном посте в каналах
+                        # В уведомлениях в боте мы можем использовать URL кнопку как в каналах
                         kb = InlineKeyboardBuilder()
-                        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{gid}"
-                        kb.button(text="🎲 Результаты", web_app=WebAppInfo(url=webapp_url))
+                        global BOT_USERNAME
+                        url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
+                        kb.button(text="🎲 Результаты", url=url)
                         kb.adjust(1)
+                        
+                        print(f"🔍 DEBUG: Создана кнопка 'Результаты' с URL: {url}")
                         
                         print(f"📤 Отправляем уведомление пользователю {user_id}")
                         await bot_instance.send_message(
