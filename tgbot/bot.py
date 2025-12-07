@@ -94,7 +94,7 @@ BTN_GIVEAWAYS = "Мои розыгрыши"
 BTN_CREATE = "Создать розыгрыш"
 BTN_ADD_CHANNEL = "Добавить канал"
 BTN_ADD_GROUP = "Добавить группу"
-BTN_SUBSCRIPTIONS = "Подписки"
+BTN_SUBSCRIPTIONS = "Премиум"
 BTN_CHANNELS = "Мои каналы"
 BOT_USERNAME: str | None = None
 
@@ -1937,10 +1937,92 @@ async def on_btn_giveaways(m: Message, state: FSMContext):
 async def on_btn_create(m: Message, state: FSMContext):
     await create_giveaway_start(m, state)
 
-# "Подписки" -> cmd_subs
-@dp.message(F.text == BTN_SUBSCRIPTIONS)
-async def on_btn_subs(m: Message, state: FSMContext):
-    await cmd_subs(m)
+@dp.message(Command("premium"))
+@dp.message(F.text == "Премиум")
+async def cmd_premium(m: Message):
+    """Раздел Премиум с подпиской, бустом и донатом"""
+    
+    text = (
+        "<b>Добро пожаловать в раздел Премиум:</b>\n\n"
+        "- <b>Вы можете получить доступ к уникальному функционалу</b>, оформив подписку, для этого нажмите на кнопку \"Подписка\", чтобы узнать о ее преимуществах и тарифах\n"
+        "- <b>Вы также можете получить доступ к отдельным функциям</b> сервиса внутри mini-app, для подробной информации нажмите на кнопку \"Буст\"\n\n"
+        "Если хотите <b>поддержать проект</b>, будем признательны за донат, оформить его можно, нажав на кнопку \"Донат\""
+    )
+    
+    # Клавиатура с тремя кнопками
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Подписка", callback_data="premium:subscribe")
+    kb.button(text="Буст", callback_data="premium:boost")
+    kb.button(text="Донат", callback_data="premium:donate")
+    kb.adjust(3)  # 3 кнопки в ряд
+    
+    await m.answer(text, parse_mode="HTML", reply_markup=kb.as_markup())
+
+# --- Обработчики кнопок премиум-раздела ---
+
+@dp.callback_query(F.data == "premium:subscribe")
+async def cb_premium_subscribe(cq: CallbackQuery):
+    """Обработчик кнопки 'Подписка'"""
+    await cq.answer("🚀 Разрабатываем", show_alert=True)
+
+@dp.callback_query(F.data == "premium:boost")
+async def cb_premium_boost(cq: CallbackQuery):
+    """Обработчик кнопки 'Буст'"""
+    await cq.answer("🚀 Разрабатываем", show_alert=True)
+
+@dp.callback_query(F.data == "premium:donate")
+async def cb_premium_donate(cq: CallbackQuery):
+    """Обработчик кнопки 'Донат' - показывает информацию о донате"""
+    text = (
+        "<b>❤️ Спасибо за интерес к сервису</b>\n\n"
+        "Лучшая поддержка на свете дарует лучший сервис, проект будет развиваться, а донат способствовать этому 🙌🏻"
+    )
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💰 Поддержать", url="https://t.me/tribute/app?startapp=dA1o")
+    kb.button(text="⬅️ Назад", callback_data="premium:back")
+    kb.adjust(1)
+    
+    # Редактируем сообщение чтобы показать информацию о донате
+    try:
+        await cq.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    except Exception:
+        # Если не удалось отредактировать (например, сообщение слишком старое), отправляем новое
+        await cq.message.answer(text, parse_mode="HTML", reply_markup=kb.as_markup())
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+    
+    await cq.answer()
+
+@dp.callback_query(F.data == "premium:back")
+async def cb_premium_back(cq: CallbackQuery):
+    """Обработчик кнопки 'Назад' в премиум-разделе"""
+    text = (
+        "<b>Добро пожаловать в раздел Премиум:</b>\n\n"
+        "- <b>Вы можете получить доступ к уникальному функционалу</b>, оформив подписку, для этого нажмите на кнопку \"Подписка\", чтобы узнать о ее преимуществах и тарифах\n"
+        "- <b>Вы также можете получить доступ к отдельным функциям</b> сервиса внутри mini-app, для подробной информации нажмите на кнопку \"Буст\"\n\n"
+        "Если хотите <b>поддержать проект</b>, будем признательны за донат, оформить его можно, нажав на кнопку \"Донат\""
+    )
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Подписка", callback_data="premium:subscribe")
+    kb.button(text="Буст", callback_data="premium:boost")
+    kb.button(text="Донат", callback_data="premium:donate")
+    kb.adjust(3)
+    
+    try:
+        await cq.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    except Exception:
+        await cq.message.answer(text, parse_mode="HTML", reply_markup=kb.as_markup())
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+    
+    await cq.answer()
+
 
 # Обработчик для новой кнопки "Мои каналы"
 @dp.message(F.text == BTN_CHANNELS)
