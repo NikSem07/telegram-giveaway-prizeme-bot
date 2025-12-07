@@ -4558,6 +4558,11 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
     try:
         print(f"📨 Уведомляем участников розыгрыша {gid}")
         
+        # 🔄 ПОЛУЧАЕМ BOT_USERNAME из бота
+        bot_info = await bot_instance.get_me()
+        BOT_USERNAME = bot_info.username
+        print(f"🔍 DEBUG: BOT_USERNAME получен: @{BOT_USERNAME}")
+        
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
             if not gw:
@@ -4605,7 +4610,6 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                         
                         # 🔄 ДОБАВЛЕНО: Кнопка "Результаты" и для победителей для consistency
                         kb = InlineKeyboardBuilder()
-                        global BOT_USERNAME
                         url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
                         kb.button(text="🎲 Результаты", url=url)
                         kb.adjust(1)
@@ -4634,7 +4638,6 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                         # Используем ТОЧНО ТУ ЖЕ кнопку что и в опубликованном посте в каналах
                         # В уведомлениях в боте мы можем использовать URL кнопку как в каналах
                         kb = InlineKeyboardBuilder()
-                        global BOT_USERNAME
                         url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
                         kb.button(text="🎲 Результаты", url=url)
                         kb.adjust(1)
@@ -4663,7 +4666,6 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
         
     except Exception as e:
         print(f"❌ Ошибка уведомления участников для розыгрыша {gid}: {e}")
-
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
     async with session_scope() as s:
