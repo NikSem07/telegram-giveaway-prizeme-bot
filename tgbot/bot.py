@@ -4536,8 +4536,17 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
                     "К сожалению, не удалось определить победителей."
                 )
             
+            # Кнопка "Выгрузить CSV" для организатора            
+            kb = InlineKeyboardBuilder()
+            kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
+            kb.adjust(1)
+            
             print(f"📤 Отправляем уведомление организатору {gw.owner_user_id}")
-            await bot_instance.send_message(gw.owner_user_id, message_text)
+            await bot_instance.send_message(
+                gw.owner_user_id, 
+                message_text,
+                reply_markup=kb.as_markup()
+            )
             print(f"✅ Организатор уведомлен")
             
     except Exception as e:
@@ -4593,6 +4602,10 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             f"Ваш билет <b>{ticket_code}</b> оказался выбранным случайным образом.\n\n"
                             f"Организатор свяжется с вами для вручения приза."
                         )
+                        
+                        # Для победителей не добавляем кнопку "Результаты" - их результат уже известен
+                        await bot_instance.send_message(user_id, message_text, parse_mode="HTML")
+                        
                     else:
                         # Участник (не победитель)
                         message_text = (
@@ -4603,9 +4616,24 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             f"Победители: {winners_list_text}\n\n"
                             f"Участвуйте в других розыгрышах!"
                         )
-                    
-                    print(f"📤 Отправляем уведомление пользователю {user_id}")
-                    await bot_instance.send_message(user_id, message_text, parse_mode="HTML")
+                        
+                        # 🔄 ДОБАВЛЕНО: Кнопка "Результаты" для участников
+                        # Используем ту же клавиатуру что и в посте (но в личных сообщениях можно WebApp)
+                        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                        
+                        kb = InlineKeyboardBuilder()
+                        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=results_{gid}"
+                        kb.button(text="🎲 Результаты", web_app=WebAppInfo(url=webapp_url))
+                        kb.adjust(1)
+                        
+                        print(f"📤 Отправляем уведомление пользователю {user_id}")
+                        await bot_instance.send_message(
+                            user_id, 
+                            message_text, 
+                            parse_mode="HTML",
+                            reply_markup=kb.as_markup()
+                        )
+
                     notified_count += 1
                     print(f"✅ Пользователь {user_id} уведомлен")
                     
