@@ -982,7 +982,7 @@ class Winner(Base):
 # ---- DB INIT ----
 
 # ID закрытой группы
-PREMIUM_GROUP_ID = -1003151089272
+PREMIUM_GROUP_ID = -1003320639276
 
 # 🔧 ПРИНУДИТЕЛЬНО УКАЗЫВАЕМ ASYNCPG ДРАЙВЕР
 DB_URL = "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod"
