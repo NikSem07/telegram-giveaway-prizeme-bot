@@ -1171,17 +1171,21 @@ async def check_group_membership(user_id: int) -> bool:
 # Функция обновления премиум-статуса
 async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
     """
-    Проверяет членство в группе и обновляет статус пользователя
+    Проверяет членство в PrizeMe ПРЕМИУМ и обновляет статус пользователя
     """
     current_time = datetime.now(timezone.utc)
+
+    check_delay = 30  # секунд
     
-    # Проверяем не чаще чем раз в 5 минут (для оптимизации)
     if (bot_user.last_group_check and 
-        (current_time - bot_user.last_group_check).total_seconds() < 300):
+        (current_time - bot_user.last_group_check).total_seconds() < check_delay):
         logging.info(f"⏰ Пропускаем проверку для {bot_user.user_id} (слишком рано)")
         return
     
     try:
+        # 🔥 ДОБАВЬТЕ ДИАГНОСТИЧЕСКИЙ ЛОГ
+        logging.info(f"🔍 Начинаю проверку канала для user_id={bot_user.user_id}")
+        
         # Проверяем членство в группе
         is_member = await check_group_membership(bot_user.user_id)
         
