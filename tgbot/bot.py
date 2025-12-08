@@ -1428,6 +1428,80 @@ async def save_shared_chat(
         logging.error(f"Traceback: {traceback.format_exc()}")
         return False
 
+async def save_channel_for_user(
+    *,
+    user_id: int,
+    chat_id: int,
+    title: str,
+    username: str | None = None,
+    chat_type: str,
+    bot_role: str
+) -> bool:
+    """
+    УНИВЕРСАЛЬНАЯ функция сохранения канала для пользователя.
+    Используется ВЕЗДЕ: on_my_chat_member, on_chat_shared, save_shared_chat.
+    """
+    is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
+    
+    try:
+        added_at_aware = datetime.now(timezone.utc)
+        
+        async with session_scope() as s:
+            # Сначала проверяем существование
+            existing = await s.execute(
+                text("SELECT id FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
+                {"user_id": user_id, "chat_id": chat_id}
+            )
+            existing_row = existing.first()
+            
+            if existing_row:
+                # Обновляем существующую запись
+                await s.execute(
+                    text("""
+                    UPDATE organizer_channels 
+                    SET title = :title, username = :username, is_private = :is_private, 
+                        bot_role = :role, status = 'ok', added_at = :added_at
+                    WHERE owner_user_id = :user_id AND chat_id = :chat_id
+                    """),
+                    {
+                        "title": title,
+                        "username": username,
+                        "is_private": is_private,
+                        "role": bot_role,
+                        "added_at": added_at_aware,
+                        "user_id": user_id,
+                        "chat_id": chat_id
+                    }
+                )
+                logging.info(f"✅ Канал обновлен: {title} (chat_id={chat_id}) для user_id={user_id}")
+                return False  # Не новая запись
+            else:
+                # Создаем новую запись
+                await s.execute(
+                    text("""
+                    INSERT INTO organizer_channels
+                        (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at)
+                    VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at)
+                    """),
+                    {
+                        "user_id": user_id,
+                        "chat_id": chat_id,
+                        "title": title,
+                        "username": username,
+                        "is_private": is_private,
+                        "role": bot_role,
+                        "added_at": added_at_aware
+                    }
+                )
+                logging.info(f"✅ Новый канал добавлен: {title} (chat_id={chat_id}) для user_id={user_id}")
+                return True  # Новая запись
+                
+    except Exception as e:
+        logging.error(f"❌ Error in save_channel_for_user: {e}")
+        import traceback
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        return False
+
 # ----------------- FSM -----------------
 class CreateFlow(StatesGroup):
     TITLE = State()
@@ -1586,64 +1660,112 @@ def chooser_reply_kb() -> ReplyKeyboardMarkup:
 # === СИСТЕМНОЕ окно выбора канала/группы (chat_shared) ===
 @dp.message(F.chat_shared)
 async def on_chat_shared(m: Message, state: FSMContext):
+    """УНИВЕРСАЛЬНЫЙ обработчик добавления каналов/групп из ВСЕХ мест"""
     shared = m.chat_shared
     chat_id = shared.chat_id
+    user_id = m.from_user.id
+    
+    logging.info(f"🔍 CHAT_SHARED: user={user_id}, chat_id={chat_id}, request_id={shared.request_id}")
 
     try:
+        # Получаем информацию о чате
         chat = await bot.get_chat(chat_id)
         me = await bot.get_me()
-        cm = await bot.get_chat_member(chat_id, me.id)
-        role = "admin" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
-    except Exception as e:
-        await m.answer(f"Не удалось получить данные чата. Попробуйте ещё раз. ({e})")
-        return
-
-    title = chat.title or getattr(chat, "first_name", None) or "Без названия"
-    username = getattr(chat, "username", None)
-    
-    is_new = await save_shared_chat(
-        owner_user_id=m.from_user.id,
-        chat_id=chat.id,
-        title=title,
-        chat_type=chat.type,
-        bot_role=role
-    )
-
-    kind = "канал" if chat.type == "channel" else "группа"
-    action_text = "подключён" if is_new else "обновлён"
-    await m.answer(
-        f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
-        parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-
-    # Если сейчас идёт привязка к конкретному розыгрышу — перерисуем экран привязки
-    data = await state.get_data()
-    event_id = data.get("chooser_event_id")
-    if event_id:
-        async with session_scope() as s:
-            gw = await s.get(Giveaway, event_id)
-            res = await s.execute(
-                text("SELECT id, title FROM organizer_channels WHERE owner_user_id = :u AND status = 'ok'"),
-                {"u": gw.owner_user_id}
-            )
-            channels = [(r[0], r[1]) for r in res.all()]
-            res = await s.execute(
-                text("SELECT channel_id FROM giveaway_channels WHERE giveaway_id = :g"),
-                {"g": event_id}
-            )
-            attached_ids = {r[0] for r in res.fetchall()}
         
-        await m.answer(
-            build_connect_channels_text(gw.internal_title),
-            reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
+        # Проверяем права бота в чате
+        try:
+            cm = await bot.get_chat_member(chat_id, me.id)
+            role = "admin" if cm.status == "administrator" else ("member" if cm.status == "member" else "none")
+        except Exception as e:
+            logging.warning(f"⚠️ Не удалось проверить права бота: {e}")
+            role = "none"
+        
+        title = chat.title or getattr(chat, "first_name", None) or "Без названия"
+        username = getattr(chat, "username", None)
+        
+        # Определяем тип чата
+        if chat.type == "channel":
+            chat_type = "channel"
+        elif chat.type in ["group", "supergroup"]:
+            chat_type = "group"
+        else:
+            chat_type = chat.type
+        
+        # Сохраняем канал с использованием единой функции
+        is_new = await save_channel_for_user(
+            user_id=user_id,
+            chat_id=chat.id,
+            title=title,
+            username=username,
+            chat_type=chat_type,
+            bot_role=role
         )
-        await state.update_data(chooser_event_id=None)
-    else:
-        # Обычный кейс: показать «Мои каналы»
-        rows = await get_user_org_channels(m.from_user.id)
-        label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
-        await m.answer(label, reply_markup=kb_my_channels(rows))
+
+        kind = "канал" if chat.type == "channel" else "группа"
+        action_text = "подключён" if is_new else "обновлён"
+        
+        # Отправляем подтверждение
+        await m.answer(
+            f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
+            parse_mode="HTML",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+
+        # 🔄 УЛУЧШЕННАЯ ЛОГИКА: возвращаемся в правильный контекст
+        data = await state.get_data()
+        
+        # 1. Если это добавление канала во время создания розыгрыша
+        event_id = data.get("chooser_event_id")
+        if event_id:
+            async with session_scope() as s:
+                gw = await s.get(Giveaway, event_id)
+                res = await s.execute(
+                    text("SELECT id, title FROM organizer_channels WHERE owner_user_id = :u AND status = 'ok'"),
+                    {"u": gw.owner_user_id}
+                )
+                channels = [(r[0], r[1]) for r in res.all()]
+                res = await s.execute(
+                    text("SELECT channel_id FROM giveaway_channels WHERE giveaway_id = :g"),
+                    {"g": event_id}
+                )
+                attached_ids = {r[0] for r in res.fetchall()}
+            
+            await m.answer(
+                build_connect_channels_text(gw.internal_title),
+                reply_markup=build_channels_menu_kb(event_id, channels, attached_ids)
+            )
+            await state.update_data(chooser_event_id=None)
+        
+        # 2. Если это добавление из главного меню или кнопок "Добавить канал/группу"
+        elif shared.request_id in [1, 2, 101, 102]:  # ID из reply-кнопок
+            # Возвращаемся в главное меню
+            await m.answer(
+                f"{kind.capitalize()} успешно добавлен!",
+                reply_markup=reply_main_kb(),
+                parse_mode="HTML"
+            )
+            
+            # Показываем обновленный список каналов
+            rows = await get_user_org_channels(user_id)
+            if rows:
+                await m.answer(
+                    "📋 Ваши каналы/группы обновлены:",
+                    reply_markup=kb_my_channels(rows)
+                )
+        
+        # 3. Если это добавление из меню "Мои каналы"
+        else:
+            # Просто показываем обновленный список
+            rows = await get_user_org_channels(user_id)
+            label = "Ваши каналы:\n\n" + ("" if rows else "Пока пусто.")
+            await m.answer(label, reply_markup=kb_my_channels(rows))
+            
+    except Exception as e:
+        logging.error(f"❌ Ошибка в on_chat_shared: {e}")
+        await m.answer(
+            f"Не удалось добавить чат. Попробуйте ещё раз. ({str(e)[:100]})",
+            reply_markup=ReplyKeyboardRemove()
+        )
 
 
 def kb_event_actions(gid:int, status:str):
@@ -2302,6 +2424,35 @@ async def on_btn_my_channels(m: Message):
     rows = await get_user_org_channels(m.from_user.id)
     text = "Ваши каналы / группы:\n\n" + ("" if rows else "Пока пусто.")
     await m.answer(text, reply_markup=kb_my_channels(rows))
+
+# Обработчик для кнопки "Добавить канал" в главном меню
+@dp.message(F.text == BTN_ADD_CHANNEL)
+async def on_btn_add_channel_main(m: Message, state: FSMContext):
+    """Обработчик кнопки 'Добавить канал' в главном меню"""
+    logging.info(f"🔍 MAIN MENU: Добавление канала, user={m.from_user.id}")
+    
+    # Показываем инструкцию
+    await m.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    
+    # Показываем кнопки выбора чата
+    INVISIBLE = "\u2060"
+    await m.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+
+# Обработчик для кнопки "Добавить группу" в главном меню
+@dp.message(F.text == BTN_ADD_GROUP)
+async def on_btn_add_group_main(m: Message, state: FSMContext):
+    """Обработчик кнопки 'Добавить группу' в главном меню"""
+    logging.info(f"🔍 MAIN MENU: Добавление группы, user={m.from_user.id}")
+    
+    # Показываем инструкцию
+    await m.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
+    
+    # Показываем кнопки выбора чата
+    INVISIBLE = "\u2060"
+    await m.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+
+
+#--- Обработчики в создании розыгрыша ---
 
 @dp.message(CreateFlow.TITLE)
 async def handle_giveaway_name(m: Message, state: FSMContext):
@@ -5524,55 +5675,23 @@ async def on_my_chat_member(event: ChatMemberUpdated):
     async with Session() as s:
         async with s.begin():
             if status in ("administrator", "member"):
-                # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверяем существование записи для ЭТОГО пользователя
-                existing = await s.execute(
-                    stext("SELECT id FROM organizer_channels WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
-                    {"user_id": user_id, "chat_id": chat.id}  # ✅ ИСПРАВЛЕНО: именованные параметры
+                # Используем единую функцию сохранения
+                await save_channel_for_user(
+                    user_id=user_id,
+                    chat_id=chat.id,
+                    title=title,
+                    username=username,
+                    chat_type=chat.type,
+                    bot_role=status
                 )
-                existing_row = existing.first()
-                
-                if existing_row:
-                    # Обновляем существующую запись
-                    await s.execute(
-                        stext("""
-                            UPDATE organizer_channels 
-                            SET title=:title, username=:username, is_private=:is_private, bot_role=:role, status='ok', added_at=:added_at
-                            WHERE owner_user_id=:user_id AND chat_id=:chat_id
-                        """),
-                        {
-                            "title": title, 
-                            "username": username, 
-                            "is_private": int(is_private), 
-                            "role": status, 
-                            "added_at": datetime.now(timezone.utc),
-                            "user_id": user_id, 
-                            "chat_id": chat.id
-                        }  # ✅ ИСПРАВЛЕНО: именованные параметры
-                    )
-                else:
-                    # Создаем новую запись для этого пользователя
-                    await s.execute(
-                        stext("""
-                            INSERT INTO organizer_channels(
-                                owner_user_id, chat_id, username, title, is_private, bot_role, status, added_at
-                            ) VALUES (:user_id, :chat_id, :username, :title, :is_private, :role, 'ok', :added_at)
-                        """),
-                        {
-                            "user_id": user_id,
-                            "chat_id": chat.id, 
-                            "username": username, 
-                            "title": title, 
-                            "is_private": int(is_private), 
-                            "role": status,
-                            "added_at": datetime.now(timezone.utc)
-                        }  # ✅ ИСПРАВЛЕНО: именованные параметры
-                    )
             else:
                 # если бота удалили из чата - помечаем только для этого пользователя
-                await s.execute(
-                    stext("UPDATE organizer_channels SET status='gone' WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
-                    {"user_id": user_id, "chat_id": chat_id},
-                )
+                async with Session() as s:
+                    async with s.begin():
+                        await s.execute(
+                            stext("UPDATE organizer_channels SET status='gone' WHERE owner_user_id=:user_id AND chat_id=:chat_id"),
+                            {"user_id": user_id, "chat_id": chat.id},  # ✅ ИСПРАВЛЕНО
+                        )
 
     logging.info(f"🔁 my_chat_member: user={user_id}, chat={chat.title} ({chat.id}) -> {status}")
 
