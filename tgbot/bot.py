@@ -911,6 +911,17 @@ class User(Base):
     tz: Mapped[str] = mapped_column(String(64), default=DEFAULT_TZ)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+class BotUser(Base):
+    __tablename__ = "bot_users"
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_status: Mapped[str] = mapped_column(String(10), default='standard')
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    last_group_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
 class OrganizerChannel(Base):
     __tablename__="organizer_channels"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -969,6 +980,9 @@ class Winner(Base):
     hash_used: Mapped[str] = mapped_column(String(128))
 
 # ---- DB INIT ----
+
+# ID закрытой группы
+PREMIUM_GROUP_ID = -1003151089272
 
 # 🔧 ПРИНУДИТЕЛЬНО УКАЗЫВАЕМ ASYNCPG ДРАЙВЕР
 DB_URL = "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod"
@@ -1073,6 +1087,145 @@ async def ensure_user(user_id:int, username:str|None):
         if not u:
             u = User(user_id=user_id, username=username)
             s.add(u)
+    
+    # Регистрируем пользователя и в bot_users
+    await ensure_bot_user(user_id, username)
+
+# Функция для регистрации/обновления пользователя бота
+async def ensure_bot_user(user_id: int, username: str | None = None, first_name: str | None = None) -> BotUser:
+    """
+    Регистрирует или обновляет пользователя в таблице bot_users
+    Автоматически проверяет членство в премиум-группе
+    """
+    async with session_scope() as s:
+        # Ищем существующего пользователя
+        bot_user = await s.get(BotUser, user_id)
+        
+        if not bot_user:
+            # Создаем нового пользователя
+            bot_user = BotUser(
+                user_id=user_id,
+                username=username,
+                first_name=first_name,
+                user_status='standard',  # По умолчанию standard
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            s.add(bot_user)
+            logging.info(f"✅ Новый пользователь бота зарегистрирован: {user_id}")
+        else:
+            # Обновляем данные существующего пользователя
+            if username and bot_user.username != username:
+                bot_user.username = username
+            if first_name and bot_user.first_name != first_name:
+                bot_user.first_name = first_name
+            bot_user.updated_at = datetime.now(timezone.utc)
+            logging.info(f"✅ Данные пользователя бота обновлены: {user_id}")
+        
+        # Проверяем членство в премиум-группе
+        await check_and_update_premium_status(bot_user, s)
+        
+        return bot_user
+
+# Функция проверки членства в группе
+async def check_group_membership(user_id: int) -> bool:
+    """
+    Проверяет, состоит ли пользователь в закрытой премиум-группе
+    Возвращает True если состоит, False если нет
+    """
+    try:
+        chat_member = await bot.get_chat_member(
+            chat_id=PREMIUM_GROUP_ID,
+            user_id=user_id
+        )
+        
+        # Пользователь считается участником если его статус:
+        # - "member" (участник)
+        # - "administrator" (администратор)
+        # - "creator" (создатель)
+        # - "restricted" с is_member=True (ограниченный, но член группы)
+        
+        status = chat_member.status.lower()
+        is_member = status in ["member", "administrator", "creator"]
+        
+        # Для статуса "restricted" проверяем явно
+        if status == "restricted":
+            is_member = getattr(chat_member, "is_member", False)
+        
+        logging.info(f"🔍 Проверка группы: user={user_id}, status={status}, is_member={is_member}")
+        return is_member
+        
+    except Exception as e:
+        # Если пользователь не найден в группе или произошла ошибка
+        logging.warning(f"⚠️ Ошибка проверки группы для {user_id}: {e}")
+        return False
+
+# Функция обновления премиум-статуса
+async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
+    """
+    Проверяет членство в группе и обновляет статус пользователя
+    """
+    current_time = datetime.now(timezone.utc)
+    
+    # Проверяем не чаще чем раз в 5 минут (для оптимизации)
+    if (bot_user.last_group_check and 
+        (current_time - bot_user.last_group_check).total_seconds() < 300):
+        return  # Не проверяем слишком часто
+    
+    try:
+        # Проверяем членство в группе
+        is_member = await check_group_membership(bot_user.user_id)
+        
+        old_status = bot_user.user_status
+        new_status = 'premium' if is_member else 'standard'
+        
+        # Обновляем статус если изменился
+        if old_status != new_status:
+            bot_user.user_status = new_status
+            logging.info(f"🔄 Статус пользователя {bot_user.user_id} изменен: {old_status} -> {new_status}")
+        
+        # Обновляем время последней проверки
+        bot_user.last_group_check = current_time
+        bot_user.updated_at = current_time
+        
+    except Exception as e:
+        logging.error(f"❌ Ошибка обновления премиум-статуса для {bot_user.user_id}: {e}")
+
+# Функция получения статуса пользователя
+async def get_user_status(user_id: int) -> str:
+    """
+    Возвращает статус пользователя (standard/premium)
+    Если пользователя нет в базе - регистрирует со статусом standard
+    """
+    async with session_scope() as s:
+        bot_user = await s.get(BotUser, user_id)
+        
+        if not bot_user:
+            # Пользователя нет - создаем со статусом standard
+            # Нужно получить username и first_name через бота
+            try:
+                user = await bot.get_chat(user_id)
+                bot_user = BotUser(
+                    user_id=user_id,
+                    username=user.username,
+                    first_name=user.first_name,
+                    user_status='standard',
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                s.add(bot_user)
+                logging.info(f"📝 Авторегистрация пользователя {user_id} со статусом standard")
+            except Exception:
+                # Если не удалось получить данные - создаем базовую запись
+                bot_user = BotUser(
+                    user_id=user_id,
+                    user_status='standard',
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                s.add(bot_user)
+        
+        return bot_user.user_status
 
 async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
     """
@@ -1284,6 +1437,41 @@ class EditFlow(StatesGroup):
 bot = Bot(BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
+
+# Middleware для регистрации пользователей при любом взаимодействии
+@dp.update.outer_middleware()
+async def user_registration_middleware(handler, event, data):
+    """
+    Middleware который регистрирует пользователя при любом взаимодействии с ботом
+    """
+    # Проверяем есть ли информация о пользователе в событии
+    user_id = None
+    username = None
+    first_name = None
+    
+    if hasattr(event, 'from_user') and event.from_user:
+        user_id = event.from_user.id
+        username = event.from_user.username
+        first_name = event.from_user.first_name
+    elif hasattr(event, 'message') and event.message and event.message.from_user:
+        user_id = event.message.from_user.id
+        username = event.message.from_user.username
+        first_name = event.message.from_user.first_name
+    elif hasattr(event, 'callback_query') and event.callback_query:
+        user_id = event.callback_query.from_user.id
+        username = event.callback_query.from_user.username
+        first_name = event.callback_query.from_user.first_name
+    
+    # Если нашли пользователя - регистрируем/обновляем
+    if user_id:
+        try:
+            await ensure_bot_user(user_id, username, first_name)
+        except Exception as e:
+            logging.warning(f"⚠️ Ошибка регистрации пользователя в middleware: {e}")
+    
+    # Продолжаем обработку
+    return await handler(event, data)
+
 
 @dp.chat_join_request()
 async def on_join_request(ev: ChatJoinRequest, bot: Bot):
@@ -4373,6 +4561,10 @@ async def user_join(cq:CallbackQuery):
         gw = await s.get(Giveaway, gid)
         if gw.status != GiveawayStatus.ACTIVE:
             await cq.answer("Розыгрыш не активен.", show_alert=True); return
+    
+    #Регистрируем пользователя при участии
+    await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
+
     ok, details = await check_membership_on_all(bot, cq.from_user.id, gid)
     if not ok:
         await cq.answer("Подпишитесь на все каналы и попробуйте снова.", show_alert=True); return
