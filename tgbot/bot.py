@@ -142,13 +142,57 @@ ADD_CHAT_HELP_HTML = (
     "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту.</b>"
 )
 
+# ============================================================================
+# PREMIUM ACCESS CONTROL SYSTEM
+# ============================================================================
+
+def premium_only(func):
+    """
+    ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
+    Использование: @premium_only перед async def функции
+    
+    Для standard пользователей показывает pop-up с предложением подписки
+    Для premium пользователей выполняет оригинальную функцию
+    """
+    async def wrapper(cq: CallbackQuery, *args, **kwargs):
+        user_id = cq.from_user.id
+        
+        # Получаем статус пользователя
+        status = await get_user_status(user_id)
+        
+        if status == 'standard':
+            # Показываем pop-up для standard пользователей
+            await cq.answer(
+                "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+                show_alert=True
+            )
+            return
+        
+        # Если premium - выполняем оригинальную функцию
+        return await func(cq, *args, **kwargs)
+    
+    return wrapper
+
+
+@dp.callback_query(F.data.startswith("premium_required:"))
+async def handle_premium_required(cq: CallbackQuery):
+    """
+    Обработчик для заблокированных кнопок standard пользователей
+    Показывает pop-up с предложением оформить подписку
+    """
+    await cq.answer(
+        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+        show_alert=True
+    )
+
+
+# ---- Другое ----
 def kb_add_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Отмена", callback_data="add:cancel")
     kb.adjust(1)
     return kb.as_markup()
 
-# ---- Другое ----
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
 
@@ -5907,50 +5951,6 @@ async def back_to_participant_menu(cq: CallbackQuery):
 async def back_to_creator_menu(cq: CallbackQuery):
     """Возврат из списков создателя в меню 'Я - создатель'"""
     await show_creator_menu(cq)
-
-
-# ============================================================================
-# PREMIUM ACCESS CONTROL SYSTEM
-# ============================================================================
-
-def premium_only(func):
-    """
-    ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
-    Использование: @premium_only перед async def функции
-    
-    Для standard пользователей показывает pop-up с предложением подписки
-    Для premium пользователей выполняет оригинальную функцию
-    """
-    async def wrapper(cq: CallbackQuery, *args, **kwargs):
-        user_id = cq.from_user.id
-        
-        # Получаем статус пользователя
-        status = await get_user_status(user_id)
-        
-        if status == 'standard':
-            # Показываем pop-up для standard пользователей
-            await cq.answer(
-                "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
-                show_alert=True
-            )
-            return
-        
-        # Если premium - выполняем оригинальную функцию
-        return await func(cq, *args, **kwargs)
-    
-    return wrapper
-
-
-@dp.callback_query(F.data.startswith("premium_required:"))
-async def handle_premium_required(cq: CallbackQuery):
-    """
-    Обработчик для заблокированных кнопок standard пользователей
-    Показывает pop-up с предложением оформить подписку
-    """
-    await cq.answer(
-        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
-        show_alert=True
-    )
 
 
 # ---------------- ENTRYPOINT ----------------
