@@ -152,65 +152,6 @@ def kb_add_cancel() -> InlineKeyboardMarkup:
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
 
-# ============================================================================
-# PREMIUM ACCESS CONTROL SYSTEM
-# ============================================================================
-
-def premium_only(func):
-    """
-    УНИВЕРСАЛЬНЫЙ ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
-    Гарантированно фильтрует ВСЕ aiogram-specific параметры
-    """
-    async def wrapper(*args, **kwargs):
-        # Находим CallbackQuery среди аргументов
-        cq = None
-        
-        # Ищем CallbackQuery в args
-        for arg in args:
-            if isinstance(arg, CallbackQuery):
-                cq = arg
-                break
-        
-        # Если не нашли в args, ищем в kwargs
-        if not cq:
-            for key in ['callback_query', 'cq', 'call']:
-                if key in kwargs and isinstance(kwargs[key], CallbackQuery):
-                    cq = kwargs[key]
-                    break
-        
-        if not cq:
-            # Если вообще не нашли CallbackQuery - пропускаем проверку
-            # (это может быть другой тип обработчика)
-            return await func(*args, **kwargs)
-        
-        # Проверяем статус пользователя
-        user_id = cq.from_user.id
-        status = await get_user_status(user_id)
-        
-        if status == 'standard':
-            await cq.answer(
-                "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
-                show_alert=True
-            )
-            return
-        
-        # Создаем ОЧИЩЕННЫЙ словарь kwargs
-        # Удаляем ВСЕ потенциально проблемные параметры
-        safe_kwargs = {}
-        for key, value in kwargs.items():
-            # Пропускаем все aiogram-specific параметры
-            if key not in [
-                'dispatcher', 'event_update', 'bot', 'bots', 
-                'state', 'event', 'raw_state', 'data', 'update',
-                'router', 'fsm_context', 'chat_member'
-            ]:
-                safe_kwargs[key] = value
-        
-        # Передаем ТОЛЬКО очищенные kwargs
-        return await func(*args, **safe_kwargs)
-    
-    return wrapper
-
 # --- Функция безопасного HTML ---
 def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     """
@@ -3888,17 +3829,25 @@ async def event_status(cq: CallbackQuery):
 # === Полноценный экспорт статистики в CSV файл ===
 
 @dp.callback_query(F.data.startswith("stats:csv:"))
-@premium_only
 async def cb_csv_export(cq: CallbackQuery):
     """
     Выгрузка статистики в CSV файл - ТОЛЬКО для premium пользователей
-    Для standard пользователей показывается pop-up через декоратор
     """
-    # ДИАГНОСТИКА
+    # 🔥 ВСТРОЕННАЯ ПРОВЕРКА ПРЕМИУМ СТАТУСА
     user_id = cq.from_user.id
+    status = await get_user_status(user_id)
+    
+    if status == 'standard':
+        await cq.answer(
+            "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+            show_alert=True
+        )
+        return
+    
+    # 🔍 ДИАГНОСТИКА
     giveaway_id = int(cq.data.split(":")[2])
-    logging.info(f"🔍 [DIAGNOSTICS] cb_csv_export: user_id={user_id}, giveaway_id={giveaway_id}, data={cq.data}")
-
+    logging.info(f"🔍 [CSV_EXPORT] Premium доступ подтвержден: user_id={user_id}, giveaway_id={giveaway_id}")
+    
     try:
         # 1. Извлекаем ID розыгрыша из callback_data
         giveaway_id = int(cq.data.split(":")[2])
@@ -6020,20 +5969,6 @@ async def back_to_creator_menu(cq: CallbackQuery):
 @dp.callback_query(F.data.startswith("premium_required:"))
 async def handle_premium_required(cq: CallbackQuery):
     """Показывает pop-up с предложением подписки"""
-    
-    # ДИАГНОСТИКА
-    user_id = cq.from_user.id
-    giveaway_id = int(cq.data.split(":")[1]) if len(cq.data.split(":")) > 1 else "unknown"
-    logging.info(f"🔍 [DIAGNOSTICS] handle_premium_required: user_id={user_id}, giveaway_id={giveaway_id}, data={cq.data}")
-    
-    # ПРОВЕРЯЕМ СТАТУС ПОЛЬЗОВАТЕЛЯ В ЭТОТ МОМЕНТ
-    async with session_scope() as s:
-        bot_user = await s.get(BotUser, user_id)
-        if bot_user:
-            logging.info(f"🔍 [DIAGNOSTICS] Реальный статус в handle_premium_required: {bot_user.user_status}")
-        else:
-            logging.info(f"🔍 [DIAGNOSTICS] Пользователь не найден в bot_users")
-    
     await cq.answer(
         "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
         show_alert=True
