@@ -142,6 +142,16 @@ ADD_CHAT_HELP_HTML = (
     "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту.</b>"
 )
 
+# ---- Другое ----
+def kb_add_cancel() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Отмена", callback_data="add:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
+    logging.warning("S3 env not fully set — uploads will fail.")
+
 # ============================================================================
 # PREMIUM ACCESS CONTROL SYSTEM
 # ============================================================================
@@ -172,17 +182,6 @@ def premium_only(func):
         return await func(cq, *args, **kwargs)
     
     return wrapper
-
-# ---- Другое ----
-def kb_add_cancel() -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text="Отмена", callback_data="add:cancel")
-    kb.adjust(1)
-    return kb.as_markup()
-
-if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
-    logging.warning("S3 env not fully set — uploads will fail.")
-
 
 # --- Функция безопасного HTML ---
 def safe_html_text(html_text: str, max_length: int = 2500) -> str:
