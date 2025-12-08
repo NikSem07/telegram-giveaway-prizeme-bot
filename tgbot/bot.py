@@ -1175,7 +1175,7 @@ async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
     """
     current_time = datetime.now(timezone.utc)
 
-    check_delay = 30  # секунд
+    check_delay = 2  # секунд
     
     if (bot_user.last_group_check and 
         (current_time - bot_user.last_group_check).total_seconds() < check_delay):
