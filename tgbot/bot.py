@@ -1089,7 +1089,11 @@ async def ensure_user(user_id:int, username:str|None):
             s.add(u)
     
     # Регистрируем пользователя и в bot_users
-    await ensure_bot_user(user_id, username)
+    try:
+        await ensure_bot_user(user_id, username)
+        logging.info(f"✅ Пользователь {user_id} зарегистрирован в bot_users")
+    except Exception as e:
+        logging.error(f"❌ Ошибка регистрации в bot_users: {e}")
 
 # Функция для регистрации/обновления пользователя бота
 async def ensure_bot_user(user_id: int, username: str | None = None, first_name: str | None = None) -> BotUser:
@@ -1109,9 +1113,11 @@ async def ensure_bot_user(user_id: int, username: str | None = None, first_name:
                 first_name=first_name,
                 user_status='standard',  # По умолчанию standard
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
+                is_active=True
             )
             s.add(bot_user)
+            await s.flush()  # Важно: получить ID перед дальнейшими операциями
             logging.info(f"✅ Новый пользователь бота зарегистрирован: {user_id}")
         else:
             # Обновляем данные существующего пользователя
@@ -1120,10 +1126,12 @@ async def ensure_bot_user(user_id: int, username: str | None = None, first_name:
             if first_name and bot_user.first_name != first_name:
                 bot_user.first_name = first_name
             bot_user.updated_at = datetime.now(timezone.utc)
+            bot_user.is_active = True
             logging.info(f"✅ Данные пользователя бота обновлены: {user_id}")
         
         # Проверяем членство в премиум-группе
         await check_and_update_premium_status(bot_user, s)
+        await s.commit()  # КОММИТ после обновлений
         
         return bot_user
 
@@ -1134,23 +1142,23 @@ async def check_group_membership(user_id: int) -> bool:
     Возвращает True если состоит, False если нет
     """
     try:
+        logging.info(f"🔍 Начинаю проверку группы для user_id={user_id}, группа={PREMIUM_GROUP_ID}")
+        
         chat_member = await bot.get_chat_member(
             chat_id=PREMIUM_GROUP_ID,
             user_id=user_id
         )
         
         # Пользователь считается участником если его статус:
-        # - "member" (участник)
-        # - "administrator" (администратор)
-        # - "creator" (создатель)
-        # - "restricted" с is_member=True (ограниченный, но член группы)
-        
         status = chat_member.status.lower()
+        logging.info(f"🔍 Статус пользователя {user_id} в группе: {status}")
+        
         is_member = status in ["member", "administrator", "creator"]
         
         # Для статуса "restricted" проверяем явно
         if status == "restricted":
             is_member = getattr(chat_member, "is_member", False)
+            logging.info(f"🔍 Ограниченный пользователь {user_id}, is_member={is_member}")
         
         logging.info(f"🔍 Проверка группы: user={user_id}, status={status}, is_member={is_member}")
         return is_member
@@ -1170,7 +1178,8 @@ async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
     # Проверяем не чаще чем раз в 5 минут (для оптимизации)
     if (bot_user.last_group_check and 
         (current_time - bot_user.last_group_check).total_seconds() < 300):
-        return  # Не проверяем слишком часто
+        logging.info(f"⏰ Пропускаем проверку для {bot_user.user_id} (слишком рано)")
+        return
     
     try:
         # Проверяем членство в группе
@@ -1183,10 +1192,14 @@ async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
         if old_status != new_status:
             bot_user.user_status = new_status
             logging.info(f"🔄 Статус пользователя {bot_user.user_id} изменен: {old_status} -> {new_status}")
+        else:
+            logging.info(f"ℹ️ Статус пользователя {bot_user.user_id} не изменился: {old_status}")
         
         # Обновляем время последней проверки
         bot_user.last_group_check = current_time
         bot_user.updated_at = current_time
+        
+        logging.info(f"✅ Проверка премиум-статуса завершена для {bot_user.user_id}")
         
     except Exception as e:
         logging.error(f"❌ Ошибка обновления премиум-статуса для {bot_user.user_id}: {e}")
@@ -1437,40 +1450,6 @@ class EditFlow(StatesGroup):
 bot = Bot(BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
-
-# Middleware для регистрации пользователей при любом взаимодействии
-@dp.update.outer_middleware()
-async def user_registration_middleware(handler, event, data):
-    """
-    Middleware который регистрирует пользователя при любом взаимодействии с ботом
-    """
-    # Проверяем есть ли информация о пользователе в событии
-    user_id = None
-    username = None
-    first_name = None
-    
-    if hasattr(event, 'from_user') and event.from_user:
-        user_id = event.from_user.id
-        username = event.from_user.username
-        first_name = event.from_user.first_name
-    elif hasattr(event, 'message') and event.message and event.message.from_user:
-        user_id = event.message.from_user.id
-        username = event.message.from_user.username
-        first_name = event.message.from_user.first_name
-    elif hasattr(event, 'callback_query') and event.callback_query:
-        user_id = event.callback_query.from_user.id
-        username = event.callback_query.from_user.username
-        first_name = event.callback_query.from_user.first_name
-    
-    # Если нашли пользователя - регистрируем/обновляем
-    if user_id:
-        try:
-            await ensure_bot_user(user_id, username, first_name)
-        except Exception as e:
-            logging.warning(f"⚠️ Ошибка регистрации пользователя в middleware: {e}")
-    
-    # Продолжаем обработку
-    return await handler(event, data)
 
 
 @dp.chat_join_request()
@@ -2085,6 +2064,77 @@ async def show_my_giveaways_menu(m: Message | CallbackQuery):
             reply_markup=kb_my_events_menu(),
             parse_mode="HTML"
         )
+
+
+# === ДИАГНОСТИЧЕСКИЕ КОМАНДЫ ПРЕМИУМ ===
+
+@dp.message(Command("debug_botuser"))
+async def cmd_debug_botuser(m: Message):
+    """Диагностика регистрации в bot_users"""
+    user_id = m.from_user.id
+    
+    # 1. Проверяем есть ли пользователь в bot_users
+    async with session_scope() as s:
+        bot_user = await s.get(BotUser, user_id)
+        
+        if bot_user:
+            # Проверяем актуальное членство в группе
+            is_in_group = await check_group_membership(user_id)
+            
+            await m.answer(
+                f"✅ <b>Пользователь найден в bot_users:</b>\n\n"
+                f"🆔 User ID: <code>{user_id}</code>\n"
+                f"📋 Статус в БД: <b>{bot_user.user_status}</b>\n"
+                f"📋 Актуальный статус группы: {'✅ В группе' if is_in_group else '❌ Не в группе'}\n"
+                f"👤 Username: {bot_user.username or 'не указан'}\n"
+                f"📅 Создан: {bot_user.created_at}\n"
+                f"🔄 Обновлен: {bot_user.updated_at}\n"
+                f"⏰ Последняя проверка группы: {bot_user.last_group_check or 'никогда'}\n\n"
+                f"<i>Используйте /start для принудительной проверки статуса</i>",
+                parse_mode="HTML"
+            )
+        else:
+            await m.answer(
+                f"❌ <b>Пользователь НЕ найден в bot_users</b>\n\n"
+                f"🆔 User ID: <code>{user_id}</code>\n"
+                f"👤 Username: {m.from_user.username}\n"
+                f"👤 First name: {m.from_user.first_name}\n\n"
+                f"<i>Попробуйте команду /start для регистрации</i>",
+                parse_mode="HTML"
+            )
+
+@dp.message(Command("force_check"))
+async def cmd_force_check(m: Message):
+    """Принудительная проверка и обновление статуса"""
+    user_id = m.from_user.id
+    
+    try:
+        # 1. Регистрируем/обновляем пользователя
+        bot_user = await ensure_bot_user(user_id, m.from_user.username, m.from_user.first_name)
+        
+        # 2. Проверяем актуальное членство в группе
+        is_in_group = await check_group_membership(user_id)
+        
+        await m.answer(
+            f"🔄 <b>Принудительная проверка завершена:</b>\n\n"
+            f"🆔 User ID: <code>{user_id}</code>\n"
+            f"📋 Новый статус: <b>{bot_user.user_status}</b>\n"
+            f"👥 В премиум-группе: {'✅ Да' if is_in_group else '❌ Нет'}\n"
+            f"⏰ Время проверки: {bot_user.last_group_check}\n\n"
+            f"<i>Статус автоматически обновляется при каждом взаимодействии</i>",
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        await m.answer(
+            f"❌ <b>Ошибка при проверке:</b>\n\n"
+            f"🆔 User ID: <code>{user_id}</code>\n"
+            f"💥 Ошибка: {e}\n\n"
+            f"<i>Проверьте логи бота</i>",
+            parse_mode="HTML"
+        )
+        logging.error(f"❌ Ошибка в force_check для {user_id}: {e}")
+
 
 # ===== Команда /menu чтобы вернуть/показать клавиатуру внизу =====
 @dp.message(Command("menu"))
@@ -4563,7 +4613,11 @@ async def user_join(cq:CallbackQuery):
             await cq.answer("Розыгрыш не активен.", show_alert=True); return
     
     #Регистрируем пользователя при участии
-    await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
+    try:
+        await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
+        logging.info(f"✅ Пользователь {cq.from_user.id} зарегистрирован при участии в розыгрыше")
+    except Exception as e:
+        logging.error(f"❌ Ошибка регистрации при участии: {e}")
 
     ok, details = await check_membership_on_all(bot, cq.from_user.id, gid)
     if not ok:
