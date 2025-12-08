@@ -3827,7 +3827,12 @@ async def event_status(cq: CallbackQuery):
 # === Полноценный экспорт статистики в CSV файл ===
 
 @dp.callback_query(F.data.startswith("stats:csv:"))
+@premium_only
 async def cb_csv_export(cq: CallbackQuery):
+    """
+    Выгрузка статистики в CSV файл - ТОЛЬКО для premium пользователей
+    Для standard пользователей показывается pop-up через декоратор
+    """
     try:
         # 1. Извлекаем ID розыгрыша из callback_data
         giveaway_id = int(cq.data.split(":")[2])
@@ -5771,7 +5776,17 @@ async def show_finished_stats(message: Message, giveaway_id: int):
 
     # Создаем клавиатуру с кнопкой "Назад" которая удаляет сообщение
     kb = InlineKeyboardBuilder()
-    kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    
+    # Получаем статус пользователя для динамической кнопки
+    user_status = await get_user_status(message.from_user.id)
+    
+    if user_status == 'premium':
+        # Premium пользователи видят кнопку с алмазом
+        kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    else:
+        # Standard пользователи видят заблокированную кнопку
+        kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{giveaway_id}")
+    
     kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
@@ -5837,7 +5852,17 @@ async def show_active_stats(message: Message, giveaway_id: int):
 
     # Создаем клавиатуру с кнопкой "Назад" которая удаляет сообщение
     kb = InlineKeyboardBuilder()
-    kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    
+    # Получаем статус пользователя для динамической кнопки
+    user_status = await get_user_status(message.from_user.id)
+    
+    if user_status == 'premium':
+        # Premium пользователи видят кнопку с алмазом
+        kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+    else:
+        # Standard пользователи видят заблокированную кнопку
+        kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{giveaway_id}")
+    
     kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
 
@@ -5882,6 +5907,51 @@ async def back_to_participant_menu(cq: CallbackQuery):
 async def back_to_creator_menu(cq: CallbackQuery):
     """Возврат из списков создателя в меню 'Я - создатель'"""
     await show_creator_menu(cq)
+
+
+# ============================================================================
+# PREMIUM ACCESS CONTROL SYSTEM
+# ============================================================================
+
+def premium_only(func):
+    """
+    ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
+    Использование: @premium_only перед async def функции
+    
+    Для standard пользователей показывает pop-up с предложением подписки
+    Для premium пользователей выполняет оригинальную функцию
+    """
+    async def wrapper(cq: CallbackQuery, *args, **kwargs):
+        user_id = cq.from_user.id
+        
+        # Получаем статус пользователя
+        status = await get_user_status(user_id)
+        
+        if status == 'standard':
+            # Показываем pop-up для standard пользователей
+            await cq.answer(
+                "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+                show_alert=True
+            )
+            return
+        
+        # Если premium - выполняем оригинальную функцию
+        return await func(cq, *args, **kwargs)
+    
+    return wrapper
+
+
+@dp.callback_query(F.data.startswith("premium_required:"))
+async def handle_premium_required(cq: CallbackQuery):
+    """
+    Обработчик для заблокированных кнопок standard пользователей
+    Показывает pop-up с предложением оформить подписку
+    """
+    await cq.answer(
+        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+        show_alert=True
+    )
+
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
