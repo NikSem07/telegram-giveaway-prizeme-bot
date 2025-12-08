@@ -158,32 +158,56 @@ if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
 
 def premium_only(func):
     """
-    ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
-    Использование: @premium_only перед async def функции
-    Для standard пользователей показывает pop-up с предложением подписки
-    Для premium пользователей выполняет оригинальную функцию
+    УНИВЕРСАЛЬНЫЙ ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
+    Гарантированно фильтрует ВСЕ aiogram-specific параметры
     """
-    async def wrapper(cq: CallbackQuery, *args, **kwargs):
+    async def wrapper(*args, **kwargs):
+        # Находим CallbackQuery среди аргументов
+        cq = None
+        
+        # Ищем CallbackQuery в args
+        for arg in args:
+            if isinstance(arg, CallbackQuery):
+                cq = arg
+                break
+        
+        # Если не нашли в args, ищем в kwargs
+        if not cq:
+            for key in ['callback_query', 'cq', 'call']:
+                if key in kwargs and isinstance(kwargs[key], CallbackQuery):
+                    cq = kwargs[key]
+                    break
+        
+        if not cq:
+            # Если вообще не нашли CallbackQuery - пропускаем проверку
+            # (это может быть другой тип обработчика)
+            return await func(*args, **kwargs)
+        
+        # Проверяем статус пользователя
         user_id = cq.from_user.id
-        
-        # Удаляем лишние аргументы из kwargs, которые могут быть автоматически добавлены aiogram
-        kwargs.pop('dispatcher', None)
-        kwargs.pop('event_update', None)
-        kwargs.pop('bot', None)
-        
-        # Получаем статус пользователя
         status = await get_user_status(user_id)
         
         if status == 'standard':
-            # Показываем pop-up для standard пользователей
             await cq.answer(
                 "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
                 show_alert=True
             )
             return
         
-        # Если premium - выполняем оригинальную функцию
-        return await func(cq, *args, **kwargs)
+        # Создаем ОЧИЩЕННЫЙ словарь kwargs
+        # Удаляем ВСЕ потенциально проблемные параметры
+        safe_kwargs = {}
+        for key, value in kwargs.items():
+            # Пропускаем все aiogram-specific параметры
+            if key not in [
+                'dispatcher', 'event_update', 'bot', 'bots', 
+                'state', 'event', 'raw_state', 'data', 'update',
+                'router', 'fsm_context', 'chat_member'
+            ]:
+                safe_kwargs[key] = value
+        
+        # Передаем ТОЛЬКО очищенные kwargs
+        return await func(*args, **safe_kwargs)
     
     return wrapper
 
