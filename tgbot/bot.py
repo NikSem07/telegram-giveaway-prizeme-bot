@@ -3846,9 +3846,11 @@ async def event_status(cq: CallbackQuery):
         
         # Определяем контекст и показываем статистику как новое сообщение
         if gw.status == GiveawayStatus.ACTIVE:
-            await show_active_stats(cq.message, gid)  # Передаем message вместо cq
+            # Передаем user_id явно
+            await show_active_stats(cq.message, gid, cq.from_user.id)
         elif gw.status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-            await show_finished_stats(cq.message, gid)  # Передаем message вместо cq
+            # Передаем user_id явно
+            await show_finished_stats(cq.message, gid, cq.from_user.id)
         else:
             await cq.answer("Статистика недоступна для этого статуса.", show_alert=True)
     
@@ -5754,11 +5756,12 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
 
 # --- ФУНКЦИИ СТАТИСТИКИ ДЛЯ СОЗДАТЕЛЯ ---
 
-async def show_finished_stats(message: Message, giveaway_id: int):
+async def show_finished_stats(message: Message, giveaway_id: int, user_id: int | None = None):
     """Показывает статистику завершенного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
+    # Явно передаем user_id или используем из message
+    if user_id is None:
+        user_id = message.from_user.id
     
-    #ДИАГНОСТИКА
-    user_id = message.from_user.id
     logging.info(f"🔍 [DIAGNOSTICS] show_finished_stats: user_id={user_id}, giveaway_id={giveaway_id}")
     
     async with session_scope() as s:
@@ -5769,7 +5772,7 @@ async def show_finished_stats(message: Message, giveaway_id: int):
             return
 
         # Проверяем статус пользователя НАПРЯМУЮ из БД
-        bot_user = await s.get(BotUser, user_id)
+        bot_user = await s.get(BotUser, user_id)  # 🔥 Используем переданный user_id
         if bot_user:
             logging.info(f"🔍 [DIAGNOSTICS] Статус из БД напрямую: {bot_user.user_status}")
         else:
@@ -5826,9 +5829,9 @@ async def show_finished_stats(message: Message, giveaway_id: int):
     kb = InlineKeyboardBuilder()
     
     # Получаем статус пользователя для динамической кнопки
-    user_status = await get_user_status(message.from_user.id)
+    user_status = await get_user_status(user_id)
     
-    # ДИАГНОСТИКА
+    # ДОБАВЛЯЕМ ДИАГНОСТИКУ
     logging.info(f"🔍 [DIAGNOSTICS] get_user_status вернул: {user_status}")
     logging.info(f"🔍 [DIAGNOSTICS] giveaway_id для кнопки: {giveaway_id}")
     
@@ -5849,10 +5852,12 @@ async def show_finished_stats(message: Message, giveaway_id: int):
     # Отправляем как новое сообщение
     await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
-async def show_active_stats(message: Message, giveaway_id: int):
+async def show_active_stats(message: Message, giveaway_id: int, user_id: int | None = None):
     """Показывает статистику активного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
-    # ДИАГНОСТИКА
-    user_id = message.from_user.id
+    # Явно передаем user_id или используем из message
+    if user_id is None:
+        user_id = message.from_user.id
+    
     logging.info(f"🔍 [DIAGNOSTICS] show_active_stats: user_id={user_id}, giveaway_id={giveaway_id}")
     
     async with session_scope() as s:
@@ -5921,7 +5926,7 @@ async def show_active_stats(message: Message, giveaway_id: int):
     kb = InlineKeyboardBuilder()
     
     # Получаем статус пользователя для динамической кнопки
-    user_status = await get_user_status(message.from_user.id)
+    user_status = await get_user_status(user_id)
     
     # ДИАГНОСТИКА
     logging.info(f"🔍 [DIAGNOSTICS] get_user_status вернул: {user_status}")
