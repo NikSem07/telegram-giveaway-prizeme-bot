@@ -3864,6 +3864,11 @@ async def cb_csv_export(cq: CallbackQuery):
     Выгрузка статистики в CSV файл - ТОЛЬКО для premium пользователей
     Для standard пользователей показывается pop-up через декоратор
     """
+    # ДИАГНОСТИКА
+    user_id = cq.from_user.id
+    giveaway_id = int(cq.data.split(":")[2])
+    logging.info(f"🔍 [DIAGNOSTICS] cb_csv_export: user_id={user_id}, giveaway_id={giveaway_id}, data={cq.data}")
+
     try:
         # 1. Извлекаем ID розыгрыша из callback_data
         giveaway_id = int(cq.data.split(":")[2])
@@ -5751,12 +5756,24 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
 
 async def show_finished_stats(message: Message, giveaway_id: int):
     """Показывает статистику завершенного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
+    
+    #ДИАГНОСТИКА
+    user_id = message.from_user.id
+    logging.info(f"🔍 [DIAGNOSTICS] show_finished_stats: user_id={user_id}, giveaway_id={giveaway_id}")
+    
     async with session_scope() as s:
         # Получаем данные розыгрыша
         gw = await s.get(Giveaway, giveaway_id)
         if not gw:
             await message.answer("Розыгрыш не найден.")
             return
+
+        # Проверяем статус пользователя НАПРЯМУЮ из БД
+        bot_user = await s.get(BotUser, user_id)
+        if bot_user:
+            logging.info(f"🔍 [DIAGNOSTICS] Статус из БД напрямую: {bot_user.user_status}")
+        else:
+            logging.info(f"🔍 [DIAGNOSTICS] Пользователь не найден в bot_users")
 
         # Количество уникальных участников, прошедших предварительную проверку
         participants_res = await s.execute(
@@ -5811,12 +5828,20 @@ async def show_finished_stats(message: Message, giveaway_id: int):
     # Получаем статус пользователя для динамической кнопки
     user_status = await get_user_status(message.from_user.id)
     
+    # ДИАГНОСТИКА
+    logging.info(f"🔍 [DIAGNOSTICS] get_user_status вернул: {user_status}")
+    logging.info(f"🔍 [DIAGNOSTICS] giveaway_id для кнопки: {giveaway_id}")
+    
     if user_status == 'premium':
         # Premium пользователи видят кнопку с алмазом
-        kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+        callback_data = f"stats:csv:{giveaway_id}"
+        kb.button(text="💎📥 Выгрузить CSV", callback_data=callback_data)
+        logging.info(f"🔍 [DIAGNOSTICS] Создана PREMIUM кнопка: {callback_data}")
     else:
         # Standard пользователи видят заблокированную кнопку
-        kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{giveaway_id}")
+        callback_data = f"premium_required:{giveaway_id}"
+        kb.button(text="🔒📥 Выгрузить CSV", callback_data=callback_data)
+        logging.info(f"🔍 [DIAGNOSTICS] Создана STANDARD кнопка: {callback_data}")
     
     kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
@@ -5826,12 +5851,23 @@ async def show_finished_stats(message: Message, giveaway_id: int):
 
 async def show_active_stats(message: Message, giveaway_id: int):
     """Показывает статистику активного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
+    # ДИАГНОСТИКА
+    user_id = message.from_user.id
+    logging.info(f"🔍 [DIAGNOSTICS] show_active_stats: user_id={user_id}, giveaway_id={giveaway_id}")
+    
     async with session_scope() as s:
         # Получаем данные розыгрыша
         gw = await s.get(Giveaway, giveaway_id)
         if not gw:
             await message.answer("Розыгрыш не найден.")
             return
+
+        # Проверяем статус пользователя НАПРЯМУЮ из БД
+        bot_user = await s.get(BotUser, user_id)
+        if bot_user:
+            logging.info(f"🔍 [DIAGNOSTICS] Статус из БД напрямую: {bot_user.user_status}")
+        else:
+            logging.info(f"🔍 [DIAGNOSTICS] Пользователь не найден в bot_users")
 
         # Количество уникальных участников, прошедших предварительную проверку
         participants_res = await s.execute(
@@ -5887,12 +5923,20 @@ async def show_active_stats(message: Message, giveaway_id: int):
     # Получаем статус пользователя для динамической кнопки
     user_status = await get_user_status(message.from_user.id)
     
+    # ДИАГНОСТИКА
+    logging.info(f"🔍 [DIAGNOSTICS] get_user_status вернул: {user_status}")
+    logging.info(f"🔍 [DIAGNOSTICS] giveaway_id для кнопки: {giveaway_id}")
+    
     if user_status == 'premium':
         # Premium пользователи видят кнопку с алмазом
-        kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{giveaway_id}")
+        callback_data = f"stats:csv:{giveaway_id}"
+        kb.button(text="💎📥 Выгрузить CSV", callback_data=callback_data)
+        logging.info(f"🔍 [DIAGNOSTICS] Создана PREMIUM кнопка: {callback_data}")
     else:
         # Standard пользователи видят заблокированную кнопку
-        kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{giveaway_id}")
+        callback_data = f"premium_required:{giveaway_id}"
+        kb.button(text="🔒📥 Выгрузить CSV", callback_data=callback_data)
+        logging.info(f"🔍 [DIAGNOSTICS] Создана STANDARD кнопка: {callback_data}")
     
     kb.button(text="⬅️ Назад", callback_data="close_message")
     kb.adjust(1)
@@ -5942,9 +5986,21 @@ async def back_to_creator_menu(cq: CallbackQuery):
 #--- Обработчик для заблокированных кнопок standard пользователей ---
 @dp.callback_query(F.data.startswith("premium_required:"))
 async def handle_premium_required(cq: CallbackQuery):
-    """
-    Показывает pop-up с предложением оформить подписку
-    """
+    """Показывает pop-up с предложением подписки"""
+    
+    # ДИАГНОСТИКА
+    user_id = cq.from_user.id
+    giveaway_id = int(cq.data.split(":")[1]) if len(cq.data.split(":")) > 1 else "unknown"
+    logging.info(f"🔍 [DIAGNOSTICS] handle_premium_required: user_id={user_id}, giveaway_id={giveaway_id}, data={cq.data}")
+    
+    # ПРОВЕРЯЕМ СТАТУС ПОЛЬЗОВАТЕЛЯ В ЭТОТ МОМЕНТ
+    async with session_scope() as s:
+        bot_user = await s.get(BotUser, user_id)
+        if bot_user:
+            logging.info(f"🔍 [DIAGNOSTICS] Реальный статус в handle_premium_required: {bot_user.user_status}")
+        else:
+            logging.info(f"🔍 [DIAGNOSTICS] Пользователь не найден в bot_users")
+    
     await cq.answer(
         "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
         show_alert=True
