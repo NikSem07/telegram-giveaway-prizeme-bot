@@ -173,19 +173,6 @@ def premium_only(func):
     
     return wrapper
 
-
-@dp.callback_query(F.data.startswith("premium_required:"))
-async def handle_premium_required(cq: CallbackQuery):
-    """
-    Обработчик для заблокированных кнопок standard пользователей
-    Показывает pop-up с предложением оформить подписку
-    """
-    await cq.answer(
-        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
-        show_alert=True
-    )
-
-
 # ---- Другое ----
 def kb_add_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
@@ -195,6 +182,7 @@ def kb_add_cancel() -> InlineKeyboardMarkup:
 
 if not all([S3_ENDPOINT, S3_BUCKET, S3_KEY, S3_SECRET]):
     logging.warning("S3 env not fully set — uploads will fail.")
+
 
 # --- Функция безопасного HTML ---
 def safe_html_text(html_text: str, max_length: int = 2500) -> str:
@@ -5951,6 +5939,17 @@ async def back_to_participant_menu(cq: CallbackQuery):
 async def back_to_creator_menu(cq: CallbackQuery):
     """Возврат из списков создателя в меню 'Я - создатель'"""
     await show_creator_menu(cq)
+
+#--- Обработчик для заблокированных кнопок standard пользователей ---
+@dp.callback_query(F.data.startswith("premium_required:"))
+async def handle_premium_required(cq: CallbackQuery):
+    """
+    Показывает pop-up с предложением оформить подписку
+    """
+    await cq.answer(
+        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+        show_alert=True
+    )
 
 
 # ---------------- ENTRYPOINT ----------------
