@@ -160,12 +160,16 @@ def premium_only(func):
     """
     ДЕКОРАТОР ДЛЯ PREMIUM-ДОСТУПА
     Использование: @premium_only перед async def функции
-    
     Для standard пользователей показывает pop-up с предложением подписки
     Для premium пользователей выполняет оригинальную функцию
     """
     async def wrapper(cq: CallbackQuery, *args, **kwargs):
         user_id = cq.from_user.id
+        
+        # Удаляем лишние аргументы из kwargs, которые могут быть автоматически добавлены aiogram
+        kwargs.pop('dispatcher', None)
+        kwargs.pop('event_update', None)
+        kwargs.pop('bot', None)
         
         # Получаем статус пользователя
         status = await get_user_status(user_id)
