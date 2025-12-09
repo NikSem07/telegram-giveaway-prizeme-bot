@@ -3175,9 +3175,9 @@ async def edit_apply(cq: CallbackQuery, state: FSMContext):
     
     await cq.answer("✅ Изменения применены")
 
+# --- Исправить - вернуться к вводу ---
 @dp.callback_query(EditFlow.CONFIRM_EDIT, F.data == "edit:fix")
 async def edit_fix(cq: CallbackQuery, state: FSMContext):
-    """Исправить - вернуться к вводу"""
     data = await state.get_data()
     setting_type = data.get("setting_type")
     
@@ -3193,7 +3193,17 @@ async def edit_fix(cq: CallbackQuery, state: FSMContext):
         await cq.message.answer("Введите новое время окончания в формате ЧЧ:ММ ДД.ММ.ГГГГ (например, 20:00 15.12.2024):")
     elif setting_type == "winners":
         await state.set_state(EditFlow.EDIT_WINNERS)
-        await cq.message.answer("Введите новое количество победителей (от 1 до 50):")
+        
+        # Получаем лимит для пользователя
+        user_id = cq.from_user.id
+        limit, status = await get_winners_limit(user_id)
+        
+        if status == 'premium':
+            prompt = f"Введите новое количество победителей (от 1 до {limit}):"
+        else:
+            prompt = f"Введите новое количество победителей (от 1 до {limit}):"
+        
+        await cq.message.answer(prompt)
     elif setting_type == "media":
         await state.set_state(EditFlow.EDIT_MEDIA)
         await cq.message.answer(MEDIA_QUESTION, reply_markup=kb_yes_no(), parse_mode="HTML")
