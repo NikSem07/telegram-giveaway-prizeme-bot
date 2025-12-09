@@ -2492,7 +2492,7 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
     if status == 'premium':
         prompt = f"Укажите количество победителей в этом розыгрыше от 1 до {limit} (введите только число, не указывая других символов):"
     else:
-        prompt = f"Укажите количество победителей в этом розыгрыше от 1 до {limit} (введите только число, не указывая других символов):"
+        prompt = f"Укажите количество победителей в этом розыгрыше от 1 до {limit} (до 100 только для ПРЕМИУМ, введите только число, не указывая других символов):"
     
     await state.set_state(CreateFlow.WINNERS)
     await m.answer(prompt)
