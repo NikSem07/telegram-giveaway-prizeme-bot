@@ -142,6 +142,10 @@ ADD_CHAT_HELP_HTML = (
     "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту.</b>"
 )
 
+# --- Константы для количества победителей ---
+WINNERS_LIMIT_PREMIUM = 100
+WINNERS_LIMIT_STANDARD = 30
+
 # ---- Другое ----
 def kb_add_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
@@ -1244,6 +1248,17 @@ async def get_user_status(user_id: int) -> str:
         
         return bot_user.user_status
 
+
+#--- Возвращает (лимит_победителей, статус_пользователя) для указанного user_id ---
+
+async def get_winners_limit(user_id: int) -> tuple[int, str]:
+    status = await get_user_status(user_id)
+    if status == 'premium':
+        return WINNERS_LIMIT_PREMIUM, 'premium'
+    else:
+        return WINNERS_LIMIT_STANDARD, 'standard'
+
+
 async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
     """
     Надёжнее проверяем админство через get_chat_administrators().
@@ -2277,6 +2292,10 @@ async def hide_menu(m: Message):
 async def create_giveaway_start(message: Message, state: FSMContext):
     await state.clear()
     await state.update_data(owner=message.from_user.id)
+    
+    # Получаем лимит для пользователя
+    limit, status = await get_winners_limit(message.from_user.id)
+    
     await message.answer(
         "Введите название розыгрыша:\n\n"
         "Максимум — <b>50 символов</b>.\n\n"
@@ -2287,7 +2306,7 @@ async def create_giveaway_start(message: Message, state: FSMContext):
         "<i>Пример названия:</i> <b>MacBook Pro от канала PrizeMe</b>",
         parse_mode="HTML"
     )
-    await state.set_state(CreateFlow.TITLE)   # <-- ставим состояние титула
+    await state.set_state(CreateFlow.TITLE)
 
 # ===== Reply-кнопки: перенаправляем на готовые сценарии =====
 
@@ -2466,32 +2485,64 @@ async def handle_giveaway_name(m: Message, state: FSMContext):
 
     await state.update_data(title=name)
 
-    # ➜ Новый следующий шаг: спросить количество победителей
+    # Получаем лимит для пользователя
+    limit, status = await get_winners_limit(m.from_user.id)
+    
+    # Динамический текст в зависимости от статуса
+    if status == 'premium':
+        prompt = f"Укажите количество победителей в этом розыгрыше от 1 до {limit} (введите только число, не указывая других символов):"
+    else:
+        prompt = f"Укажите количество победителей в этом розыгрыше от 1 до {limit} (введите только число, не указывая других символов):"
+    
     await state.set_state(CreateFlow.WINNERS)
-    await m.answer(
-        "Укажите количество победителей в этом розыгрыше от 1 до 50 "
-        "(введите только число, не указывая других символов):"
-    )
+    await m.answer(prompt)
+
+
+# --- Обработчик ввода количества победителей с учетом статуса пользователя ---
 
 @dp.message(CreateFlow.WINNERS)
 async def handle_winners_count(m: Message, state: FSMContext):
     raw = (m.text or "").strip()
+    user_id = m.from_user.id
+    
+    # Получаем лимит для пользователя
+    limit, status = await get_winners_limit(user_id)
+    
+    # Проверяем что введено число
     if not raw.isdigit():
-        await m.answer("Нужно целое число от 1 до 50. Введите ещё раз:")
+        await m.answer(f"Нужно целое число от 1 до {limit}. Введите ещё раз:")
         return
 
     winners = int(raw)
-    if not (1 <= winners <= 50):
-        await m.answer("Число должно быть от 1 до 50. Введите ещё раз:")
-        return
+    
+    # Проверяем лимиты в зависимости от статуса
+    if status == 'standard':
+        if not (1 <= winners <= WINNERS_LIMIT_STANDARD):
+            if winners > WINNERS_LIMIT_STANDARD:
+                # Premium-ограничение для standard пользователей
+                await m.answer(
+                    "<b>💎 Больше 30 победителей могут устанавливать пользователи с подпиской, "
+                    "оформить подписку можно в разделе \"Премиум\"</b>\n\n"
+                    f"Введите новое значение количества победителей от 1 до {WINNERS_LIMIT_STANDARD}:",
+                    parse_mode="HTML"
+                )
+            else:
+                await m.answer(f"Число должно быть от 1 до {WINNERS_LIMIT_STANDARD}. Введите ещё раз:")
+            return
+    else:  # premium
+        if not (1 <= winners <= WINNERS_LIMIT_PREMIUM):
+            await m.answer(f"Число должно быть от 1 до {WINNERS_LIMIT_PREMIUM}. Введите ещё раз:")
+            return
 
+    # Сохраняем количество победителей
     await state.update_data(winners_count=winners)
 
-    # ➜ дальше идём к описанию (как и раньше)
+    # Переходим к описанию
     await state.set_state(CreateFlow.DESC)
     await m.answer(DESCRIPTION_PROMPT, parse_mode="HTML")
 
-# --- пользователь прислал описание ---
+
+# --- Пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
     # УПРОЩЕННАЯ ВЕРСИЯ: используем только html_text как раньше
@@ -2879,16 +2930,37 @@ async def handle_edit_endat(m: Message, state: FSMContext):
 async def handle_edit_winners(m: Message, state: FSMContext):
     data = await state.get_data()
     gid = data.get("editing_giveaway_id")
+    user_id = m.from_user.id
     
     raw = (m.text or "").strip()
+    
+    # Получаем лимит для пользователя
+    limit, status = await get_winners_limit(user_id)
+    
     if not raw.isdigit():
-        await m.answer("Нужно целое число от 1 до 50. Введите ещё раз:")
+        await m.answer(f"Нужно целое число от 1 до {limit}. Введите ещё раз:")
         return
 
     winners = int(raw)
-    if not (1 <= winners <= 50):
-        await m.answer("Число должно быть от 1 до 50. Введите ещё раз:")
-        return
+    
+    # Проверяем лимиты в зависимости от статуса
+    if status == 'standard':
+        if not (1 <= winners <= WINNERS_LIMIT_STANDARD):
+            if winners > WINNERS_LIMIT_STANDARD:
+                # Premium-ограничение для standard пользователей
+                await m.answer(
+                    "<b>💎 Больше 30 победителей могут устанавливать пользователи с подпиской, "
+                    "оформить подписку можно в разделе \"Премиум\"</b>\n\n"
+                    f"Введите новое значение количества победителей от 1 до {WINNERS_LIMIT_STANDARD}:",
+                    parse_mode="HTML"
+                )
+            else:
+                await m.answer(f"Число должно быть от 1 до {WINNERS_LIMIT_STANDARD}. Введите ещё раз:")
+            return
+    else:  # premium
+        if not (1 <= winners <= WINNERS_LIMIT_PREMIUM):
+            await m.answer(f"Число должно быть от 1 до {WINNERS_LIMIT_PREMIUM}. Введите ещё раз:")
+            return
 
     await state.update_data(new_value=winners, display_value=str(winners))
     await state.set_state(EditFlow.CONFIRM_EDIT)
@@ -2904,6 +2976,7 @@ async def handle_edit_winners(m: Message, state: FSMContext):
         reply_markup=kb.as_markup(),
         parse_mode="HTML"
     )
+
 
 # Обработчик для решения о медиа (Да/Нет)
 @dp.callback_query(EditFlow.EDIT_MEDIA, F.data == "media:yes")
@@ -4753,10 +4826,11 @@ async def cb_settings_media(cq: CallbackQuery, state: FSMContext):
     )
     await cq.answer()
 
+# --- Обработчик кнопки "Количество победителей" в настройках ---
 @dp.callback_query(F.data.startswith("settings:winners:"))
 async def cb_settings_winners(cq: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Количество победителей' в настройках"""
     gid = int(cq.data.split(":")[2])
+    user_id = cq.from_user.id
     
     await state.update_data(
         editing_giveaway_id=gid,
@@ -4764,12 +4838,19 @@ async def cb_settings_winners(cq: CallbackQuery, state: FSMContext):
         return_context="settings"
     )
     
+    # Получаем лимит для пользователя
+    limit, status = await get_winners_limit(user_id)
+    
     await state.set_state(EditFlow.EDIT_WINNERS)
-    await cq.message.answer(
-        "Укажите новое количество победителей в этом розыгрыше от 1 до 50 "
-        "(введите только число, не указывая других символов):"
-    )
+    
+    if status == 'premium':
+        prompt = f"Введите новое количество победителей (от 1 до {limit}):"
+    else:
+        prompt = f"Введите новое количество победителей (от 1 до {limit}):"
+    
+    await cq.message.answer(prompt)
     await cq.answer()
+
 
 #--- Кнопка "назад" ---
 @dp.callback_query(F.data.startswith("settings:back:"))
