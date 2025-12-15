@@ -36,7 +36,7 @@ body.home-page .wrap {
     align-items: center;
     height: 32px;       /* общая высота строки */
     padding: 0;
-    margin-bottom: 18px; /* отступ до синего блока */
+    margin-bottom: 24px; /* отступ до синего блока */
 }
 
 /* Капсула с аватаркой */
