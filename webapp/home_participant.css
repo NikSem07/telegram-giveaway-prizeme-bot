@@ -209,11 +209,13 @@ body.theme-light .profile-header {
     left: 0;
     width: 100%;
     height: 74px;
-    background: #2e2e2ee6; /* полупрозрачный темный фон как в Figma */
+    background: rgba(46, 46, 46, 0.90); /* полупрозрачный темный фон как в Figma */
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     display: flex;
     justify-content: space-around;
+    padding-top: 8px;
+    padding-bottom: 12px;
     align-items: center;
     border-top: 0.33px solid rgba(60, 60, 67, 0.36);
     z-index: 9999;
@@ -273,10 +275,12 @@ body.theme-light .profile-header {
 .nav-item.active .nav-icon {
     opacity: 1;
     filter: none;
+    /* делаем иконку синей */
+    filter: brightness(0) saturate(100%) invert(35%) sepia(98%) saturate(2500%) hue-rotate(195deg);
 }
 
 .nav-item.active .nav-label {
-    color: #FAFAFA; /* белый текст */
+    color: #007AFF; /* синий текст */
 }
 
 
