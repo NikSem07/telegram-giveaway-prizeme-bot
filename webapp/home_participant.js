@@ -50,7 +50,7 @@ function renderHomePage() {
       <div id="top-giveaways-list" style="margin-top:10px;"></div>
     </div>
 
-    <div class="section-title" style="margin-top:4px;">Все текущие розыгрыши ></div>
+    <div class="section-title" style="margin-top:18px;">Все текущие розыгрыши ></div>
     <div id="all-giveaways-list" style="margin-top:8px;"></div>
   `;
 
