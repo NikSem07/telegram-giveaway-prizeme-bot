@@ -82,23 +82,24 @@ body.theme-light .profile-header {
 }
 
 /* Контейнер переключалки внутри top-header */
+
+.mode-switcher-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    justify-content: center;
+}
+
 .mode-switcher {
     display: flex;
     align-items: center;
-    background: #2E2E2E;
+    background: #2E2E2E;      /* общая подложка */
     border-radius: 999px;
-    padding: 2px 4px;   /* ниже вертикальные отступы */
+    padding: 2px 4px;
     border: none;
-    height: 32px;       /* совпадает с высотой строки */
-}
-
-/* Это и есть ОБЩАЯ ПОДЛОЖКА #2E2E2E под обе кнопки */
-.mode-switcher {
-    display: flex;
-    background: #2E2E2E;      /* ← жёстко, как в макете */
-    border-radius: 999px;     /* максимальное скругление */
-    padding: 4px;
-    border: none;
+    height: 32px;             /* одна высота с .top-header */
 }
 
 /* Кнопки внутри капсулы */
