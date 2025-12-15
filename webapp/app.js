@@ -27,9 +27,27 @@ function initializeTelegramWebApp() {
   tg.expand();
   tg.enableClosingConfirmation();
 
-  // ❗ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: используем цвета темы Telegram
+  // Используем цвета темы Telegram
   const theme = tg.themeParams || {};
   const bgColor = theme.bg_color || '#0f1115';
+
+  // прокидываем цвет фона в CSS-переменную
+  try {
+    document.documentElement.style.setProperty('--app-bg-color', bgColor);
+
+    // определяем "темная / светлая" тема по яркости
+    const hex = (theme.bg_color || '#000000').replace('#', '');
+    const r = parseInt(hex.slice(0, 2) || '00', 16);
+    const g = parseInt(hex.slice(2, 4) || '00', 16);
+    const b = parseInt(hex.slice(4, 6) || '00', 16);
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const isDark = luminance < 140; // условный порог
+
+    document.body.classList.toggle('theme-dark', isDark);
+    document.body.classList.toggle('theme-light', !isDark);
+  } catch (e) {
+    console.log('Cannot compute theme darkness:', e);
+  }
 
   // Спец. значение "bg_color" делает шапку такого же цвета, как фон Telegram
   tg.setHeaderColor('bg_color');

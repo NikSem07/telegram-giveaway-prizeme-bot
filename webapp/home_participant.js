@@ -43,13 +43,13 @@ function renderHomePage() {
   main.innerHTML = `
     <div class="profile-header" id="profile-header">
       <div class="profile-avatar">
-        <img id="profile-avatar-img" src="" alt="avatar">
+        <img id="profile-avatar-img"
+             src="/miniapp-static/assets/icons/profile-icon.svg"
+             alt="avatar">
       </div>
-      <div class="profile-info">
-        <div id="profile-name">Участник PrizeMe</div>
-        <div style="font-size:12px; opacity:0.7;" id="profile-username"></div>
-      </div>
-      <img class="profile-arrow" src="/miniapp-static/assets/icons/arrow-icon.svg" alt=">">
+      <img class="profile-arrow"
+           src="/miniapp-static/assets/icons/arrow-icon.svg"
+           alt=">">
     </div>
 
     <div class="section-blue">
@@ -145,34 +145,27 @@ function switchPage(page) {
 }
 
 // ====== Профиль из Telegram WebApp ======
-
 function fillProfileFromTelegram() {
   try {
     const tg = window.Telegram && Telegram.WebApp;
     const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (!user) return;
 
-    const nameEl = document.getElementById('profile-name');
-    const usernameEl = document.getElementById('profile-username');
     const avatarEl = document.getElementById('profile-avatar-img');
+    if (!avatarEl) return;
 
-    if (nameEl) {
-      const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
-      nameEl.textContent = name || 'Участник PrizeMe';
-    }
-
-    if (usernameEl) {
-      usernameEl.textContent = user.username ? '@' + user.username : '';
-    }
-
-    // Аватар Телеги в Mini App получить нельзя, ставим заглушку
-    if (avatarEl) {
+    if (user.photo_url) {
+      // Telegram иногда отдаёт прямой URL аватара в user.photo_url
+      avatarEl.src = user.photo_url;
+    } else {
+      // fallback — стандартная иконка профиля
       avatarEl.src = '/miniapp-static/assets/icons/profile-icon.svg';
     }
   } catch (e) {
     console.log('[HOME-PARTICIPANT] fillProfileFromTelegram error:', e);
   }
 }
+
 
 // ====== Загрузка розыгрышей с Node.js ======
 
