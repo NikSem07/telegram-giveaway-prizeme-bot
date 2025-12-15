@@ -24,19 +24,25 @@ function initializeTelegramWebApp() {
   console.log('🎯 Start param:', tg.initDataUnsafe?.start_param);
   console.log('📋 InitData:', tg.initData ? 'AVAILABLE' : 'MISSING');
 
-  // Расширяем на весь экран
   tg.expand();
-  
-  // Отключаем подтверждение закрытия
   tg.enableClosingConfirmation();
-  
-  // Устанавливаем цвета
-  tg.setHeaderColor('#2481cc');
-  tg.setBackgroundColor('#f4f4f5');
-  
-  // Говорим Telegram что приложение готово
+
+  // ❗ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: используем цвета темы Telegram
+  const theme = tg.themeParams || {};
+  const bgColor = theme.bg_color || '#0f1115';
+
+  // Спец. значение "bg_color" делает шапку такого же цвета, как фон Telegram
+  tg.setHeaderColor('bg_color');
+  tg.setBackgroundColor(bgColor);
+
+  // На всякий случай синхронизируем фон body
+  try {
+    document.body.style.backgroundColor = bgColor;
+  } catch (e) {
+    console.log('Cannot set body background from theme:', e);
+  }
+
   tg.ready();
-  
   return true;
 }
 
@@ -402,15 +408,6 @@ function initializeMainPage() {
   } else {
     // НЕТ параметра розыгрыша или demo - остаемся на home_participant
     console.log("❌ No giveaway ID or demo mode - staying on home participant page");
-    
-    // Настройка Telegram WebApp
-    if (window.Telegram && Telegram.WebApp) {
-      Telegram.WebApp.expand();
-      Telegram.WebApp.enableClosingConfirmation();
-      Telegram.WebApp.setHeaderColor('#2481cc');
-      Telegram.WebApp.setBackgroundColor('#f4f4f5');
-      Telegram.WebApp.ready();
-    }
   }
 }
 

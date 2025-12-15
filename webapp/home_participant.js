@@ -174,6 +174,38 @@ function fillProfileFromTelegram() {
   }
 }
 
+// Инициализация домашнего экрана участника
+function initParticipantHomePage() {
+  console.log('[HOME-PARTICIPANT] initParticipantHomePage');
+
+  // тут — всё, что сейчас у тебя вызывается только при переключении вкладок:
+  // - проставить активный таб "Главная"
+  // - подгрузить профиль
+  // - загрузить топ-розыгрыши и все текущие
+  try {
+    if (typeof setupNavigation === 'function') {
+      setupNavigation();
+    }
+    if (typeof loadTopGiveaways === 'function') {
+      loadTopGiveaways();
+    }
+    if (typeof loadRecentGiveaways === 'function') {
+      loadRecentGiveaways();
+    }
+  } catch (e) {
+    console.error('[HOME-PARTICIPANT] init error:', e);
+  }
+}
+
+// Гарантируем запуск сразу после загрузки страницы
+document.addEventListener('DOMContentLoaded', () => {
+  // app.js уже вызвал initializeTelegramWebApp();
+  if (window.location.pathname === '/miniapp/home_participant') {
+    initParticipantHomePage();
+  }
+});
+
+
 // ====== Загрузка розыгрышей с Node.js ======
 
 async function loadGiveawaysLists() {

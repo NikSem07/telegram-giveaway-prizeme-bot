@@ -25,15 +25,6 @@ function initHomeScreen() {
     if (document.querySelector('.nav-item')) {
         setupNavigation();
     }
-    
-    // Настройка внешнего вида Mini App
-    if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.expand();
-        Telegram.WebApp.enableClosingConfirmation();
-        Telegram.WebApp.setHeaderColor('#2481cc');
-        Telegram.WebApp.setBackgroundColor('#f4f4f5');
-        Telegram.WebApp.ready();
-    }
 }
 
 // Настройка навигационного бара (для других страниц)
