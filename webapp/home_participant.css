@@ -205,46 +205,80 @@ body.theme-light .profile-header {
 /* ====== Навигационный бар ====== */
 .bottom-nav {
     position: fixed;
-    bottom: 26px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--tg-theme-bg-color);
-    border-radius: 50px;
-    padding: 6px 8px;
-    width: calc(100% - 32px);
-    max-width: 360px;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 74px;
+    background: #2e2e2ee6; /* полупрозрачный темный фон как в Figma */
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
     display: flex;
-    justify-content: space-between;
-    box-shadow: 0px 4px 16px rgba(0,0,0,0.3);
+    justify-content: space-around;
+    align-items: center;
+    border-top: 0.33px solid rgba(60, 60, 67, 0.36);
+    z-index: 9999;
 }
 
+/* Слот одной вкладки */
 .nav-item {
-    flex: 1;
-    text-align: center;
-    padding: 10px 0;
-    border-radius: 40px;
-    transition: 0.2s;
+    position: relative;
+    width: 72px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
 }
 
-.nav-item.active {
-    background: rgba(36,107,253,0.16);
-}
-
-.nav-item img {
-    width: 22px;
-    height: 22px;
-    margin-bottom: 4px;
+/* Иконка */
+.nav-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 3px;
     opacity: 0.8;
+    transition: opacity .2s;
 }
 
-.nav-item.active img {
+/* Подпись */
+.nav-label {
+    font-size: 12px;
+    color: var(--back-text-dark);
+    font-weight: 500;
+    line-height: 14px;
+}
+
+/* Градиентная подложка (как в Figma) */
+.nav-active-bg {
+    position: absolute;
+    top: 0;
+    width: 72px;
+    height: 44px;
+    border-radius: 12px;
+    opacity: 0;
+    transition: opacity .2s;
+
+    background: radial-gradient(
+        50% 50% at 50% 47%,
+        rgba(21, 81, 229, 0.4) 0%,
+        rgba(12, 45, 127, 0) 100%
+    );
+}
+
+/* Активная вкладка */
+.nav-item.active .nav-active-bg {
     opacity: 1;
-    filter: brightness(0) saturate(100%) invert(39%) sepia(98%) saturate(1743%) hue-rotate(194deg);
 }
 
-.nav-text {
-    font-size: 11px;
+.nav-item.active .nav-icon {
+    opacity: 1;
+    filter: none;
 }
+
+.nav-item.active .nav-label {
+    color: #FAFAFA; /* белый текст */
+}
+
 
 /* Карточки-заглушки для внутренних разделов */
 .stub-card {

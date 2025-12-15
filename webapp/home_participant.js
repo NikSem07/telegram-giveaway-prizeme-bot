@@ -110,8 +110,12 @@ function switchPage(page) {
   currentPage = page;
 
   // Обновляем активный элемент навбара
-  document.querySelectorAll('.bottom-nav .nav-item').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('data-page') === page);
+  document.querySelectorAll('.nav-item').forEach(item => {
+    if (item.dataset.page === page) {
+        item.classList.add('active');
+    } else {
+        item.classList.remove('active');
+    }
   });
 
   // Переключаем контент
