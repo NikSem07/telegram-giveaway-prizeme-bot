@@ -215,7 +215,7 @@ body.theme-light .profile-header {
     display: flex;
     justify-content: space-around;
     padding-top: 2px;
-    padding-bottom: 14px;
+    padding-bottom: 18px;
     align-items: center;
     border-top: 0.33px solid rgba(60, 60, 67, 0.36);
     z-index: 9999;
