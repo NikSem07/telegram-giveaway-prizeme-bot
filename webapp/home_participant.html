@@ -16,20 +16,35 @@
 </head>
 <body class="home-page">
   <div class="wrap">
-    <!-- Переключалка режимов -->
-    <div class="mode-switcher-container">
-      <div class="mode-switcher">
-        <button class="mode-btn active" data-mode="participant" onclick="switchMode('participant')">
-          <span class="mode-text">Участник</span>
-        </button>
-        <button class="mode-btn" data-mode="creator" onclick="switchMode('creator')">
-          <span class="mode-text">Создатель</span>
-        </button>
+    <!-- Верхний блок: аватарка + переключатель в одной линии -->
+    <div class="top-header">
+      <div class="profile-header" id="profile-header">
+        <div class="profile-avatar">
+          <img id="profile-avatar-img"
+               src="/miniapp-static/assets/icons/profile-icon.svg"
+               alt="avatar">
+        </div>
+        <img class="profile-arrow"
+             src="/miniapp-static/assets/icons/arrow-icon.svg"
+             alt=">">
+      </div>
+
+      <!-- Переключалка режимов -->
+      <div class="mode-switcher-container">
+        <div class="mode-switcher">
+          <button class="mode-btn active" data-mode="participant" onclick="switchMode('participant')">
+            <span class="mode-text">Участник</span>
+          </button>
+          <button class="mode-btn" data-mode="creator" onclick="switchMode('creator')">
+            <span class="mode-text">Создатель</span>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Основной контент, всё наполняется через JS -->
     <main class="main-content" id="main-content"></main>
+
 
     <!-- Навигационный бар -->
     <nav class="bottom-nav">

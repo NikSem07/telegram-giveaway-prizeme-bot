@@ -29,7 +29,15 @@ body.home-page .wrap {
     margin-top: -8px;
 }
 
-/* ====== Профильная панель сверху ====== */
+/* ====== Верхний блок: аватарка + переключалка ====== */
+.top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 16px;
+}
+
+/* Капсула с аватаркой */
 .profile-header {
     display: flex;
     align-items: center;
@@ -39,8 +47,7 @@ body.home-page .wrap {
     padding: 4px 8px 4px 4px; /* слева 4, справа 8 */
     border-radius: 20px;
     background: #2E2E2E;
-    margin-top: 0;
-    margin-bottom: 18px;
+    margin: 0;      /* чтобы не уводило вниз относительно переключалки */
     cursor: pointer;
 }
 
@@ -69,29 +76,22 @@ body.theme-light .profile-header {
     opacity: 0.7;
 }
 
-/* ====== Переключалка ====== */
+/* Контейнер переключалки внутри top-header */
 .mode-switcher-container {
+    flex: 1;                       /* чтобы капсула занимала центр строки */
     display: flex;
     justify-content: center;
-    margin-top: 12px;
-    margin-bottom: 16px;
-}
-
-/* фон и бордер подгоняем под общий фон, который проставим из JS */
-.mode-switcher-container {
-    display: flex;
-    justify-content: center;
-    padding: 0 16px;
-    margin: 12px auto 10px; /* поменьше зазор вниз */
+    padding: 0 16px 0 12px;        /* лёгкий отступ от аватарки */
+    margin: 0;
 }
 
 /* Это и есть ОБЩАЯ ПОДЛОЖКА #2E2E2E под обе кнопки */
 .mode-switcher {
     display: flex;
-    background: #2E2E2E;      /* ← хардкод, как в макете */
+    background: #2E2E2E;      /* ← жёстко, как в макете */
     border-radius: 999px;     /* максимальное скругление */
     padding: 4px;
-    border: none;             /* убираем границу по теме */
+    border: none;
 }
 
 /* Кнопки внутри капсулы */

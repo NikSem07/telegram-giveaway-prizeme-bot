@@ -41,17 +41,6 @@ function renderHomePage() {
   if (!main) return;
 
   main.innerHTML = `
-    <div class="profile-header" id="profile-header">
-      <div class="profile-avatar">
-        <img id="profile-avatar-img"
-             src="/miniapp-static/assets/icons/profile-icon.svg"
-             alt="avatar">
-      </div>
-      <img class="profile-arrow"
-           src="/miniapp-static/assets/icons/arrow-icon.svg"
-           alt=">">
-    </div>
-
     <div class="section-blue">
       <div class="section-title">Рекомендуем</div>
       <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
@@ -65,13 +54,6 @@ function renderHomePage() {
     <div id="all-giveaways-list" style="margin-top:8px;"></div>
   `;
 
-  // Профильный хедер кликается так же, как вкладка "Профиль" в навбаре
-  const header = document.getElementById('profile-header');
-  if (header) {
-    header.addEventListener('click', () => switchPage('profile'));
-  }
-
-  fillProfileFromTelegram();
   loadGiveawaysLists();
 }
 
@@ -237,12 +219,20 @@ function renderGiveawayList(container, list, prefix) {
 }
 
 // ====== Инициализация ======
-
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[HOME-PARTICIPANT] DOM ready');
 
   // Убедимся, что body помечен как home-page (чтобы показывалась переключалка)
   document.body.classList.add('home-page');
+
+  // Клик по аватарке = переход во вкладку "Профиль"
+  const header = document.getElementById('profile-header');
+  if (header) {
+    header.addEventListener('click', () => switchPage('profile'));
+  }
+
+  // Подгружаем аватар из Telegram один раз
+  fillProfileFromTelegram();
 
   setupNavigation();
   switchPage('home'); // отрисуем главную сразу
