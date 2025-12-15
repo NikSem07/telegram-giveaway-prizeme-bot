@@ -1042,6 +1042,15 @@ function initializeCurrentPage() {
     case '/miniapp/':
       initializeMainPage();
       break;
+
+    case '/miniapp/home_participant':
+    case '/miniapp/home_creator':
+      // Главные экраны участника/создателя.
+      // Telegram WebApp уже инициализирован выше,
+      // дальше логика отдается отдельным js (home_participant.js / home_creator.js)
+      console.log("[MULTI-PAGE] Home screen page, handled by specific JS file");
+      break;
+
     case '/miniapp/loading':
       initializeLoadingPage();
       break;
@@ -1058,7 +1067,7 @@ function initializeCurrentPage() {
       initializeResultsWinPage();
       break;
     case '/miniapp/results_lose':
-      initializeResultsLosePage();   // НОВОЕ имя функции, см. ниже
+      initializeResultsLosePage();
       break;
     default:
       window.location.href = '/miniapp/';

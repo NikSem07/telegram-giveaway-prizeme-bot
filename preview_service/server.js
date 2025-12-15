@@ -1092,6 +1092,67 @@ app.post('/api/results', async (req, res) => {
   }
 });
 
+// --- POST /api/participant_home_giveaways ---
+// Отдает списки розыгрышей для главной страницы участника:
+// top — "Топ розыгрыши", latest — "Все текущие розыгрыши"
+// Пока логика одинаковая: последние активные розыгрыши.
+app.post('/api/participant_home_giveaways', async (req, res) => {
+  try {
+    const limitTop = 5;
+    const limitLatest = 5;
+    const limit = Math.max(limitTop, limitLatest);
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.internal_title,
+        g.public_description,
+        g.end_at_utc,
+        g.status,
+        array_remove(
+          array_agg(
+            DISTINCT COALESCE(gc.title, oc.title, oc.username)
+          ),
+          NULL
+        ) AS channels
+      FROM giveaways g
+      LEFT JOIN giveaway_channels gc
+        ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc
+        ON oc.id = gc.channel_id
+      WHERE g.status = 'active'
+      GROUP BY g.id
+      ORDER BY g.id DESC
+      LIMIT $1
+    `, [limit]);
+
+    const rows = result.rows || [];
+
+    const mapped = rows.map(row => ({
+      id: row.id,
+      title: row.internal_title,
+      public_description: row.public_description,
+      end_at_utc: row.end_at_utc,
+      status: row.status,
+      channels: row.channels || []
+    }));
+
+    res.json({
+      ok: true,
+      top: mapped.slice(0, limitTop),
+      latest: mapped.slice(0, limitLatest)
+    });
+
+  } catch (error) {
+    console.log('[API participant_home_giveaways] error:', error);
+    res.status(500).json({
+      ok: false,
+      reason: 'server_error: ' + error.message
+    });
+  }
+});
+
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);

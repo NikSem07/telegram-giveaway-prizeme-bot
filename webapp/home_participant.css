@@ -198,3 +198,22 @@ body.home-page .wrap {
 .nav-text {
     font-size: 11px;
 }
+
+/* Карточки-заглушки для внутренних разделов */
+.stub-card {
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.stub-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.stub-text {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
