@@ -25,15 +25,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function firstLine(str, maxLen) {
-  if (!str) return '';
-  const line = str.split('\n')[0].trim();
-  if (maxLen && line.length > maxLen) {
-    return line.slice(0, maxLen - 1) + '…';
-  }
-  return line;
-}
-
 // ====== Форматирование счетчика участников ======
 
 function formatParticipants(n) {
@@ -226,7 +217,7 @@ function renderGiveawayList(container, list, prefix) {
   list.forEach((g, index) => {
     const channels = Array.isArray(g.channels) ? g.channels : [];
     const channelsStr = channels.length ? channels.join(', ') : (g.title || 'Розыгрыш #' + g.id);
-    const desc = firstLine(g.public_description || '', 60);
+    const desc = stripTelegramMarkup(g.public_description || '');
 
     const timerId = `timer-${prefix}-${g.id}-${index}`;
 
@@ -290,14 +281,16 @@ function renderGiveawayList(container, list, prefix) {
 function stripTelegramMarkup(input) {
   if (!input) return '';
 
-  return input
-    // убираем HTML-теги
+  return String(input)
+    // tg-spoiler и похожие
+    .replace(/<\/?tg-[^>]*>/gi, '')
+    // HTML-теги
     .replace(/<[^>]*>/g, '')
-    // убираем tg-spoiler вручную
-    .replace(/<\/?tg-spoiler>/gi, '')
-    // убираем другие tg-метки (на будущее)
-    .replace(/<\/?tg-[^>]+>/gi, '')
-    // нормализуем пробелы
+    // HTML-энтити (на всякий случай)
+    .replace(/&[a-z]+;/gi, '')
+    // переносы строк → пробел
+    .replace(/\n+/g, ' ')
+    // лишние пробелы
     .replace(/\s+/g, ' ')
     .trim();
 }
