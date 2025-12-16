@@ -264,8 +264,6 @@ function renderGiveawayList(container, list, prefix) {
           <div class="giveaway-desc giveaway-desc--top">${escapeHtml(desc || 'Описание розыгрыша')}</div>
           <div class="giveaway-timer giveaway-timer--top" id="${timerId}"></div>
         </div>
-
-        <div class="giveaway-fade"></div>
       `;
     } else {
       card.innerHTML = `
@@ -308,5 +306,5 @@ document.addEventListener('DOMContentLoaded', () => {
       loadGiveawaysLists();
     }
   }, 60 * 60 * 1000);
-  
+
 });

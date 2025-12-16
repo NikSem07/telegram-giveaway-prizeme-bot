@@ -219,6 +219,44 @@ body.home-page .wrap {
     font-weight: 600;
 }
 
+/* TOP-карточки используют обычные стили текста */
+.giveaway-card--top .giveaway-info {
+    color: inherit;
+}
+
+.giveaway-card--top .giveaway-title,
+.giveaway-card--top .giveaway-desc,
+.giveaway-card--top .giveaway-timer {
+    all: unset;
+}
+
+/* Повторно применяем базовые стили */
+.giveaway-card--top .giveaway-title {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.giveaway-card--top .giveaway-desc {
+    display: block;
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.giveaway-card--top .giveaway-timer {
+    display: block;
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
 /* ====== TOP giveaway card (Figma-like) ====== */
 .giveaway-card--top {
     position: relative;
@@ -292,36 +330,6 @@ body.home-page .wrap {
 }
 
 /* Тексты справа */
-.giveaway-info--top {
-    margin-left: 12px;
-    padding-right: 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.giveaway-channels {
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 18px;
-    color: rgba(250, 250, 250, 1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* пункт 4: без голубой подложки — ничего не задаём */
-}
-
-.giveaway-desc--top {
-    margin-top: 4px;
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 18px;
-    color: rgba(217, 217, 217, 1); /* --top-light */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .giveaway-timer--top {
     margin-top: 4px;
     font-size: 12px;
@@ -329,20 +337,6 @@ body.home-page .wrap {
     line-height: 18px;
     color: rgba(217, 217, 217, 1); /* --top-light */
     white-space: nowrap;
-}
-
-/* Правый градиентный "фейд" как в Figma .rectangle */
-.giveaway-fade {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 23px;
-    height: 72px;
-    background: linear-gradient(
-        90deg,
-        rgba(19, 78, 230, 0.9) 0%,
-        rgba(21, 80, 229, 1) 100%
-    );
 }
 
 /* ====== Навигационный бар ====== */
