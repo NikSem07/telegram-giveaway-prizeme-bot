@@ -238,7 +238,7 @@ function renderGiveawayList(container, list, prefix) {
       null;
 
     const card = document.createElement('div');
-    card.className = isTop ? 'giveaway-card giveaway-card--top' : 'giveaway-card';
+    card.className = isTop ? 'giveaway-card giveaway-card--top' : 'giveaway-card giveaway-card--all';
 
     if (isTop) {
       card.innerHTML = `
@@ -261,7 +261,17 @@ function renderGiveawayList(container, list, prefix) {
       `;
     } else {
       card.innerHTML = `
-        <div class="giveaway-avatar"></div>
+        <div class="giveaway-left">
+          <div class="giveaway-avatar giveaway-avatar--top">
+            ${firstChannelAvatarUrl ? `<img src="${escapeHtml(firstChannelAvatarUrl)}" alt="">` : ``}
+          </div>
+
+          <div class="giveaway-badge giveaway-badge--black ${participantsCount == null ? 'giveaway-badge--hidden' : ''}">
+            <span class="giveaway-badge-icon"></span>
+            <span class="giveaway-badge-text">${participantsCount == null ? '' : formatParticipants(participantsCount)}</span>
+          </div>
+        </div>
+
         <div class="giveaway-info">
           <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
           <div class="giveaway-desc">${escapeHtml(stripTelegramMarkup(desc) || 'Описание розыгрыша')}</div>

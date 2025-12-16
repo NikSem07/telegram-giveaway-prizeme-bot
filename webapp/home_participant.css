@@ -241,6 +241,11 @@ body.home-page .wrap {
     align-items: center;
 }
 
+/* "Все текущие" — та же геометрия слева (аватар+бейдж), нужно место под бейдж */
+.giveaway-card--all {
+    padding-bottom: 18px;
+}
+
 .section-title-row {
     display: inline-flex;
     align-items: center;
@@ -294,6 +299,23 @@ body.home-page .wrap {
     object-fit: cover;
 }
 
+/* В "Все текущие" текстовые отступы как в TOP */
+.giveaway-card--all .giveaway-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 2px;
+}
+
+.giveaway-card--all .giveaway-desc {
+    margin-top: 3px;
+}
+
+.giveaway-card--all .giveaway-timer {
+    margin-top: 3px;
+}
+
+
 /* Бейдж участников под аватаркой */
 .giveaway-badge {
     position: absolute;
@@ -311,6 +333,11 @@ body.home-page .wrap {
     background: rgba(10, 56, 169, 1);
     border-radius: 999px;
     white-space: nowrap;
+}
+
+/* Бейдж участников в "Все текущие" — чёрный */
+.giveaway-badge--black {
+    background: rgba(0, 0, 0, 0.85);
 }
 
 .giveaway-badge--hidden {
