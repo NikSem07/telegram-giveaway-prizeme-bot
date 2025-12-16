@@ -261,7 +261,7 @@ function renderGiveawayList(container, list, prefix) {
 
         <div class="giveaway-info">
           <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-          <div class="giveaway-desc">${escapeHtml(stripHtml(desc) || 'Описание розыгрыша')}</div>
+          <div class="giveaway-desc">${escapeHtml(stripTelegramMarkup(desc) || 'Описание розыгрыша')}</div>
           <div class="giveaway-timer" id="${timerId}"></div>
         </div>
       `;
@@ -270,7 +270,7 @@ function renderGiveawayList(container, list, prefix) {
         <div class="giveaway-avatar"></div>
         <div class="giveaway-info">
           <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-          <div class="giveaway-desc">${escapeHtml(stripHtml(desc) || 'Описание розыгрыша')}</div>
+          <div class="giveaway-desc">${escapeHtml(stripTelegramMarkup(desc) || 'Описание розыгрыша')}</div>
           <div class="giveaway-timer" id="${timerId}"></div>
         </div>
       `;
@@ -287,11 +287,18 @@ function renderGiveawayList(container, list, prefix) {
   });
 }
 
-function stripHtml(input) {
+function stripTelegramMarkup(input) {
   if (!input) return '';
+
   return input
-    .replace(/<[^>]*>/g, '')      // убираем HTML-теги
-    .replace(/\s+/g, ' ')         // нормализуем пробелы
+    // убираем HTML-теги
+    .replace(/<[^>]*>/g, '')
+    // убираем tg-spoiler вручную
+    .replace(/<\/?tg-spoiler>/gi, '')
+    // убираем другие tg-метки (на будущее)
+    .replace(/<\/?tg-[^>]+>/gi, '')
+    // нормализуем пробелы
+    .replace(/\s+/g, ' ')
     .trim();
 }
 

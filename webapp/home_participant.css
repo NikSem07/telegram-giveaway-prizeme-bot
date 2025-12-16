@@ -98,6 +98,7 @@ body.home-page .wrap {
         rgba(21, 81, 229, 1) 0%,
         rgba(0, 34, 255, 1) 100%
     );
+    padding: 16px 12px 12px;  /* ↑ было 8px, стало 16px */
 }
 
 .top-label {
@@ -105,6 +106,7 @@ body.home-page .wrap {
     font-weight: 300;         /* Light */
     letter-spacing: 0.04em;   /* iOS-стиль */
     text-transform: uppercase;
+    margin-bottom: 4px;
     color: rgba(250, 250, 250, 0.9);
 }
 
@@ -112,7 +114,7 @@ body.home-page .wrap {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 6px;
+    gap: 4px;
 }
 
 .top-title {
@@ -130,6 +132,11 @@ body.home-page .wrap {
 
 .top-arrow {
     margin-left: 2px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
 }
 
 .top-arrow-icon {
@@ -209,8 +216,10 @@ body.home-page .wrap {
     -webkit-box-orient: vertical;
     overflow: hidden;
 
-    line-height: 18px;
-    max-height: 36px;
+    font-size: 12px;      /* ВОЗВРАТ как раньше */
+    line-height: 16px;    /* было 18px — из-за этого текст "раздувался" */
+    max-height: 32px;     /* 2 * 16px */
+    opacity: 0.85;
 }
 
 .giveaway-timer {
