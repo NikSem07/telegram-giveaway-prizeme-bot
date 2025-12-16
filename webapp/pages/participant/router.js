@@ -1,4 +1,7 @@
 import { renderHomePage } from './home/home.js';
+import { renderTasksPage } from './tasks/tasks.js';
+import { renderGiveawaysPage } from './giveaways/giveaways.js';
+import { renderProfilePage } from './profile/profile.js';
 
 let currentPage = null;
 
@@ -16,23 +19,31 @@ function switchPage(page) {
   if (!page || page === currentPage) return;
   currentPage = page;
 
-  // active state
   document.querySelectorAll('.nav-item').forEach(item => {
     item.classList.toggle('active', item.dataset.page === page);
   });
 
+  document.body.classList.toggle('home-page', page === 'home');
+
   if (page === 'home') {
-    document.body.classList.add('home-page');
     renderHomePage();
     return;
   }
 
-  document.body.classList.remove('home-page');
+  if (page === 'tasks') {
+    renderTasksPage();
+    return;
+  }
 
-  // остальные страницы пока вызываем из window (их держим в entry-файле)
-  if (page === 'tasks' && window.renderTasksPage) window.renderTasksPage();
-  else if (page === 'giveaways' && window.renderGiveawaysPage) window.renderGiveawaysPage();
-  else if (page === 'profile' && window.renderProfilePage) window.renderProfilePage();
+  if (page === 'giveaways') {
+    renderGiveawaysPage();
+    return;
+  }
+
+  if (page === 'profile') {
+    renderProfilePage();
+    return;
+  }
 }
 
 function getCurrentPage() {

@@ -1,6 +1,5 @@
 // ====== Рендер профиля ======
 function renderProfilePage() {
-  window.renderProfilePage = renderProfilePage;
   const main = document.getElementById('main-content');
   if (!main) return;
 
@@ -37,4 +36,5 @@ function fillProfileFromTelegram() {
 
 export {
   renderProfilePage,
+  fillProfileFromTelegram,
 };
