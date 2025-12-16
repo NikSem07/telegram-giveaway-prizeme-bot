@@ -81,13 +81,72 @@ body.home-page .wrap {
     font-weight: 700; /* жирный шрифт */
 }
 
-
 /* ====== Заголовки секций ====== */
 .section-title {
     font-size: 15px;
     font-weight: 600;
     margin: 10px 2px 6px;
     opacity: 0.9;
+}
+
+.top-frame {
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 8px 12px 12px;
+    background: linear-gradient(
+        270deg,
+        rgba(21, 81, 229, 1) 0%,
+        rgba(0, 34, 255, 1) 100%
+    );
+}
+
+.top-label {
+    margin-top: 0;
+    font-size: 12px;
+    font-weight: 300;
+    line-height: 18px;
+    color: rgba(250, 250, 250, 1);
+}
+
+.top-title-row {
+    margin-top: 6px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.top-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px; /* близко к макету */
+}
+
+.top-title-text {
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 18px;
+    color: rgba(250, 250, 250, 1);
+}
+
+.top-arrow {
+    border: none;
+    background: transparent;
+    padding: 2px 5px;  /* как vector-wrapper */
+    cursor: pointer;
+}
+
+.top-arrow-icon {
+    display: inline-block;
+    font-size: 14px;
+    line-height: 14px;
+    opacity: 0.9;
+    color: rgba(250, 250, 250, 1);
+}
+
+/* список внутри топ-блока */
+.top-list {
+    margin-top: 8px;
 }
 
 .section-blue {
@@ -158,6 +217,132 @@ body.home-page .wrap {
     font-size: 12px;
     margin-top: 4px;
     font-weight: 600;
+}
+
+/* ====== TOP giveaway card (Figma-like) ====== */
+.giveaway-card--top {
+    position: relative;
+    height: 72px;
+    padding: 0 0 0 12px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.10);
+    border-radius: 14px;
+    overflow: hidden;
+    align-items: stretch;
+}
+
+.giveaway-left {
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.giveaway-avatar--top {
+    width: 50px;
+    height: 50px;
+    border-radius: 40px;
+    background: rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    margin-right: 0;
+}
+
+.giveaway-avatar--top img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Бейдж участников под аватаркой */
+.giveaway-badge {
+    margin-top: 2px;
+    width: 48px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(10, 56, 169, 1); /* --back-shape из твоего root */
+    border-radius: 20px;
+    overflow: hidden;
+    padding-left: 3px;
+}
+
+.giveaway-badge--hidden {
+    display: none;
+}
+
+.giveaway-badge-icon {
+    width: 10px;
+    height: 12px;
+    display: inline-block;
+    opacity: 1;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 10px 12px;
+    background-image: url("/miniapp-static/assets/icons/profile-icon.svg");
+}
+
+.giveaway-badge-text {
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 18px;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+/* Тексты справа */
+.giveaway-info--top {
+    margin-left: 12px;
+    padding-right: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.giveaway-channels {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    color: rgba(250, 250, 250, 1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* пункт 4: без голубой подложки — ничего не задаём */
+}
+
+.giveaway-desc--top {
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    color: rgba(217, 217, 217, 1); /* --top-light */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.giveaway-timer--top {
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 300;
+    line-height: 18px;
+    color: rgba(217, 217, 217, 1); /* --top-light */
+    white-space: nowrap;
+}
+
+/* Правый градиентный "фейд" как в Figma .rectangle */
+.giveaway-fade {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 23px;
+    height: 72px;
+    background: linear-gradient(
+        90deg,
+        rgba(19, 78, 230, 0.9) 0%,
+        rgba(21, 80, 229, 1) 100%
+    );
 }
 
 /* ====== Навигационный бар ====== */

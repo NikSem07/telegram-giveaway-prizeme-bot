@@ -34,6 +34,29 @@ function firstLine(str, maxLen) {
   return line;
 }
 
+// ====== Форматирование счетчика участников ======
+
+function formatParticipants(n) {
+  if (typeof n !== 'number' || !isFinite(n) || n < 0) return '';
+
+  if (n < 1000) return String(Math.floor(n));
+
+  if (n < 100000) {
+    const k = n / 1000;
+    const s = k.toFixed(1).replace(/\.0$/, '');
+    return `${s}к`;
+  }
+
+  if (n < 1000000) {
+    return `${Math.floor(n / 1000)}к`;
+  }
+
+  const m = n / 1000000;
+  const s = m.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
+  return `${s}м`;
+}
+
+
 // ====== Рендер страниц ======
 
 function renderHomePage() {
@@ -41,13 +64,20 @@ function renderHomePage() {
   if (!main) return;
 
   main.innerHTML = `
-    <div class="section-blue">
-      <div class="section-title">Рекомендуем</div>
-      <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
-        <span>🔥 Топ розыгрыши</span>
-        <span style="font-size:12px; opacity:0.8;">&gt;</span>
+    <div class="top-frame">
+      <div class="top-label">Рекомендуем</div>
+
+      <div class="top-title-row">
+        <div class="top-title">
+          <span class="top-title-emoji">🔥</span>
+          <span class="top-title-text">Топ розыгрыши</span>
+        </div>
+        <button class="top-arrow" type="button" aria-label="Открыть топ">
+          <span class="top-arrow-icon">&gt;</span>
+        </button>
       </div>
-      <div id="top-giveaways-list" style="margin-top:10px;"></div>
+
+      <div id="top-giveaways-list" class="top-list"></div>
     </div>
 
     <div class="section-title" style="margin-top:18px;">Все текущие розыгрыши ></div>
@@ -200,16 +230,53 @@ function renderGiveawayList(container, list, prefix) {
 
     const timerId = `timer-${prefix}-${g.id}-${index}`;
 
+    const isTop = prefix === 'top';
+
+    // Поддержка полей из API (если есть)
+    const firstChannelAvatarUrl =
+      g.first_channel_avatar_url ||
+      (Array.isArray(g.channels_meta) && g.channels_meta[0] && g.channels_meta[0].avatar_url) ||
+      null;
+
+    const participantsCount =
+      typeof g.participants_count === 'number' ? g.participants_count :
+      typeof g.members_count === 'number' ? g.members_count :
+      null;
+
     const card = document.createElement('div');
-    card.className = 'giveaway-card';
-    card.innerHTML = `
-      <div class="giveaway-avatar"></div>
-      <div class="giveaway-info">
-        <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-        <div class="giveaway-desc">${escapeHtml(desc || 'Описание розыгрыша')}</div>
-        <div class="giveaway-timer" id="${timerId}"></div>
-      </div>
-    `;
+    card.className = isTop ? 'giveaway-card giveaway-card--top' : 'giveaway-card';
+
+    if (isTop) {
+      card.innerHTML = `
+        <div class="giveaway-left">
+          <div class="giveaway-avatar giveaway-avatar--top">
+            ${firstChannelAvatarUrl ? `<img src="${escapeHtml(firstChannelAvatarUrl)}" alt="">` : ``}
+          </div>
+
+          <div class="giveaway-badge ${participantsCount == null ? 'giveaway-badge--hidden' : ''}">
+            <span class="giveaway-badge-icon"></span>
+            <span class="giveaway-badge-text">${participantsCount == null ? '' : formatParticipants(participantsCount)}</span>
+          </div>
+        </div>
+
+        <div class="giveaway-info giveaway-info--top">
+          <div class="giveaway-channels">${escapeHtml(channelsStr)}</div>
+          <div class="giveaway-desc giveaway-desc--top">${escapeHtml(desc || 'Описание розыгрыша')}</div>
+          <div class="giveaway-timer giveaway-timer--top" id="${timerId}"></div>
+        </div>
+
+        <div class="giveaway-fade"></div>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="giveaway-avatar"></div>
+        <div class="giveaway-info">
+          <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
+          <div class="giveaway-desc">${escapeHtml(desc || 'Описание розыгрыша')}</div>
+          <div class="giveaway-timer" id="${timerId}"></div>
+        </div>
+      `;
+    }
     container.appendChild(card);
 
     if (window.updateCountdown && g.end_at_utc) {
@@ -234,4 +301,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupNavigation();
   switchPage('home'); // отрисуем главную сразу
+
+    // Обновляем данные (включая счетчики) раз в час, когда открыта главная
+  setInterval(() => {
+    if (currentPage === 'home') {
+      loadGiveawaysLists();
+    }
+  }, 60 * 60 * 1000);
+  
 });
