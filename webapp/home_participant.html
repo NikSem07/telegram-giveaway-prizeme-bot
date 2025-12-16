@@ -18,17 +18,6 @@
   <div class="wrap">
     <!-- Верхний блок: аватарка + переключатель в одной линии -->
     <div class="top-header">
-      <div class="profile-header" id="profile-header">
-        <div class="profile-avatar">
-          <img id="profile-avatar-img"
-               src="/miniapp-static/assets/icons/profile-icon.svg"
-               alt="avatar">
-        </div>
-        <img class="profile-arrow"
-             src="/miniapp-static/assets/icons/arrow-icon.svg"
-             alt=">">
-      </div>
-
       <!-- Переключалка режимов -->
       <div class="mode-switcher-container">
         <div class="mode-switcher">
@@ -66,9 +55,15 @@
         <span class="nav-label">Розыгрыши</span>
       </div>
 
-      <div class="nav-item" data-page="profile">
+      <div class="nav-item nav-profile" data-page="profile">
         <div class="nav-active-bg"></div>
-        <img class="nav-icon" src="/miniapp-static/assets/icons/profile-icon.svg" alt="">
+
+        <div class="nav-avatar">
+          <img id="nav-profile-avatar"
+              src="/miniapp-static/assets/icons/profile-icon.svg"
+              alt="avatar">
+        </div>
+        
         <span class="nav-label">Профиль</span>
       </div>
     </nav>

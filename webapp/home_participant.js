@@ -137,7 +137,7 @@ function fillProfileFromTelegram() {
     const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
     if (!user) return;
 
-    const avatarEl = document.getElementById('profile-avatar-img');
+    const avatarEl = document.getElementById('nav-profile-avatar');
     if (!avatarEl) return;
 
     if (user.photo_url) {
@@ -228,12 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Убедимся, что body помечен как home-page (чтобы показывалась переключалка)
   document.body.classList.add('home-page');
-
-  // Клик по аватарке = переход во вкладку "Профиль"
-  const header = document.getElementById('profile-header');
-  if (header) {
-    header.addEventListener('click', () => switchPage('profile'));
-  }
 
   // Подгружаем аватар из Telegram один раз
   fillProfileFromTelegram();
