@@ -210,8 +210,9 @@ body {
 
 /* Аватарка в навбаре */
 .nav-avatar {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
+    margin-bottom: 2px; /* важно: как у .nav-icon, чтобы подпись стала на одном уровне */
     border-radius: 50%;
     overflow: hidden;
     display: flex;
