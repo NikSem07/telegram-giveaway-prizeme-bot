@@ -201,4 +201,5 @@ function escapeHtml(str) {
 
 export {
   renderHomePage,
+  loadGiveawaysLists,
 };

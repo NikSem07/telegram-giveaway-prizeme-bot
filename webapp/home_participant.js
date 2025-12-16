@@ -1,10 +1,12 @@
-import { renderHomePage } from './pages/participant/home/home.js';
+import { renderHomePage, loadGiveawaysLists } from './pages/participant/home/home.js';
+import { setupNavigation, switchPage, getCurrentPage } from './pages/participant/router.js';
 
 // home_participant.js — главный экран "Участник"
 console.log('[HOME-PARTICIPANT] Script loaded');
 
 // Переключение режима Участник / Создатель
 function switchMode(mode) {
+  window.switchMode = switchMode;
   console.log('[HOME-PARTICIPANT] switchMode:', mode);
   if (mode === 'creator') {
     window.location.href = '/miniapp/home_creator';
@@ -14,6 +16,7 @@ function switchMode(mode) {
 }
 
 function renderTasksPage() {
+  window.renderTasksPage = renderTasksPage;
   const main = document.getElementById('main-content');
   if (!main) return;
 
@@ -26,6 +29,7 @@ function renderTasksPage() {
 }
 
 function renderGiveawaysPage() {
+  window.renderGiveawaysPage = renderGiveawaysPage;
   const main = document.getElementById('main-content');
   if (!main) return;
 
@@ -38,6 +42,7 @@ function renderGiveawaysPage() {
 }
 
 function renderProfilePage() {
+  window.renderProfilePage = renderProfilePage;
   const main = document.getElementById('main-content');
   if (!main) return;
 
@@ -86,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Обновляем данные (включая счетчики) раз в час, когда открыта главная
   setInterval(() => {
-    if (currentPage === 'home') {
+    if (getCurrentPage() === 'home') {
       loadGiveawaysLists();
     }
   }, 15 * 60 * 1000);

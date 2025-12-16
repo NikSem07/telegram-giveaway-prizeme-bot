@@ -1,8 +1,6 @@
-// pages/participant/router.js
+import { renderHomePage } from './home/home.js';
 
 let currentPage = null;
-
-// ====== Навигация по нижнему бару ======
 
 function setupNavigation() {
   const items = document.querySelectorAll('.bottom-nav .nav-item');
@@ -18,24 +16,27 @@ function switchPage(page) {
   if (!page || page === currentPage) return;
   currentPage = page;
 
-  // Активный таб
+  // active state
   document.querySelectorAll('.nav-item').forEach(item => {
-    if (item.dataset.page === page) {
-        item.classList.add('active');
-    } else {
-        item.classList.remove('active');
-    }
+    item.classList.toggle('active', item.dataset.page === page);
   });
 
-  // Переключение страниц
   if (page === 'home') {
     document.body.classList.add('home-page');
     renderHomePage();
-  } else {
-    document.body.classList.remove('home-page');
-    
-    if (page === 'tasks') renderTasksPage();
-    else if (page === 'giveaways') renderGiveawaysPage();
-    else if (page === 'profile') renderProfilePage();
+    return;
   }
+
+  document.body.classList.remove('home-page');
+
+  // остальные страницы пока вызываем из window (их держим в entry-файле)
+  if (page === 'tasks' && window.renderTasksPage) window.renderTasksPage();
+  else if (page === 'giveaways' && window.renderGiveawaysPage) window.renderGiveawaysPage();
+  else if (page === 'profile' && window.renderProfilePage) window.renderProfilePage();
 }
+
+function getCurrentPage() {
+  return currentPage;
+}
+
+export { setupNavigation, switchPage, getCurrentPage };
