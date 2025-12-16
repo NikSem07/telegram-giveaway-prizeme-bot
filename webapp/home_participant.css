@@ -230,6 +230,13 @@ body.home-page .wrap {
     align-items: center;
 }
 
+/* Центрируем правый текстовый блок по высоте (middle) */
+.giveaway-card--top .giveaway-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
 .giveaway-left {
     position: relative;
     width: 46px;

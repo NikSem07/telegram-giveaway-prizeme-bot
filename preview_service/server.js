@@ -1109,17 +1109,27 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
         g.public_description,
         g.end_at_utc,
         g.status,
+
+        -- список названий каналов как раньше
         array_remove(
-          array_agg(
-            DISTINCT COALESCE(gc.title, oc.title, oc.username)
-          ),
+          array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
           NULL
-        ) AS channels
+        ) AS channels,
+
+        -- первый канал по gc.id (важно: именно порядок привязки)
+        (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id,
+
+        -- количество участников (как минимум уникальные user_id с final_ok=true)
+        (
+          SELECT COUNT(DISTINCT e.user_id)
+          FROM entries e
+          WHERE e.giveaway_id = g.id AND e.final_ok = true
+        ) AS participants_count
+
       FROM giveaways g
-      LEFT JOIN giveaway_channels gc
-        ON gc.giveaway_id = g.id
-      LEFT JOIN organizer_channels oc
-        ON oc.id = gc.channel_id
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+
       WHERE g.status = 'active'
       GROUP BY g.id
       ORDER BY g.id DESC
@@ -1128,19 +1138,29 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
 
     const rows = result.rows || [];
 
-    const mapped = rows.map(row => ({
-      id: row.id,
-      title: row.internal_title,
-      public_description: row.public_description,
-      end_at_utc: row.end_at_utc,
-      status: row.status,
-      channels: row.channels || []
-    }));
+    const mapped = rows.map(row => {
+      const firstChatId = row.first_channel_chat_id || null;
+      return {
+        id: row.id,
+        title: row.internal_title,
+        public_description: row.public_description,
+        end_at_utc: row.end_at_utc,
+        status: row.status,
+        channels: row.channels || [],
+
+        // фронту даем URL на наш прокси-роут
+        first_channel_avatar_url: firstChatId ? `/api/chat_avatar/${firstChatId}` : null,
+
+        participants_count: typeof row.participants_count === 'number'
+          ? row.participants_count
+          : (row.participants_count ? Number(row.participants_count) : 0),
+      };
+    });
 
     res.json({
       ok: true,
       top: mapped.slice(0, limitTop),
-      latest: mapped.slice(0, limitLatest)
+      latest: mapped.slice(0, limitLatest),
     });
 
   } catch (error) {
@@ -1149,6 +1169,57 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
       ok: false,
       reason: 'server_error: ' + error.message
     });
+  }
+});
+
+
+// --- GET /api/chat_avatar/:chatId ---
+// Проксируем аватарку чата (канала/группы) из Telegram, не светя BOT_TOKEN на фронт.
+app.get('/api/chat_avatar/:chatId', async (req, res) => {
+  try {
+    if (!BOT_TOKEN || !TELEGRAM_API) {
+      return res.status(500).send('BOT_TOKEN not set');
+    }
+
+    const chatIdRaw = String(req.params.chatId || '').trim();
+    if (!chatIdRaw || chatIdRaw === 'null' || chatIdRaw === 'undefined') {
+      return res.status(404).end();
+    }
+
+    const chatId = chatIdRaw.match(/^-?\d+$/) ? chatIdRaw : chatIdRaw;
+
+    // 1) getChat
+    const chatResp = await fetch(`${TELEGRAM_API}/getChat?chat_id=${encodeURIComponent(chatId)}`, { timeout: 10000 });
+    const chatData = await chatResp.json();
+    if (!chatData.ok) return res.status(404).end();
+
+    const photo = chatData.result && chatData.result.photo;
+    const fileId = photo && (photo.big_file_id || photo.small_file_id);
+    if (!fileId) return res.status(404).end();
+
+    // 2) getFile -> file_path
+    const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${encodeURIComponent(fileId)}`, { timeout: 10000 });
+    const fileData = await fileResp.json();
+    if (!fileData.ok) return res.status(404).end();
+
+    const filePath = fileData.result && fileData.result.file_path;
+    if (!filePath) return res.status(404).end();
+
+    // 3) качаем файл (ВАЖНО: file base другой)
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+    const imgResp = await fetch(fileUrl, { timeout: 15000 });
+    if (!imgResp.ok) return res.status(404).end();
+
+    const contentType = imgResp.headers.get('content-type') || 'image/jpeg';
+    const buf = Buffer.from(await imgResp.arrayBuffer());
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час, норм под твою задачу обновления
+    res.status(200).send(buf);
+
+  } catch (e) {
+    console.log('[API chat_avatar] error:', e);
+    res.status(500).end();
   }
 });
 
