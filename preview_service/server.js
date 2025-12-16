@@ -1123,7 +1123,7 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
         (
           SELECT COUNT(DISTINCT e.user_id)
           FROM entries e
-          WHERE e.giveaway_id = g.id AND e.final_ok = true
+          WHERE e.giveaway_id = g.id
         ) AS participants_count
 
       FROM giveaways g

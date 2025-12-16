@@ -261,7 +261,7 @@ function renderGiveawayList(container, list, prefix) {
 
         <div class="giveaway-info">
           <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-          <div class="giveaway-desc">${escapeHtml(desc || 'Описание розыгрыша')}</div>
+          <div class="giveaway-desc">${escapeHtml(stripHtml(desc) || 'Описание розыгрыша')}</div>
           <div class="giveaway-timer" id="${timerId}"></div>
         </div>
       `;
@@ -270,7 +270,7 @@ function renderGiveawayList(container, list, prefix) {
         <div class="giveaway-avatar"></div>
         <div class="giveaway-info">
           <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-          <div class="giveaway-desc">${escapeHtml(desc || 'Описание розыгрыша')}</div>
+          <div class="giveaway-desc">${escapeHtml(stripHtml(desc) || 'Описание розыгрыша')}</div>
           <div class="giveaway-timer" id="${timerId}"></div>
         </div>
       `;
@@ -285,6 +285,14 @@ function renderGiveawayList(container, list, prefix) {
       if (el) el.textContent = 'До окончания: ' + g.end_at_utc;
     }
   });
+}
+
+function stripHtml(input) {
+  if (!input) return '';
+  return input
+    .replace(/<[^>]*>/g, '')      // убираем HTML-теги
+    .replace(/\s+/g, ' ')         // нормализуем пробелы
+    .trim();
 }
 
 // ====== Инициализация ======
@@ -305,6 +313,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentPage === 'home') {
       loadGiveawaysLists();
     }
-  }, 60 * 60 * 1000);
+  }, 15 * 60 * 1000);
 
 });
