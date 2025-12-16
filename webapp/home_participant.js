@@ -259,10 +259,10 @@ function renderGiveawayList(container, list, prefix) {
           </div>
         </div>
 
-        <div class="giveaway-info giveaway-info--top">
-          <div class="giveaway-channels">${escapeHtml(channelsStr)}</div>
-          <div class="giveaway-desc giveaway-desc--top">${escapeHtml(desc || 'Описание розыгрыша')}</div>
-          <div class="giveaway-timer giveaway-timer--top" id="${timerId}"></div>
+        <div class="giveaway-info">
+          <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
+          <div class="giveaway-desc">${escapeHtml(desc || 'Описание розыгрыша')}</div>
+          <div class="giveaway-timer" id="${timerId}"></div>
         </div>
       `;
     } else {
