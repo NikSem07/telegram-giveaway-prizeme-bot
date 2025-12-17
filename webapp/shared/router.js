@@ -91,9 +91,34 @@ const Router = {
             return;
         }
         
+        // ГАРАНТИРУЕМ, что контейнер существует
+        if (!this.container) {
+            console.warn('[ROUTER] Container not ready, delaying render...');
+            setTimeout(() => this.render(page), 100);
+            return;
+        }
+        
+        // Дополнительная проверка: контейнер должен быть в DOM
+        if (!this.container.isConnected) {
+            console.warn('[ROUTER] Container not in DOM, delaying render...');
+            setTimeout(() => this.render(page), 100);
+            return;
+        }
+        
         try {
             console.log(`[ROUTER] Rendering: ${mode}/${page}`);
             renderFn();
+            
+            // После рендера проверяем, что контент появился
+            if (this.container.innerHTML.trim() === '') {
+                console.warn('[ROUTER] Container is empty after render, retrying...');
+                setTimeout(() => {
+                    if (this.container.innerHTML.trim() === '') {
+                        console.error('[ROUTER] Container still empty after retry');
+                        this.showFallback();
+                    }
+                }, 50);
+            }
         } catch (error) {
             console.error(`[ROUTER] Render error for ${mode}/${page}:`, error);
             this.showFallback();

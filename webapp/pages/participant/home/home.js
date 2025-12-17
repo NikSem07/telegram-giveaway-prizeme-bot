@@ -1,35 +1,72 @@
 // ====== Рендер страниц ======
 
 function renderHomePage() {
-  const main = document.getElementById('main-content');
-  if (!main) return;
-
-  main.innerHTML = `
-    <div class="top-frame">
-      <div class="top-label">Рекомендуем</div>
-
-      <div class="top-title-row">
-        <div class="top-title">
-          <span class="top-title-emoji">🔥</span>
-          <span class="top-title-text">Топ розыгрыши</span>
-        </div>
-        <button class="top-arrow" type="button" aria-label="Открыть топ">
-          <span class="top-arrow-icon">&gt;</span>
-        </button>
-      </div>
-
-      <div id="top-giveaways-list" class="top-list"></div>
-    </div>
-
-    <div class="section-title section-title-row" style="margin-top:18px;">
-      <span>Все текущие розыгрыши</span>
-      <span class="section-title-arrow">&gt;</span>
-    </div>
-    <div id="all-giveaways-list" style="margin-top:8px;"></div>
-  `;
-
-  loadGiveawaysLists();
+    const main = document.getElementById('main-content');
+    
+    if (!main) {
+        console.error('[HOME] renderHomePage: main-content container not found');
+        // Попробуем найти через альтернативные селекторы
+        const fallback = document.querySelector('.main-content') || 
+                        document.querySelector('main') || 
+                        document.querySelector('#main-content');
+        
+        if (!fallback) {
+            console.error('[HOME] No main content container available');
+            
+            // Создаем временный контейнер если нужно
+            const tempContainer = document.createElement('div');
+            tempContainer.id = 'main-content-temp';
+            tempContainer.className = 'main-content';
+            document.body.appendChild(tempContainer);
+            
+            renderHomePageContent(tempContainer);
+            return;
+        }
+        
+        renderHomePageContent(fallback);
+        return;
+    }
+    
+    renderHomePageContent(main);
 }
+
+// Выносим основную логику рендера в отдельную функцию
+function renderHomePageContent(container) {
+    if (!container || !container.innerHTML) {
+        console.error('[HOME] Invalid container for render');
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="top-frame">
+            <div class="top-label">Рекомендуем</div>
+
+            <div class="top-title-row">
+                <div class="top-title">
+                    <span class="top-title-emoji">🔥</span>
+                    <span class="top-title-text">Топ розыгрыши</span>
+                </div>
+                <button class="top-arrow" type="button" aria-label="Открыть топ">
+                    <span class="top-arrow-icon">&gt;</span>
+                </button>
+            </div>
+
+            <div id="top-giveaways-list" class="top-list"></div>
+        </div>
+
+        <div class="section-title section-title-row" style="margin-top:18px;">
+            <span>Все текущие розыгрыши</span>
+            <span class="section-title-arrow">&gt;</span>
+        </div>
+        <div id="all-giveaways-list" style="margin-top:8px;"></div>
+    `;
+
+    // Загружаем данные с небольшой задержкой для гарантии
+    setTimeout(() => {
+        loadGiveawaysLists();
+    }, 100);
+}
+
 
 // ====== Загрузка розыгрышей с Node.js ======
 

@@ -34,22 +34,39 @@ window.switchMode = switchMode;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[HOME] DOM ready');
     
-    // Инициализируем состояние
+    // 1. Сначала гарантируем, что основной контейнер существует
+    const mainContainer = document.getElementById('main-content');
+    if (!mainContainer) {
+        console.error('[HOME] Main content container not found in DOM');
+        return;
+    }
+    
+    console.log('[HOME] Main container found:', mainContainer);
+    
+    // 2. Инициализируем состояние
     AppState.init();
     
-    // Инициализируем роутер
+    // 3. Инициализируем роутер (он сам найдет контейнер)
     Router.init();
     
-    // Инициализируем navbar (он сам загрузит аватар)
+    // 4. Инициализируем navbar
     Navbar.init();
     
-    // Периодическое обновление данных на главной (только для participant)
+    // 5. Периодическое обновление данных на главной (только для participant)
     setInterval(() => {
         const mode = AppState.getMode();
         const page = AppState.getPage();
         
         if (mode === 'participant' && page === 'home') {
-            loadGiveawaysLists();
+            // Используем экспортированную функцию напрямую
+            const homeModule = import('../pages/participant/home/home.js');
+            homeModule.then(module => {
+                if (module && module.loadGiveawaysLists) {
+                    module.loadGiveawaysLists();
+                }
+            }).catch(err => {
+                console.error('[HOME] Failed to load home module:', err);
+            });
         }
     }, 15 * 60 * 1000); // 15 минут
 });
