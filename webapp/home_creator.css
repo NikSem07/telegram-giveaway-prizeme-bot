@@ -3,3 +3,24 @@
   flex-direction: column;
   gap: 16px;
 }
+
+.creator-hero {
+  background: linear-gradient(135deg, #1f4cff, #0a3fa9);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.creator-hero-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  color: #fff;
+}
+
+.creator-hero h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
