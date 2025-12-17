@@ -23,29 +23,29 @@
 
     <!-- Основной контент -->
     <main class="main-content" id="main-content">
-      <div class="card">
+      <section class="creator-home">
         <div class="app-header">
           <h1>🎁 PrizeMe Creator</h1>
           <p class="welcome-text">Панель управления розыгрышами</p>
         </div>
-        
+
         <div class="menu-grid">
           <button class="menu-btn primary" onclick="createGiveaway()">
             <span class="btn-icon">➕</span>
             <span class="btn-text">Создать розыгрыш</span>
           </button>
-          
+
           <button class="menu-btn secondary" onclick="showMyGiveaways()">
             <span class="btn-icon">📋</span>
             <span class="btn-text">Мои розыгрыши</span>
           </button>
-          
+
           <button class="menu-btn secondary" onclick="showStatistics()">
             <span class="btn-icon">📊</span>
             <span class="btn-text">Статистика</span>
           </button>
         </div>
-        
+
         <div class="stats-section">
           <div class="stat-item">
             <span class="stat-number" id="active-giveaways">0</span>
@@ -60,7 +60,7 @@
             <span class="stat-label">завершено</span>
           </div>
         </div>
-      </div>
+      </section>
     </main>
 
     <!-- Навигационный бар для создателя -->
