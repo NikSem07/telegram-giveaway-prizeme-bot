@@ -25,6 +25,7 @@
   color: #fff;
 }
 
+
 /* ===== Creator actions ===== */
 
 .creator-actions {
@@ -72,5 +73,38 @@
 
 .creator-action-subtitle {
   font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+
+/* ===== Creator stats ===== */
+
+.creator-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+
+  background: #1c1c1e;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+.creator-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.creator-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.creator-stat-label {
+  font-size: 12px;
+  margin-top: 2px;
   color: rgba(255, 255, 255, 0.6);
 }
