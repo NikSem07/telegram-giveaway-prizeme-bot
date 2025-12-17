@@ -3,7 +3,7 @@ import { renderTasksPage } from './tasks/tasks.js';
 import { renderGiveawaysPage } from './giveaways/giveaways.js';
 import { renderProfilePage } from './profile/profile.js';
 
-import { renderHomePage as renderCreatorHomePage } from '../creator/home/home.js';
+import { renderCreatorHomePage } from '../creator/home/home.js';
 
 let currentPage = null;
 
@@ -29,7 +29,7 @@ function switchPage(page) {
     item.classList.toggle('active', item.dataset.page === page);
   });
 
-  document.body.classList.toggle('home-page', page === 'home');
+  document.body.classList.toggle('home-page', page === 'home' || page === 'creator-home');
 
   if (page === 'home') {
     renderHomePage();

@@ -7,13 +7,21 @@ console.log('[HOME-PARTICIPANT] Script loaded');
 
 // Переключение режима Участник / Создатель
 function switchMode(mode) {
-  console.log('[HOME-PARTICIPANT] switchMode:', mode);
+  console.log('[HOME] switchMode:', mode);
+
+  // визуально переключаем активную кнопку
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+
+  // остаёмся в одном layout и просто рендерим другую "главную"
   if (mode === 'creator') {
-    window.location.href = '/miniapp/home_creator';
+    switchPage('creator-home');
   } else {
-    window.location.href = '/miniapp/home_participant';
+    switchPage('home');
   }
 }
+
 window.switchMode = switchMode;
 
 // ====== Инициализация ======
