@@ -1,15 +1,18 @@
-function renderTasksPage() {
-  const main = document.getElementById('main-content');
-  if (!main) return;
+// webapp/pages/participant/tasks/tasks.js
+import tasksTemplate from './tasks.template.js';
+import TelegramData from '../../../shared/telegram-data.js';
 
-  main.innerHTML = `
-    <div class="stub-card">
-      <h2 class="stub-title">📋 Задания</h2>
-      <p class="stub-text">Выполняйте задания, чтобы участвовать в розыгрышах. Раздел находится в разработке.</p>
-    </div>
-  `;
+function renderTasksPage() {
+    const main = document.getElementById('main-content');
+    if (!main) return;
+
+    const context = {
+        user: TelegramData.getUserContext()
+    };
+
+    main.innerHTML = tasksTemplate(context);
 }
 
 export {
-  renderTasksPage,
+    renderTasksPage,
 };

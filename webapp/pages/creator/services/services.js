@@ -1,24 +1,16 @@
-// Контент для сервисов создателя
-function getCreatorServicesContent() {
-  return `
-    <div class="card">
-      <div class="app-header">
-        <h1>🛠️ Сервисы</h1>
-        <p class="welcome-text">Дополнительные инструменты</p>
-      </div>
-      
-      <div style="text-align: center; padding: 40px 20px;">
-        <div style="font-size: 64px; margin-bottom: 20px;">🚧</div>
-        <h2>Скоро будет доступно</h2>
-        <p>Раздел находится в разработке</p>
-      </div>
-    </div>
-  `;
-}
+// webapp/pages/creator/services/services.js
+import servicesTemplate from './services.template.js';
+import TelegramData from '../../../shared/telegram-data.js';
 
 function renderServicesPage() {
-  const mainContent = document.getElementById('main-content');
-  mainContent.innerHTML = getCreatorServicesContent();
+    const main = document.getElementById('main-content');
+    if (!main) return;
+
+    const context = {
+        user: TelegramData.getUserContext()
+    };
+
+    main.innerHTML = servicesTemplate(context);
 }
 
 export { renderServicesPage };

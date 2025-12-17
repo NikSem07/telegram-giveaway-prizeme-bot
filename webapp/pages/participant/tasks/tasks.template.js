@@ -1,0 +1,9 @@
+// webapp/pages/participant/tasks/tasks.template.js
+export default function tasksTemplate(context = {}) {
+    return `
+        <div class="stub-card">
+            <h2 class="stub-title">📋 Задания</h2>
+            <p class="stub-text">Выполняйте задания, чтобы участвовать в розыгрышах. Раздел находится в разработке.</p>
+        </div>
+    `;
+}
