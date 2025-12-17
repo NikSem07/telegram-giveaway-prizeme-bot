@@ -1,0 +1,186 @@
+/* webapp/shared/styles/components/cards.css */
+/* Стили для карточек приложения */
+
+/* Базовый стиль карточки */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  transition: transform var(--transition-normal), 
+              box-shadow var(--transition-normal);
+}
+
+/* Карточка с тенью */
+.card-shadow {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Карточка с градиентом */
+.card-gradient {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+/* Карточка для каналов (need subscription) */
+.channel-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.channel-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+
+.channel-info {
+  flex: 1;
+  min-width: 0; /* Для правильного ellipsis */
+}
+
+.channel-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-username {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Карточка победителя */
+.winner-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.winner-card.current-user {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.winner-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.winner-medal {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.winner-position {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.winner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.winner-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winner-ticket {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Карточка действия (creator) */
+.creator-action-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background var(--transition-normal);
+}
+
+.creator-action-card:active {
+  background: var(--color-bg-tertiary);
+}
+
+.creator-action-icon {
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.creator-action-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.creator-action-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.creator-action-subtitle {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Состояния hover (только для десктопа) */
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  
+  .creator-action-card:hover {
+    background: var(--color-bg-tertiary);
+  }
+}

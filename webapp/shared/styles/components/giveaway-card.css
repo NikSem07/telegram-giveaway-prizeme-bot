@@ -1,0 +1,162 @@
+/* webapp/shared/styles/components/giveaway-card.css */
+/* Стили для карточек розыгрышей */
+
+/* Базовый стиль карточки розыгрыша */
+.giveaway-card {
+  display: flex;
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  align-items: center;
+}
+
+/* TOP giveaway card (синий блок) */
+.giveaway-card--top {
+  position: relative;
+  background: var(--card-bg-light);
+  padding: 10px;
+  padding-bottom: 18px;
+  margin-top: 8px;
+  border-radius: 14px;
+  align-items: center;
+}
+
+/* ALL giveaway card (обычные) */
+.giveaway-card--all {
+  padding-bottom: 18px;
+}
+
+/* Левая часть (аватар + бейдж) */
+.giveaway-left {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  margin-right: var(--spacing-md);
+  flex: 0 0 46px;
+}
+
+/* Аватар розыгрыша */
+.giveaway-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.giveaway-avatar--top {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.giveaway-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Информация о розыгрыше */
+.giveaway-info {
+  flex: 1;
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.giveaway-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.giveaway-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  max-height: 32px;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.giveaway-timer {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Бейдж участников */
+.giveaway-badge {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 7px;
+  background: rgba(10, 56, 169, 1);
+  border-radius: 999px;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+/* Бейдж для "Все текущие" */
+.giveaway-badge--black {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* Скрытый бейдж */
+.giveaway-badge--hidden {
+  display: none;
+}
+
+/* Иконка в бейдже */
+.giveaway-badge-icon {
+  width: 10px;
+  height: 12px;
+  display: inline-block;
+  opacity: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px 12px;
+  background-image: url("/miniapp-static/assets/icons/profile-icon.svg");
+}
+
+/* Текст бейджа */
+.giveaway-badge-text {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* Особые стили для карточек в синем блоке */
+.top-frame .giveaway-card--top {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.top-frame .giveaway-info {
+  color: rgba(250, 250, 250, 1);
+}
+
+.top-frame .giveaway-desc {
+  color: rgba(250, 250, 250, 0.85);
+}
+
+.top-frame .giveaway-timer {
+  color: rgba(250, 250, 250, 1);
+}

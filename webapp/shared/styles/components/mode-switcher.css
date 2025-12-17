@@ -1,0 +1,62 @@
+/* webapp/shared/styles/components/mode-switcher.css */
+/* Стили для переключателя режимов Participant/Creator */
+
+/* Контейнер переключателя */
+.mode-switcher {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  border-radius: 999px;
+  padding: 2px 4px;
+  height: 32px;
+}
+
+/* Кнопки переключателя */
+.mode-btn {
+  flex: 1;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+}
+
+/* Активная кнопка */
+.mode-btn.active {
+  background: #737375;
+  color: #FAFAFA;
+  font-weight: 700;
+}
+
+/* Индикатор активной кнопки (альтернативный стиль) */
+.mode-switcher-indicator {
+  position: absolute;
+  background: var(--color-primary);
+  border-radius: 999px;
+  height: calc(100% - 4px);
+  transition: transform var(--transition-normal);
+}
+
+/* Вариант с индикатором (для будущего использования) */
+.mode-switcher--indicator {
+  position: relative;
+  background: var(--color-bg-tertiary);
+}
+
+.mode-switcher--indicator .mode-btn {
+  position: relative;
+  z-index: 1;
+}
+
+/* Состояния hover (только для десктопа) */
+@media (hover: hover) {
+  .mode-btn:not(.active):hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text);
+  }
+}
