@@ -1,59 +1,62 @@
-// \webapp\pages\creator\home\home.js
+// webapp/pages/creator/home/home.js
+import creatorHomeTemplate from './home.template.js';
+import TelegramData from '../../../shared/telegram-data.js';
+import Router from '../../../shared/router.js';
 
 export function renderCreatorHomePage() {
-  const main = document.getElementById('main-content');
-  if (!main) return;
+    const main = document.getElementById('main-content');
+    if (!main) return;
 
-  main.innerHTML = `
-    <section class="creator-home">
-      <div class="creator-hero">
-        <div class="creator-hero-title">
-          <span class="creator-hero-label">СОЗДАТЕЛЬ</span>
-          <h2>Управление розыгрышами</h2>
-        </div>
-      </div>
+    // Загружаем данные пользователя
+    const user = TelegramData.getUserContext();
+    
+    // Подготавливаем контекст (можно расширить при необходимости)
+    const context = { 
+        user,
+        stats: {} // Можно добавить статистику создателя
+    };
+    
+    // Рендерим шаблон
+    main.innerHTML = creatorHomeTemplate(context);
+    
+    // Навешиваем обработчики событий
+    attachEventListeners(main);
+}
 
-      <div class="app-header">
-        <h1>🎁 PrizeMe Creator</h1>
-        <p class="welcome-text">Панель управления розыгрышами</p>
-      </div>
-
-      <div class="creator-actions">
-        <div class="creator-action-card" data-creator-action="create">
-          <div class="creator-action-icon">➕</div>
-          <div class="creator-action-text">
-            <div class="creator-action-title">Создать розыгрыш</div>
-            <div class="creator-action-subtitle">Запуск нового розыгрыша</div>
-          </div>
-        </div>
-
-        <div class="creator-action-card" data-creator-action="my">
-          <div class="creator-action-icon">📋</div>
-          <div class="creator-action-text">
-            <div class="creator-action-title">Мои розыгрыши</div>
-            <div class="creator-action-subtitle">Активные и завершённые</div>
-          </div>
-        </div>
-
-        <div class="creator-action-card" data-creator-action="stats">
-          <div class="creator-action-icon">📊</div>
-          <div class="creator-action-text">
-            <div class="creator-action-title">Статистика</div>
-            <div class="creator-action-subtitle">Участники и результаты</div>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
-
-  // Ненавязчиво: если у тебя где-то уже есть функции - используем их
-  main.querySelector('[data-creator-action="create"]')?.addEventListener('click', () => {
-    window.createGiveaway?.();
-  });
-  main.querySelector('[data-creator-action="my"]')?.addEventListener('click', () => {
-    window.showMyGiveaways?.();
-  });
-  main.querySelector('[data-creator-action="stats"]')?.addEventListener('click', () => {
-    window.showStatistics?.();
-  });
+function attachEventListeners(container) {
+    // Обработчики для карточек действий
+    const createBtn = container.querySelector('[data-creator-action="create"]');
+    const myBtn = container.querySelector('[data-creator-action="my"]');
+    const statsBtn = container.querySelector('[data-creator-action="stats"]');
+    
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            console.log('Creator: Create giveaway clicked');
+            // В будущем: Router.navigate('giveaway-create');
+        });
+    }
+    
+    if (myBtn) {
+        myBtn.addEventListener('click', () => {
+            Router.navigate('giveaways');
+        });
+    }
+    
+    if (statsBtn) {
+        statsBtn.addEventListener('click', () => {
+            Router.navigate('stats');
+        });
+    }
+    
+    // Ненавязчиво: если у тебя где-то уже есть глобальные функции - используем их
+    // (оставляем для обратной совместимости)
+    if (createBtn && window.createGiveaway) {
+        createBtn.addEventListener('click', window.createGiveaway);
+    }
+    if (myBtn && window.showMyGiveaways) {
+        myBtn.addEventListener('click', window.showMyGiveaways);
+    }
+    if (statsBtn && window.showStatistics) {
+        statsBtn.addEventListener('click', window.showStatistics);
+    }
 }
