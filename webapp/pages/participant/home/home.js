@@ -31,9 +31,38 @@ function renderHomePage() {
 }
 
 // Выносим основную логику рендера в отдельную функцию
-function renderHomePageContent(container) {
-    if (!container || !container.innerHTML) {
-        console.error('[HOME] Invalid container for render');
+function renderHomePage() {
+    console.log('[HOME] renderHomePage called');
+    
+    const main = document.getElementById('main-content');
+    
+    if (!main) {
+        console.error('[HOME] renderHomePage: main-content container not found');
+        
+        // Попробуем найти через альтернативные селекторы
+        const fallback = document.querySelector('.main-content') || 
+                        document.querySelector('main');
+        
+        if (!fallback) {
+            console.error('[HOME] No main content container available, will retry in 100ms');
+            setTimeout(renderHomePage, 100);
+            return;
+        }
+        
+        renderToContainer(fallback);
+        return;
+    }
+    
+    renderToContainer(main);
+}
+
+// Основная логика рендера
+function renderToContainer(container) {
+    console.log('[HOME] Rendering to container:', container);
+    
+    // Проверяем, что container валидный DOM элемент
+    if (!container || !(container instanceof Element)) {
+        console.error('[HOME] Invalid container:', container);
         return;
     }
     
@@ -61,6 +90,8 @@ function renderHomePageContent(container) {
         <div id="all-giveaways-list" style="margin-top:8px;"></div>
     `;
 
+    console.log('[HOME] Content rendered to container');
+    
     // Загружаем данные с небольшой задержкой для гарантии
     setTimeout(() => {
         loadGiveawaysLists();
@@ -236,7 +267,13 @@ function escapeHtml(str) {
 }
 
 
+// Экспортируем функции
 export {
-  renderHomePage,
-  loadGiveawaysLists,
+    renderHomePage,
+    loadGiveawaysLists,
 };
+
+// Дополнительно делаем loadGiveawaysLists доступной глобально для setInterval
+if (typeof window !== 'undefined') {
+    window.loadGiveawaysLists = loadGiveawaysLists;
+}

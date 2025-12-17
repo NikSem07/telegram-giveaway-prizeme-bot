@@ -58,15 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const page = AppState.getPage();
         
         if (mode === 'participant' && page === 'home') {
-            // Используем экспортированную функцию напрямую
-            const homeModule = import('../pages/participant/home/home.js');
-            homeModule.then(module => {
-                if (module && module.loadGiveawaysLists) {
-                    module.loadGiveawaysLists();
-                }
-            }).catch(err => {
-                console.error('[HOME] Failed to load home module:', err);
-            });
+            // Используем уже импортированную функцию
+            if (typeof loadGiveawaysLists === 'function') {
+                loadGiveawaysLists();
+            }
         }
     }, 15 * 60 * 1000); // 15 минут
 });

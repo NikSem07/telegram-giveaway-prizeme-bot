@@ -109,15 +109,11 @@ const Router = {
             console.log(`[ROUTER] Rendering: ${mode}/${page}`);
             renderFn();
             
-            // После рендера проверяем, что контент появился
+            // ТОЛЬКО логируем состояние контейнера, не пытаемся перерендерить
             if (this.container.innerHTML.trim() === '') {
-                console.warn('[ROUTER] Container is empty after render, retrying...');
-                setTimeout(() => {
-                    if (this.container.innerHTML.trim() === '') {
-                        console.error('[ROUTER] Container still empty after retry');
-                        this.showFallback();
-                    }
-                }, 50);
+                console.log('[ROUTER] Container is empty after render (this might be ok if loading async)');
+            } else {
+                console.log('[ROUTER] Container has content, length:', this.container.innerHTML.length);
             }
         } catch (error) {
             console.error(`[ROUTER] Render error for ${mode}/${page}:`, error);
