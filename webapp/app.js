@@ -1054,38 +1054,45 @@ function initializeCurrentPage() {
   }
 
   switch (path) {
-    case '/miniapp/':
-      initializeMainPage();
-      break;
+      case '/miniapp/':
+          initializeMainPage();
+          break;
 
-    case '/miniapp/home_participant':
-    case '/miniapp/home_creator':
-      // Главные экраны участника/создателя.
-      // Telegram WebApp уже инициализирован выше,
-      // дальше логика отдается отдельным js (home_participant.js / home_creator.js)
-      console.log("[MULTI-PAGE] Home screen page, handled by specific JS file");
-      break;
+      case '/miniapp/home_participant':
+      case '/miniapp/home_creator':
+      case '/miniapp/index':  // <--- ДОБАВЛЯЕМ ЭТОТ КЕЙС!
+          // Главные экраны участника/создателя.
+          // Telegram WebApp уже инициализирован выше,
+          // дальше логика отдается отдельным js (main.js для SPA)
+          console.log("[MULTI-PAGE] Home screen page (/index), SPA will handle it");
+          break;
 
-    case '/miniapp/loading':
-      initializeLoadingPage();
-      break;
-    case '/miniapp/need_subscription':
-      initializeNeedSubscriptionPage();
-      break;
-    case '/miniapp/success':
-      initializeSuccessPage();
-      break;
-    case '/miniapp/already':
-      initializeAlreadyPage();
-      break;
-    case '/miniapp/results_win':
-      initializeResultsWinPage();
-      break;
-    case '/miniapp/results_lose':
-      initializeResultsLosePage();
-      break;
-    default:
-      window.location.href = '/miniapp/';
+      case '/miniapp/loading':
+          initializeLoadingPage();
+          break;
+      case '/miniapp/need_subscription':
+          initializeNeedSubscriptionPage();
+          break;
+      case '/miniapp/success':
+          initializeSuccessPage();
+          break;
+      case '/miniapp/already':
+          initializeAlreadyPage();
+          break;
+      case '/miniapp/results_win':
+          initializeResultsWinPage();
+          break;
+      case '/miniapp/results_lose':
+          initializeResultsLosePage();
+          break;
+      default:
+          // Для неизвестных путей редиректим на главную SPA
+          if (path.startsWith('/miniapp/')) {
+              console.log("[MULTI-PAGE] Unknown miniapp path, redirecting to index:", path);
+              window.location.href = '/miniapp/index';
+          } else {
+              console.log("[MULTI-PAGE] Not a miniapp path, staying on:", path);
+          }
   }
 }
 
