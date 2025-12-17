@@ -1,122 +1,58 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PrizeMe — Создатель</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/miniapp-static/home_participant.css?v=UI-V1"/>
-  <link rel="stylesheet" href="/miniapp-static/home_creator.css?v=CREATOR-V1"/>
-</head>
-<body class="home-page">
-  <div class="wrap">
-    <!-- Переключалка режимов ТОЛЬКО на главной -->
-    <div class="mode-switcher-container">
-      <div class="mode-switcher">
-        <button class="mode-btn" data-mode="participant" onclick="switchMode('participant')">
-          <span class="mode-text">Участник</span>
-        </button>
-        <button class="mode-btn active" data-mode="creator" onclick="switchMode('creator')">
-          <span class="mode-text">Создатель</span>
-        </button>
+<section class="creator-home">
+
+  <div class="creator-hero">
+    <div class="creator-hero-title">
+      <span class="creator-hero-label">СОЗДАТЕЛЬ</span>
+      <h2>Управление розыгрышами</h2>
+    </div>
+  </div>
+
+  <div class="app-header">
+    <h1>🎁 PrizeMe Creator</h1>
+    <p class="welcome-text">Панель управления розыгрышами</p>
+  </div>
+
+  <div class="creator-actions">
+    <div class="creator-action-card" onclick="createGiveaway()">
+      <div class="creator-action-icon">➕</div>
+      <div class="creator-action-text">
+        <div class="creator-action-title">Создать розыгрыш</div>
+        <div class="creator-action-subtitle">Запуск нового розыгрыша</div>
       </div>
     </div>
 
-    <!-- Основной контент -->
-    <main class="main-content" id="main-content">
-      <section class="creator-home">
-
-        <div class="creator-hero">
-          <div class="creator-hero-title">
-            <span class="creator-hero-label">СОЗДАТЕЛЬ</span>
-            <h2>Управление розыгрышами</h2>
-          </div>
-        </div>
-
-        <div class="app-header">
-          <h1>🎁 PrizeMe Creator</h1>
-          <p class="welcome-text">Панель управления розыгрышами</p>
-        </div>
-
-        <div class="creator-actions">
-          <div class="creator-action-card" onclick="createGiveaway()">
-            <div class="creator-action-icon">➕</div>
-            <div class="creator-action-text">
-              <div class="creator-action-title">Создать розыгрыш</div>
-              <div class="creator-action-subtitle">Запуск нового розыгрыша</div>
-            </div>
-          </div>
-
-          <div class="creator-action-card" onclick="showMyGiveaways()">
-            <div class="creator-action-icon">📋</div>
-            <div class="creator-action-text">
-              <div class="creator-action-title">Мои розыгрыши</div>
-              <div class="creator-action-subtitle">Активные и завершённые</div>
-            </div>
-          </div>
-
-          <div class="creator-action-card" onclick="showStatistics()">
-            <div class="creator-action-icon">📊</div>
-            <div class="creator-action-text">
-              <div class="creator-action-title">Статистика</div>
-              <div class="creator-action-subtitle">Участники и результаты</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="creator-stats">
-          <div class="creator-stat-item">
-            <div class="creator-stat-value">0</div>
-            <div class="creator-stat-label">активных</div>
-          </div>
-
-          <div class="creator-stat-item">
-            <div class="creator-stat-value">0</div>
-            <div class="creator-stat-label">участников</div>
-          </div>
-
-          <div class="creator-stat-item">
-            <div class="creator-stat-value">0</div>
-            <div class="creator-stat-label">завершено</div>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Навигационный бар для создателя -->
-    <nav class="bottom-nav">
-      <div class="nav-container">
-        <button class="nav-item active" data-page="home">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/home-icon.svg" alt="Главная" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Главная</div>
-        </button>
-        
-        <button class="nav-item" data-page="services">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/services-icon.svg" alt="Сервисы" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Сервисы</div>
-        </button>
-        
-        <button class="nav-item" data-page="giveaways">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/giveaway-icon.svg" alt="Розыгрыши" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Розыгрыши</div>
-        </button>
-        
-        <button class="nav-item" data-page="stats">
-          <div class="nav-icon">
-            <img src="/miniapp-static/assets/icons/stats-icon.svg" alt="Статистика" class="nav-icon-img">
-          </div>
-          <div class="nav-text">Статистика</div>
-        </button>
+    <div class="creator-action-card" onclick="showMyGiveaways()">
+      <div class="creator-action-icon">📋</div>
+      <div class="creator-action-text">
+        <div class="creator-action-title">Мои розыгрыши</div>
+        <div class="creator-action-subtitle">Активные и завершённые</div>
       </div>
-    </nav>
+    </div>
+
+    <div class="creator-action-card" onclick="showStatistics()">
+      <div class="creator-action-icon">📊</div>
+      <div class="creator-action-text">
+        <div class="creator-action-title">Статистика</div>
+        <div class="creator-action-subtitle">Участники и результаты</div>
+      </div>
+    </div>
   </div>
-  
-  <script src="/miniapp-static/home_creator.js?v=MULTI-PAGE-V2"></script>
-</body>
-</html>
+
+  <div class="creator-stats">
+    <div class="creator-stat-item">
+      <div class="creator-stat-value">0</div>
+      <div class="creator-stat-label">активных</div>
+    </div>
+
+    <div class="creator-stat-item">
+      <div class="creator-stat-value">0</div>
+      <div class="creator-stat-label">участников</div>
+    </div>
+
+    <div class="creator-stat-item">
+      <div class="creator-stat-value">0</div>
+      <div class="creator-stat-label">завершено</div>
+    </div>
+  </div>
+
+</section>

@@ -3,6 +3,8 @@ import { renderTasksPage } from './tasks/tasks.js';
 import { renderGiveawaysPage } from './giveaways/giveaways.js';
 import { renderProfilePage } from './profile/profile.js';
 
+import { renderCreatorHomePage } from '../creator/home/home.js';
+
 let currentPage = null;
 
 function setupNavigation() {
@@ -30,6 +32,11 @@ function switchPage(page) {
     return;
   }
 
+  if (page === 'creator-home') {
+    renderCreatorHomePage();
+    return;
+  }
+
   if (page === 'tasks') {
     renderTasksPage();
     return;
@@ -44,10 +51,6 @@ function switchPage(page) {
     renderProfilePage();
     return;
   }
-}
-
-function getCurrentPage() {
-  return currentPage;
 }
 
 export { setupNavigation, switchPage, getCurrentPage };
