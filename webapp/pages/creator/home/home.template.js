@@ -1,7 +1,5 @@
 // webapp/pages/creator/home/home.template.js
 export default function creatorHomeTemplate(context = {}) {
-    const { user = {}, stats = {} } = context;
-    
     return `
         <section class="creator-home">
             <div class="creator-hero">

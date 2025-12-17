@@ -10,8 +10,14 @@ function renderProfilePage() {
     // Загружаем данные из Telegram
     const user = TelegramData.getUserContext();
     
-    // Передаем в шаблон
-    const context = { user };
+    // Подготавливаем контекст для шаблона
+    const context = {
+        avatarUrl: user.photoUrl || '/miniapp-static/assets/icons/profile-icon.svg',
+        fullName: user.fullName || 'Пользователь',
+        username: user.username || ''
+    };
+    
+    // Рендерим через шаблон
     main.innerHTML = profileTemplate(context);
 }
 
@@ -22,13 +28,13 @@ function fillProfileFromTelegram() {
         const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
         if (!user) return null;
 
-        // Возвращаем объект пользователя для возможного использования
-        return {
-            firstName: user.first_name || '',
-            lastName: user.last_name || '',
-            username: user.username || '',
-            photoUrl: user.photo_url || null
-        };
+        // Обновляем аватар в навбаре
+        const navAvatarEl = document.getElementById('nav-profile-avatar');
+        if (navAvatarEl && user.photo_url) {
+            navAvatarEl.src = user.photo_url;
+        }
+        
+        return user; // Возвращаем объект пользователя для возможного использования
     } catch (e) {
         console.log('[PROFILE] fillProfileFromTelegram error:', e);
         return null;
@@ -36,9 +42,33 @@ function fillProfileFromTelegram() {
 }
 
 // Устаревшая функция - оставляем для обратной совместимости
-// Теперь данные загружаются через TelegramData и шаблон
 function loadProfileFromTelegram() {
-    console.warn('[PROFILE] loadProfileFromTelegram is deprecated, use TelegramData instead');
+    try {
+        const tg = window.Telegram && Telegram.WebApp;
+        const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+        if (!user) return;
+
+        // Обновляем аватар на странице
+        const avatarEl = document.getElementById('profile-page-avatar');
+        if (avatarEl && user.photo_url) {
+            avatarEl.src = user.photo_url;
+        }
+
+        // Обновляем имя
+        const nameEl = document.getElementById('profile-page-name');
+        if (nameEl && (user.first_name || user.last_name)) {
+            const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+            nameEl.textContent = fullName;
+        }
+
+        // Обновляем username
+        const usernameEl = document.getElementById('profile-page-username');
+        if (usernameEl && user.username) {
+            usernameEl.textContent = `@${user.username}`;
+        }
+    } catch (e) {
+        console.log('[PROFILE] loadProfileFromTelegram error:', e);
+    }
 }
 
 export {
@@ -46,4 +76,3 @@ export {
     fillProfileFromTelegram,
     loadProfileFromTelegram
 };
-

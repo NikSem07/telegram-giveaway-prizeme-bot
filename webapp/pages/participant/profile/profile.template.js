@@ -1,15 +1,11 @@
 // webapp/pages/participant/profile/profile.template.js
 export default function profileTemplate(context = {}) {
-    const { user = {} } = context;
     const { 
-        fullName = 'Пользователь', 
-        username = '', 
-        photoUrl = null,
-        firstName = '',
-        lastName = ''
-    } = user;
+        avatarUrl = '/miniapp-static/assets/icons/profile-icon.svg',
+        fullName = 'Пользователь',
+        username = ''
+    } = context;
     
-    // Используем условный оператор для username
     const usernameHtml = username 
         ? `<p class="profile-username" id="profile-page-username">${username}</p>`
         : '';
@@ -18,7 +14,7 @@ export default function profileTemplate(context = {}) {
         <div class="profile-header">
             <div class="profile-avatar-container">
                 <img id="profile-page-avatar" 
-                     src="${photoUrl || '/miniapp-static/assets/icons/profile-icon.svg'}" 
+                     src="${avatarUrl}" 
                      alt="Аватар"
                      class="profile-avatar">
             </div>
