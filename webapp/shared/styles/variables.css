@@ -33,4 +33,31 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  /* Цвета градиентов */
+--gradient-primary: linear-gradient(270deg, rgba(21, 81, 229, 1) 0%, rgba(0, 34, 255, 1) 100%);
+--gradient-blue: linear-gradient(135deg, #1f4cff, #0a3fa9);
+
+/* Цвета навбара */
+--navbar-bg: rgba(46, 46, 46, 0.1);
+--navbar-border: rgba(60, 60, 67, 0.36);
+
+/* Цвета карточек */
+--card-bg: var(--color-bg-secondary);
+--card-bg-light: rgba(255, 255, 255, 0.1);
+
+/* Цвета текста навбара */
+--nav-text: #8E8E93;
+--nav-text-active: #007AFF;
+
+/* Размеры навбара */
+--navbar-height: 80px;
+--nav-item-width: 72px;
+--nav-item-height: 44px;
+
+/* Анимации */
+--transition-fast: 0.15s ease;
+--transition-normal: 0.2s ease;
+--transition-slow: 0.3s ease;
 }
+

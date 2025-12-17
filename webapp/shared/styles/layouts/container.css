@@ -1,0 +1,62 @@
+/* webapp/shared/styles/layouts/container.css */
+/* Стили для контейнеров и оберток */
+
+/* Основной контейнер контента */
+.main-content {
+  padding-bottom: 90px;
+  min-height: calc(100vh - 90px);
+}
+
+/* Обертка страницы (для совместимости) */
+.wrap {
+  padding: 20px;
+}
+
+/* Карточка-заглушка для ошибок */
+.stub-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin: var(--spacing-md) 0;
+}
+
+.stub-title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.stub-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Секции */
+.section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-md);
+}
+
+.section-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-title-arrow {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 18px;
+  font-weight: 700;
+  opacity: 0.95;
+  transform: translateY(1px);
+}

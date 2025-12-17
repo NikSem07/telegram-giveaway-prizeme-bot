@@ -1,0 +1,72 @@
+/* webapp/shared/styles/reset.css */
+/* Современный сброс стилей */
+
+/* Убираем отступы и стандартные стили списков */
+ul, ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Кнопки и интерактивные элементы */
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  margin: 0;
+  padding: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Кнопки */
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* Отключаем подсветку при тапе на мобильных */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Поля ввода */
+input, textarea {
+  border-radius: 0;
+}
+
+/* Отключаем стрелки у числовых полей */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Таблицы */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* Медиа элементы */
+img, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Формы */
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* Скрываем крестик в поле поиска IE */
+input[type="search"]::-ms-clear {
+  display: none;
+}

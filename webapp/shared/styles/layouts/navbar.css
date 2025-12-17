@@ -1,2 +1,116 @@
-/* Стили navbar вынесем сюда позже */
-/* Пока оставляем в home_participant.css */
+/* webapp/shared/styles/layouts/navbar.css */
+/* Стили для навигационного бара */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: var(--navbar-height);
+  background: var(--navbar-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  justify-content: space-around;
+  padding-top: 2px;
+  padding-bottom: 18px;
+  align-items: center;
+  border-top: 0.33px solid var(--navbar-border);
+  z-index: 1000;
+}
+
+/* Слот одной вкладки */
+.nav-item {
+  position: relative;
+  width: var(--nav-item-width);
+  height: var(--nav-item-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Иконка */
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 3px;
+  opacity: 0.8;
+  transition: opacity var(--transition-normal);
+}
+
+/* Аватарка в навбаре */
+.nav-avatar {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Подпись */
+.nav-label {
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 14px;
+  color: var(--nav-text);
+  transition: color var(--transition-normal);
+}
+
+/* Градиентная подложка (активное состояние) */
+.nav-active-bg {
+  position: absolute;
+  top: 0;
+  width: var(--nav-item-width);
+  height: var(--nav-item-height);
+  border-radius: var(--radius-md);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  background: radial-gradient(
+    50% 50% at 50% 47%,
+    rgba(21, 81, 229, 0.4) 0%,
+    rgba(12, 45, 127, 0) 100%
+  );
+}
+
+/* Активная вкладка */
+.nav-item.active .nav-active-bg {
+  opacity: 1;
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
+  /* Делаем иконку синей, исключая аватар */
+  filter: brightness(0) saturate(100%) invert(35%) sepia(98%) saturate(2500%) hue-rotate(195deg);
+}
+
+.nav-item.active .nav-label {
+  color: var(--nav-text-active);
+}
+
+/* Особые стили для профиля (аватарка) */
+.nav-item.active.nav-profile .nav-avatar {
+  outline: 2px solid var(--nav-text-active);
+  outline-offset: 2px;
+}
+
+/* Исключаем аватар из синего фильтра */
+.nav-item.active.nav-profile .nav-avatar-img {
+  filter: none !important;
+}
+
+.nav-item.active.nav-profile .nav-icon {
+  filter: none !important;
+}
