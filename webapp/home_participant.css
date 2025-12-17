@@ -494,3 +494,39 @@ body {
   font-size: 13px;
   opacity: 0.8;
 }
+
+/* ====== Стили страницы профиля ====== */
+.profile-header {
+  text-align: center;
+  padding: 24px 20px;
+  background: var(--tg-theme-secondary-bg-color, #1c1c1e);
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+.profile-avatar-container {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 12px;
+}
+
+.profile-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #007AFF;
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tg-theme-text-color, #ffffff);
+  margin: 0 0 4px;
+}
+
+.profile-username {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}

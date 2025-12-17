@@ -38,14 +38,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализируем состояние
     AppState.init();
     
-    // Загружаем аватар из Telegram
-    fillProfileFromTelegram();
+    // Загружаем аватар из Telegram для навбара
+    // Используем задержку, чтобы DOM успел загрузиться
+    setTimeout(() => {
+        const user = fillProfileFromTelegram();
+        if (user && user.photo_url) {
+            // Обновляем аватар в navbar через Navbar API
+            Navbar.updateAvatar(user.photo_url);
+        }
+    }, 300);
     
     // Инициализируем роутер
     Router.init();
     
     // Инициализируем navbar
     Navbar.init();
+
+    // Подписываемся на изменения страницы для обновления аватара на странице профиля
+    AppState.subscribe((state) => {
+        if (state.changed === 'page' && state.page === 'profile') {
+            // Небольшая задержка, чтобы DOM успел отрендериться
+            setTimeout(() => {
+                const tg = window.Telegram && Telegram.WebApp;
+                const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+                if (user && user.photo_url) {
+                    // Обновляем аватар на странице профиля
+                    const profileAvatar = document.getElementById('profile-page-avatar');
+                    if (profileAvatar) {
+                        profileAvatar.src = user.photo_url;
+                    }
+                }
+            }, 50);
+        }
+    });
     
     // Периодическое обновление данных на главной (только для participant)
     setInterval(() => {

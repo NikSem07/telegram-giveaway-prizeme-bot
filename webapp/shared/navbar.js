@@ -83,11 +83,21 @@ const Navbar = {
             
             const avatarImg = document.createElement('img');
             avatarImg.id = 'nav-profile-avatar';
+            // Изначально используем иконку по умолчанию
             avatarImg.src = `/miniapp-static/assets/icons/${item.icon}`;
             avatarImg.alt = '';
             
             avatarContainer.appendChild(avatarImg);
             div.appendChild(avatarContainer);
+            
+            // Пытаемся сразу загрузить аватар из Telegram
+            setTimeout(() => {
+                const tg = window.Telegram && Telegram.WebApp;
+                const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+                if (user && user.photo_url) {
+                    avatarImg.src = user.photo_url;
+                }
+            }, 100);
         } else {
             const iconImg = document.createElement('img');
             iconImg.className = 'nav-icon';
