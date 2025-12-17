@@ -500,8 +500,8 @@ app.get('/miniapp/', (req, res) => {
       </html>
     `);
   } else {
-    console.log('❌ [ROOT] No valid start param, redirecting to home_participant');
-    res.redirect('/miniapp/home_participant');
+    console.log('❌ [ROOT] No valid start param, redirecting to index');
+    res.redirect('/miniapp/index');
   }
 });
 
@@ -542,12 +542,8 @@ app.get('/miniapp/results_lose', (req, res) => {
 });
 
 // Participant and creator home pages
-app.get('/miniapp/home_participant', (req, res) => {
-  res.sendFile(path.join(__dirname, '../webapp/home_participant.html'));
-});
-
-app.get('/miniapp/home_creator', (req, res) => {
-  res.sendFile(path.join(__dirname, '../webapp/home_creator.html'));
+app.get('/miniapp/index', (req, res) => {
+  res.sendFile(path.join(__dirname, '../webapp/index.html'));
 });
 
 // HEAD ENDPOINTS
