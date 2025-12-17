@@ -1,0 +1,229 @@
+/* webapp/shared/styles/pages/participant/profile.css */
+/* Стили для страницы профиля участника */
+
+/* Заголовок профиля */
+.profile-header {
+  text-align: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.profile-avatar-container {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto var(--spacing-sm);
+  position: relative;
+}
+
+.profile-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--color-primary);
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-bg);
+  cursor: pointer;
+}
+
+.profile-avatar-edit svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-xs);
+}
+
+.profile-username {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--spacing-md);
+}
+
+.profile-id {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+/* Статистика профиля */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.profile-stat {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  text-align: center;
+}
+
+.profile-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.profile-stat-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Секции профиля */
+.profile-section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.profile-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-md);
+}
+
+.profile-list {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.profile-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-bg-tertiary);
+  transition: background var(--transition-fast);
+}
+
+.profile-list-item:last-child {
+  border-bottom: none;
+}
+
+.profile-list-item:active {
+  background: var(--color-bg-tertiary);
+}
+
+.profile-list-label {
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.profile-list-value {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+}
+
+.profile-list-arrow {
+  color: var(--color-text-tertiary);
+  font-size: 14px;
+}
+
+/* Настройки */
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-sm);
+}
+
+.settings-label {
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.settings-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-toggle input {
+  display: none;
+}
+
+.settings-toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-bg-tertiary);
+  border-radius: 12px;
+  transition: background var(--transition-normal);
+}
+
+.settings-toggle-slider:before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform var(--transition-normal);
+}
+
+.settings-toggle input:checked + .settings-toggle-slider {
+  background: var(--color-primary);
+}
+
+.settings-toggle input:checked + .settings-toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Кнопка выхода */
+.logout-button {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-lg);
+  margin-top: var(--spacing-lg);
+  transition: all var(--transition-normal);
+}
+
+.logout-button:active {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+@media (hover: hover) {
+  .profile-list-item:hover {
+    background: var(--color-bg-tertiary);
+  }
+  
+  .logout-button:hover {
+    background: rgba(255, 59, 48, 0.1);
+  }
+}

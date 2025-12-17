@@ -1,0 +1,112 @@
+/* webapp/shared/styles/pages/participant/home.css */
+/* Стили для главной страницы участника */
+
+/* Топ-блок с градиентом */
+.top-frame {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  background: var(--gradient-primary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.top-label {
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: var(--spacing-xs);
+  color: rgba(250, 250, 250, 0.9);
+}
+
+.top-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--spacing-xs);
+}
+
+.top-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-title-emoji {
+  font-size: 18px;
+}
+
+.top-title-text {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 18px;
+  color: rgba(250, 250, 250, 1);
+}
+
+/* Список в топ-блоке */
+.top-list {
+  margin-top: var(--spacing-sm);
+}
+
+/* Секция "Все текущие розыгрыши" */
+.home-section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.home-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.home-section-arrow {
+  font-size: 18px;
+  font-weight: 700;
+  opacity: 0.95;
+  color: var(--color-text);
+}
+
+/* Пустое состояние */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  color: var(--color-text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-text);
+}
+
+.empty-state-text {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* Адаптивность */
+@media (max-width: 360px) {
+  .top-frame {
+    padding: var(--spacing-sm);
+  }
+  
+  .top-title-text {
+    font-size: 16px;
+  }
+  
+  .home-section-title {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,183 @@
+/* webapp/shared/styles/pages/participant/tasks.css */
+/* Стили для страницы заданий участника */
+
+.tasks-header {
+  text-align: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.tasks-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.tasks-header-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+}
+
+.tasks-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+}
+
+.tasks-progress-circle {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+.tasks-progress-bg {
+  fill: none;
+  stroke: var(--color-bg-tertiary);
+  stroke-width: 4;
+}
+
+.tasks-progress-fill {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.tasks-progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tasks-progress-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* Список заданий */
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.task-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  transition: transform var(--transition-normal);
+}
+
+.task-card:active {
+  transform: scale(0.98);
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+}
+
+.task-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.task-reward {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-description {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+  line-height: 1.4;
+}
+
+.task-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.task-status--completed {
+  background: rgba(52, 199, 89, 0.1);
+  color: var(--color-success);
+}
+
+.task-status--pending {
+  background: rgba(255, 149, 0, 0.1);
+  color: var(--color-warning);
+}
+
+.task-status--available {
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--color-primary);
+}
+
+.task-action {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Пустое состояние */
+.tasks-empty {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+}
+
+.tasks-empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+  color: var(--color-text-secondary);
+}
+
+.tasks-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-text);
+}
+
+.tasks-empty-text {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* Состояния hover (только для десктопа) */
+@media (hover: hover) {
+  .task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+  }
+}
