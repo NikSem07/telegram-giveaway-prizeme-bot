@@ -7,6 +7,10 @@ import { renderCreatorHomePage } from '../creator/home/home.js';
 
 let currentPage = null;
 
+function getCurrentPage() {
+  return currentPage;
+}
+
 function setupNavigation() {
   const items = document.querySelectorAll('.bottom-nav .nav-item');
   items.forEach(item => {
