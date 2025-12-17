@@ -38,21 +38,30 @@
           <p class="welcome-text">Панель управления розыгрышами</p>
         </div>
 
-        <div class="menu-grid">
-          <button class="menu-btn primary" onclick="createGiveaway()">
-            <span class="btn-icon">➕</span>
-            <span class="btn-text">Создать розыгрыш</span>
-          </button>
+        <div class="creator-actions">
+          <div class="creator-action-card" onclick="createGiveaway()">
+            <div class="creator-action-icon">➕</div>
+            <div class="creator-action-text">
+              <div class="creator-action-title">Создать розыгрыш</div>
+              <div class="creator-action-subtitle">Запуск нового розыгрыша</div>
+            </div>
+          </div>
 
-          <button class="menu-btn secondary" onclick="showMyGiveaways()">
-            <span class="btn-icon">📋</span>
-            <span class="btn-text">Мои розыгрыши</span>
-          </button>
+          <div class="creator-action-card" onclick="showMyGiveaways()">
+            <div class="creator-action-icon">📋</div>
+            <div class="creator-action-text">
+              <div class="creator-action-title">Мои розыгрыши</div>
+              <div class="creator-action-subtitle">Активные и завершённые</div>
+            </div>
+          </div>
 
-          <button class="menu-btn secondary" onclick="showStatistics()">
-            <span class="btn-icon">📊</span>
-            <span class="btn-text">Статистика</span>
-          </button>
+          <div class="creator-action-card" onclick="showStatistics()">
+            <div class="creator-action-icon">📊</div>
+            <div class="creator-action-text">
+              <div class="creator-action-title">Статистика</div>
+              <div class="creator-action-subtitle">Участники и результаты</div>
+            </div>
+          </div>
         </div>
 
         <div class="stats-section">
