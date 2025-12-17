@@ -8,15 +8,8 @@ const Navbar = {
     // Контейнер navbar
     container: null,
     
-    // Иконки по умолчанию (пути)
-    defaultIcons: {
-        'home': 'home-icon.svg',
-        'tasks': 'tasks-icon.svg',
-        'giveaways': 'giveaway-icon.svg',
-        'profile': 'profile-icon.svg',
-        'services': 'services-icon.svg',
-        'stats': 'stats-icon.svg'
-    },
+    // URL аватара (сохраняем между перерисовками)
+    avatarUrl: null,
     
     // Инициализация
     init() {
@@ -28,15 +21,32 @@ const Navbar = {
         
         console.log('[NAVBAR] Initialized');
         
-        // Подписываемся на изменения режима
+        // Пытаемся получить аватар из Telegram при инициализации
+        this.loadAvatarFromTelegram();
+        
+        // Подписываемся на изменения режима И страницы
         AppState.subscribe((state) => {
-            if (state.changed === 'mode') {
+            if (state.changed === 'mode' || state.changed === 'page') {
                 this.render();
             }
         });
         
         // Рендерим начальный navbar
         this.render();
+    },
+    
+    // Загрузка аватара из Telegram
+    loadAvatarFromTelegram() {
+        try {
+            const tg = window.Telegram && Telegram.WebApp;
+            const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+            if (user && user.photo_url) {
+                this.avatarUrl = user.photo_url;
+                console.log('[NAVBAR] Avatar URL loaded:', this.avatarUrl);
+            }
+        } catch (e) {
+            console.log('[NAVBAR] Error loading avatar:', e);
+        }
     },
     
     // Рендер navbar
@@ -47,7 +57,7 @@ const Navbar = {
         
         if (!this.container) return;
         
-        console.log(`[NAVBAR] Rendering for mode: ${mode}`);
+        console.log(`[NAVBAR] Rendering for mode: ${mode}, page: ${currentPage}`);
         
         // Очищаем контейнер
         this.container.innerHTML = '';
@@ -83,21 +93,14 @@ const Navbar = {
             
             const avatarImg = document.createElement('img');
             avatarImg.id = 'nav-profile-avatar';
-            // Изначально используем иконку по умолчанию
-            avatarImg.src = `/miniapp-static/assets/icons/${item.icon}`;
+            avatarImg.className = 'nav-icon';
+            
+            // Используем сохраненный URL аватара или иконку по умолчанию
+            avatarImg.src = this.avatarUrl || `/miniapp-static/assets/icons/${item.icon}`;
             avatarImg.alt = '';
             
             avatarContainer.appendChild(avatarImg);
             div.appendChild(avatarContainer);
-            
-            // Пытаемся сразу загрузить аватар из Telegram
-            setTimeout(() => {
-                const tg = window.Telegram && Telegram.WebApp;
-                const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-                if (user && user.photo_url) {
-                    avatarImg.src = user.photo_url;
-                }
-            }, 100);
         } else {
             const iconImg = document.createElement('img');
             iconImg.className = 'nav-icon';
@@ -134,11 +137,18 @@ const Navbar = {
         });
     },
     
-    // Обновление аватара (для профиля)
+    // Обновление аватара (для внешнего использования)
     updateAvatar(avatarUrl) {
-        const avatarImg = document.getElementById('nav-profile-avatar');
-        if (avatarImg && avatarUrl) {
-            avatarImg.src = avatarUrl;
+        if (avatarUrl) {
+            this.avatarUrl = avatarUrl;
+            
+            // Обновляем аватар в DOM, если он существует
+            const avatarImg = document.getElementById('nav-profile-avatar');
+            if (avatarImg) {
+                avatarImg.src = avatarUrl;
+            }
+            
+            console.log('[NAVBAR] Avatar updated:', avatarUrl);
         }
     }
 };

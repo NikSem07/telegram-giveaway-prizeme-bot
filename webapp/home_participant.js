@@ -3,7 +3,6 @@
 import AppState from './shared/state.js';
 import Router from './shared/router.js';
 import Navbar from './shared/navbar.js';
-import { fillProfileFromTelegram } from './pages/participant/profile/profile.js';
 import { loadGiveawaysLists } from './pages/participant/home/home.js';
 
 console.log('[HOME] Script loaded');
@@ -38,39 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализируем состояние
     AppState.init();
     
-    // Загружаем аватар из Telegram для навбара
-    // Используем задержку, чтобы DOM успел загрузиться
-    setTimeout(() => {
-        const user = fillProfileFromTelegram();
-        if (user && user.photo_url) {
-            // Обновляем аватар в navbar через Navbar API
-            Navbar.updateAvatar(user.photo_url);
-        }
-    }, 300);
-    
     // Инициализируем роутер
     Router.init();
     
-    // Инициализируем navbar
+    // Инициализируем navbar (он сам загрузит аватар)
     Navbar.init();
-
-    // Подписываемся на изменения страницы для обновления аватара на странице профиля
-    AppState.subscribe((state) => {
-        if (state.changed === 'page' && state.page === 'profile') {
-            // Небольшая задержка, чтобы DOM успел отрендериться
-            setTimeout(() => {
-                const tg = window.Telegram && Telegram.WebApp;
-                const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-                if (user && user.photo_url) {
-                    // Обновляем аватар на странице профиля
-                    const profileAvatar = document.getElementById('profile-page-avatar');
-                    if (profileAvatar) {
-                        profileAvatar.src = user.photo_url;
-                    }
-                }
-            }, 50);
-        }
-    });
     
     // Периодическое обновление данных на главной (только для participant)
     setInterval(() => {
