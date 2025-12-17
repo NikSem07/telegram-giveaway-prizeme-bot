@@ -3,7 +3,7 @@ import { renderTasksPage } from './tasks/tasks.js';
 import { renderGiveawaysPage } from './giveaways/giveaways.js';
 import { renderProfilePage } from './profile/profile.js';
 
-import { renderCreatorHomePage } from '../creator/home/home.js';
+import { renderHomePage as renderCreatorHomePage } from '../creator/home/home.js';
 
 let currentPage = null;
 
