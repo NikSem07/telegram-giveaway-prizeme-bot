@@ -93,7 +93,8 @@ const Navbar = {
             
             const avatarImg = document.createElement('img');
             avatarImg.id = 'nav-profile-avatar';
-            avatarImg.className = 'nav-icon';
+            // ИСПРАВЛЕНО: убираем класс nav-icon, добавляем nav-avatar-img
+            avatarImg.className = 'nav-avatar-img';
             
             // Используем сохраненный URL аватара или иконку по умолчанию
             avatarImg.src = this.avatarUrl || `/miniapp-static/assets/icons/${item.icon}`;
