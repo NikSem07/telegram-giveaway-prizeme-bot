@@ -133,6 +133,11 @@
 
   background: linear-gradient(180deg, #2f7cff 0%, #1b4dff 100%);
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  
+  /* Явное выравнивание по верхнему краю */
+  display: flex;
+  align-items: flex-start; /* Выравнивание по верху */
+  justify-content: flex-start; /* Выравнивание по левому краю */
 }
 
 .creator-home-v2-big:active {
