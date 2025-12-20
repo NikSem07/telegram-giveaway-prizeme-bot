@@ -1243,17 +1243,41 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
 app.post('/api/creator_total_giveaways', async (req, res) => {
   try {
     const { init_data } = req.body;
+    
+    console.log(`[DEBUG][creator_total_giveaways] Raw init_data (first 200 chars): ${init_data?.substring(0, 200)}`);
 
     const parsedInitData = _tgCheckMiniAppInitData(init_data);
     if (!parsedInitData || !parsedInitData.user_parsed) {
+      console.log(`[DEBUG][creator_total_giveaways] Failed to parse init_data`);
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
 
     const userId = Number(parsedInitData.user_parsed.id);
+    
+    console.log(`[DEBUG][creator_total_giveaways] Parsed user_id from init_data: ${userId} (type: ${typeof userId})`);
+    console.log(`[DEBUG][creator_total_giveaways] User data from init_data:`, parsedInitData.user_parsed);
+
     if (!Number.isFinite(userId)) {
       return res.status(400).json({ ok: false, reason: 'bad_user_id' });
     }
 
+    // ДИАГНОСТИКА: Проверим какие user_id вообще есть в таблице giveaways
+    const diagnosticResult = await pool.query(
+      `SELECT owner_user_id, COUNT(*) as giveaway_count, 
+              MIN(id) as min_giveaway_id, MAX(id) as max_giveaway_id
+       FROM giveaways 
+       GROUP BY owner_user_id 
+       ORDER BY giveaway_count DESC 
+       LIMIT 10`
+    );
+    
+    console.log(`[DEBUG][creator_total_giveaways] Top 10 owner_user_id in giveaways table:`, diagnosticResult.rows);
+
+    // Проверим есть ли наш пользователь в списке
+    const userExists = diagnosticResult.rows.find(row => row.owner_user_id == userId);
+    console.log(`[DEBUG][creator_total_giveaways] User ${userId} exists in giveaways table: ${!!userExists}`);
+
+    // Исходный запрос
     const result = await pool.query(
       `
         SELECT COUNT(*)::int AS total
@@ -1265,13 +1289,28 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
 
     const total = result.rows[0]?.total ?? 0;
 
-    console.log(
-      `[creator_total_giveaways] owner_user_id=${userId} total=${total}`
-    );
+    console.log(`[DEBUG][creator_total_giveaways] owner_user_id=${userId} total=${total}`);
+
+    // Дополнительная диагностика: посмотрим все розыгрыши этого пользователя
+    if (total > 0) {
+      const giveawaysDetails = await pool.query(
+        `SELECT id, internal_title, status, created_at 
+         FROM giveaways 
+         WHERE owner_user_id = $1 
+         ORDER BY id DESC 
+         LIMIT 5`,
+        [userId]
+      );
+      console.log(`[DEBUG][creator_total_giveaways] User's giveaways:`, giveawaysDetails.rows);
+    }
 
     return res.json({
       ok: true,
       total_giveaways: total,
+      debug: {
+        user_id_from_init: userId,
+        user_data: parsedInitData.user_parsed
+      }
     });
 
   } catch (error) {
@@ -1279,6 +1318,7 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
     return res.status(500).json({
       ok: false,
       reason: 'server_error',
+      error: error.message
     });
   }
 });
