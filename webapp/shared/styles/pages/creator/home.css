@@ -1,169 +1,182 @@
 /* webapp/shared/styles/pages/creator/home.css */
-/* Стили для главной страницы создателя */
 
-.creator-home {
+.creator-home-v2 {
+  width: 100%;
+}
+
+.creator-home-v2-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.creator-home-v2-left {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: 12px;
 }
 
-/* Герой-блок создателя */
-.creator-hero {
-  background: var(--gradient-blue);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-md);
-}
+.creator-home-v2-card {
+  border: none;
+  outline: none;
+  text-align: left;
+  width: 100%;
 
-.creator-hero-label {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  opacity: 0.8;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: var(--spacing-xs);
-}
+  border-radius: 16px;
+  padding: 14px 14px;
+  background: rgba(255, 255, 255, 0.06);
 
-.creator-hero h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
   color: #fff;
-  line-height: 1.3;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+
+  position: relative;
 }
 
-/* Быстрые действия */
-.creator-actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+.creator-home-v2-card:active {
+  transform: translateY(0.5px);
+  filter: brightness(1.02);
 }
 
-.creator-action-card {
+.creator-home-v2-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* TOTAL CARD */
+.creator-home-v2-card--total {
+  min-height: 86px;
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  background: var(--card-bg);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
+}
+
+.creator-home-v2-total-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.creator-home-v2-total-line1 {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+  line-height: 18px;
+}
+
+.creator-home-v2-total-line2 {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.creator-home-v2-total-count {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 22px;
+
+  /* градиент числа */
+  background: linear-gradient(90deg, #ff4d9b 0%, #9157ea 55%, #5b3aef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.creator-home-v2-total-word {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* DONATE + SUB CARDS */
+.creator-home-v2-card--donate,
+.creator-home-v2-card--sub {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   cursor: pointer;
-  transition: background var(--transition-normal);
 }
 
-.creator-action-card:active {
-  background: var(--color-bg-tertiary);
+.creator-home-v2-arrow {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
 }
 
-.creator-action-icon {
-  width: 36px;
-  height: 36px;
+/* Подписка (градиент как на макете) */
+.creator-home-v2-card--sub {
+  background: linear-gradient(135deg, #ff4d9b 0%, #9157ea 55%, #5b3aef 100%);
+}
+
+/* BIG CREATE CARD */
+.creator-home-v2-big {
+  border: none;
+  outline: none;
+  width: 100%;
+  min-height: 170px;
+  border-radius: 18px;
+  padding: 16px 16px;
+
+  color: #fff;
+  text-align: left;
+
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+
+  background: linear-gradient(180deg, #2f7cff 0%, #1b4dff 100%);
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+}
+
+.creator-home-v2-big:active {
+  transform: translateY(0.5px);
+  filter: brightness(1.02);
+}
+
+.creator-home-v2-big-title {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 22px;
+  max-width: 140px;
+}
+
+.creator-home-v2-plus {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  font-size: 20px;
 }
 
-.creator-action-text {
-  flex: 1;
-  min-width: 0;
+.creator-home-v2-plus-icon {
+  width: 18px;
+  height: 18px;
 }
 
-.creator-action-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 2px;
+.creator-home-v2-illustration {
+  position: absolute;
+  right: -8px;
+  bottom: -10px;
+  width: 150px;
+  height: auto;
+  pointer-events: none;
 }
 
-.creator-action-subtitle {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-/* Статистика создателя */
-.creator-stats {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-  background: var(--card-bg);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
-  margin-top: var(--spacing-md);
-}
-
-.creator-stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-}
-
-.creator-stat-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.creator-stat-label {
-  font-size: 12px;
-  margin-top: 2px;
-  color: var(--color-text-secondary);
-}
-
-/* Активные розыгрыши */
-.creator-active-giveaways {
-  margin-top: var(--spacing-lg);
-}
-
-.creator-active-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: var(--spacing-md);
-}
-
-.creator-empty-state {
-  text-align: center;
-  padding: var(--spacing-xl) var(--spacing-md);
-  background: var(--card-bg);
-  border-radius: var(--radius-lg);
-}
-
-.creator-empty-icon {
-  font-size: 48px;
-  margin-bottom: var(--spacing-md);
-  opacity: 0.5;
-  color: var(--color-text-secondary);
-}
-
-.creator-empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: var(--spacing-xs);
-  color: var(--color-text);
-}
-
-.creator-empty-text {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-md);
-}
-
-/* Адаптивная сетка для статистики */
-@media (max-width: 360px) {
-  .creator-stats {
-    flex-wrap: wrap;
-  }
-  
-  .creator-stat-item {
-    flex: 0 0 calc(50% - var(--spacing-xs));
-    margin-bottom: var(--spacing-sm);
-  }
-}
-
-/* Состояния hover (только для десктопа) */
-@media (hover: hover) {
-  .creator-action-card:hover {
-    background: var(--color-bg-tertiary);
+/* Мобилки: чтобы выглядело как в скрине (2 колонки сохраняем) */
+@media (max-width: 420px) {
+  .creator-home-v2-grid {
+    grid-template-columns: 1fr 1.35fr;
   }
 }

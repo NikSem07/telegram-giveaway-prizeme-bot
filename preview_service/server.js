@@ -1168,6 +1168,75 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/creator_total_giveaways ---
+// Возвращает общее кол-во розыгрышей, созданных текущим создателем (по init_data).
+app.post('/api/creator_total_giveaways', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = parseInt(parsedInitData.user_parsed.id);
+    if (!userId) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+    }
+
+    // Мы не видим твою точную схему "авторства" розыгрыша,
+    // поэтому делаем "устойчивый" подсчет:
+    // 1) пробуем giveaways.creator_user_id
+    // 2) пробуем giveaways.user_id
+    // 3) пробуем через organizer_channels.user_id + giveaway_channels
+    const queries = [
+      {
+        name: 'giveaways.creator_user_id',
+        sql: `SELECT COUNT(*)::int AS total FROM giveaways WHERE creator_user_id = $1`,
+      },
+      {
+        name: 'giveaways.user_id',
+        sql: `SELECT COUNT(*)::int AS total FROM giveaways WHERE user_id = $1`,
+      },
+      {
+        name: 'join organizer_channels.user_id',
+        sql: `
+          SELECT COUNT(DISTINCT gc.giveaway_id)::int AS total
+          FROM giveaway_channels gc
+          JOIN organizer_channels oc ON oc.id = gc.channel_id
+          WHERE oc.user_id = $1
+        `,
+      },
+    ];
+
+    let total = 0;
+    let worked = false;
+
+    for (const q of queries) {
+      try {
+        const r = await pool.query(q.sql, [userId]);
+        total = r.rows?.[0]?.total ?? 0;
+        worked = true;
+        console.log(`[creator_total_giveaways] method=${q.name} total=${total} user_id=${userId}`);
+        break;
+      } catch (e) {
+        console.log(`[creator_total_giveaways] method_failed=${q.name} err=${e.message}`);
+      }
+    }
+
+    if (!worked) {
+      // если ни один способ не подошел — отдаем 0, но не валим фронт
+      return res.json({ ok: true, total_giveaways: 0, note: 'no_working_query' });
+    }
+
+    res.json({ ok: true, total_giveaways: total });
+
+  } catch (error) {
+    console.log('[API creator_total_giveaways] error:', error);
+    res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+  }
+});
+
 
 // --- GET /api/chat_avatar/:chatId ---
 // Проксируем аватарку чата (канала/группы) из Telegram, не светя BOT_TOKEN на фронт.
@@ -1218,7 +1287,6 @@ app.get('/api/chat_avatar/:chatId', async (req, res) => {
     res.status(500).end();
   }
 });
-
 
 // Start server
 app.listen(PORT, () => {
