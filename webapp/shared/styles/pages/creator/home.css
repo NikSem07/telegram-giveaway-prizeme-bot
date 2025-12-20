@@ -147,15 +147,19 @@
 
 /* Текст с правильными отступами */
 .creator-home-v2-big-title {
-  font-size: 16px; /* Уменьшили с 18px */
+  font-size: 18px;
   font-weight: 800;
-  line-height: 20px; /* Уменьшили с 22px */
-  max-width: 140px;
+  line-height: 22px;
+  max-width: 180px;
   margin: 0; /* Убираем все отступы */
   padding: 0; /* Убираем внутренние отступы */
   display: flex;
   flex-direction: column;
   gap: 2px; /* Небольшой отступ между строками */
+
+  /* Гарантируем правильный перенос */
+  word-break: keep-all;
+  white-space: normal;
 }
 
 /* Увеличенный плюсик в круге */
