@@ -1238,55 +1238,51 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
 });
 
 
-// --- GET /api/chat_avatar/:chatId ---
-// Проксируем аватарку чата (канала/группы) из Telegram, не светя BOT_TOKEN на фронт.
-app.get('/api/chat_avatar/:chatId', async (req, res) => {
+// --- POST /api/creator_total_giveaways ---
+// Возвращает общее кол-во розыгрышей, созданных текущим создателем
+app.post('/api/creator_total_giveaways', async (req, res) => {
   try {
-    if (!BOT_TOKEN || !TELEGRAM_API) {
-      return res.status(500).send('BOT_TOKEN not set');
+    const { init_data } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
 
-    const chatIdRaw = String(req.params.chatId || '').trim();
-    if (!chatIdRaw || chatIdRaw === 'null' || chatIdRaw === 'undefined') {
-      return res.status(404).end();
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
     }
 
-    const chatId = chatIdRaw.match(/^-?\d+$/) ? chatIdRaw : chatIdRaw;
+    const result = await pool.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM giveaways
+        WHERE owner_user_id = $1
+      `,
+      [userId]
+    );
 
-    // 1) getChat
-    const chatResp = await fetch(`${TELEGRAM_API}/getChat?chat_id=${encodeURIComponent(chatId)}`, { timeout: 10000 });
-    const chatData = await chatResp.json();
-    if (!chatData.ok) return res.status(404).end();
+    const total = result.rows[0]?.total ?? 0;
 
-    const photo = chatData.result && chatData.result.photo;
-    const fileId = photo && (photo.big_file_id || photo.small_file_id);
-    if (!fileId) return res.status(404).end();
+    console.log(
+      `[creator_total_giveaways] owner_user_id=${userId} total=${total}`
+    );
 
-    // 2) getFile -> file_path
-    const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${encodeURIComponent(fileId)}`, { timeout: 10000 });
-    const fileData = await fileResp.json();
-    if (!fileData.ok) return res.status(404).end();
+    return res.json({
+      ok: true,
+      total_giveaways: total,
+    });
 
-    const filePath = fileData.result && fileData.result.file_path;
-    if (!filePath) return res.status(404).end();
-
-    // 3) качаем файл (ВАЖНО: file base другой)
-    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
-    const imgResp = await fetch(fileUrl, { timeout: 15000 });
-    if (!imgResp.ok) return res.status(404).end();
-
-    const contentType = imgResp.headers.get('content-type') || 'image/jpeg';
-    const buf = Buffer.from(await imgResp.arrayBuffer());
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час, норм под твою задачу обновления
-    res.status(200).send(buf);
-
-  } catch (e) {
-    console.log('[API chat_avatar] error:', e);
-    res.status(500).end();
+  } catch (error) {
+    console.error('[API creator_total_giveaways] error:', error);
+    return res.status(500).json({
+      ok: false,
+      reason: 'server_error',
+    });
   }
 });
+
 
 // Start server
 app.listen(PORT, () => {
