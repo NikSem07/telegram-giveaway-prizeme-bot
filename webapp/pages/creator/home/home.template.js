@@ -12,7 +12,7 @@ export default function creatorHomeTemplate(context = {}) {
           <!-- Total giveaways card -->
           <div class="creator-home-v2-card creator-home-v2-card--total">
             <div class="creator-home-v2-total-text">
-              <div class="creator-home-v2-total-line1">Всего было запущено</div>
+              <div class="creator-home-v2-total-line1">Всего проведено</div>
               <div class="creator-home-v2-total-line2">
                 <span id="creator-total-giveaways" class="creator-home-v2-total-count">${total !== null ? total : '--'}</span>
                 <span class="creator-home-v2-total-word">розыгрыша</span>
@@ -37,7 +37,7 @@ export default function creatorHomeTemplate(context = {}) {
         <!-- RIGHT COLUMN -->
         <button class="creator-home-v2-big" data-creator-action="create" type="button">
           <div class="creator-home-v2-big-title">
-            <div>Запустить</div>
+            <div>Создать</div>
             <div>новый розыгрыш</div>
           </div>
 

@@ -99,10 +99,12 @@
   cursor: pointer;
 }
 
+/* Выравнивание стрелок по центру вертикально */
 .creator-home-v2-arrow {
   position: absolute;
   right: 12px;
-  top: 12px;
+  top: 50%;
+  transform: translateY(-50%); /* Центрирование по вертикали */
   width: 18px;
   height: 18px;
   opacity: 0.9;
@@ -120,7 +122,8 @@
   width: 100%;
   min-height: 170px;
   border-radius: 18px;
-  padding: 16px 16px;
+  padding: 16px;
+  padding-top: 14px; /* Поднять текст выше */
 
   color: #fff;
   text-align: left;
@@ -138,13 +141,17 @@
   filter: brightness(1.02);
 }
 
+/* Текст с правильными отступами */
 .creator-home-v2-big-title {
   font-size: 18px;
   font-weight: 800;
   line-height: 22px;
   max-width: 140px;
+  margin-top: 0; /* Убираем лишние отступы */
+  margin-left: 0; /* Выравнивание с левым краем */
 }
 
+/* Увеличенный плюсик в круге */
 .creator-home-v2-plus {
   position: absolute;
   left: 14px;
@@ -161,22 +168,29 @@
 }
 
 .creator-home-v2-plus-icon {
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
 }
 
+/* Увеличенная и смещенная картинка */
 .creator-home-v2-illustration {
   position: absolute;
-  right: -8px;
-  bottom: -10px;
-  width: 150px;
+  right: -25px; /* Смещение вправо за край */
+  bottom: -25px; /* Смещение вниз за край */
+  width: 195px; /* Увеличение на 30% (150px * 1.3 = 195px) */
   height: auto;
   pointer-events: none;
 }
 
-/* Мобилки: чтобы выглядело как в скрине (2 колонки сохраняем) */
 @media (max-width: 420px) {
   .creator-home-v2-grid {
     grid-template-columns: 1fr 1.35fr;
+  }
+  
+  /* Адаптация увеличенной картинки на мобилках */
+  .creator-home-v2-illustration {
+    width: 180px;
+    right: -20px;
+    bottom: -20px;
   }
 }
