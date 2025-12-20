@@ -47,7 +47,7 @@ export default function creatorHomeTemplate(context = {}) {
 
           <img
             class="creator-home-v2-illustration"
-            src="/miniapp-static/assets/images/success-image.svg"
+            src="/miniapp-static/assets/images/success-image.webp"
             alt="raffle"
           />
         </button>
