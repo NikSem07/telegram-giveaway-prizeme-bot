@@ -2,6 +2,7 @@
 /* Стили для верхнего заголовка с переключателем режимов */
 
 .top-header {
+  background: var(--color-bg);
   position: relative;
   display: flex;
   justify-content: center;

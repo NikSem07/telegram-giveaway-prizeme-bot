@@ -63,10 +63,13 @@
 
 /* ====== СВЕТЛАЯ ТЕМА ====== */
 :root.theme-light {
+  /* Переопределяем Telegram цвет фона для светлой темы */
+  --color-bg: #EFEEF4;
+
   /* Основные фоны */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f5;
-  --color-bg-tertiary: #f0f0f0;
+  --color-bg-primary: #EFEEF4;
+  --color-bg-secondary: #E5E4EA;
+  --color-bg-tertiary: #DAD9DF;
   
   /* Текст */
   --color-text: #000000;
