@@ -1,6 +1,34 @@
 // webapp/pages/creator/home/home.js
 import creatorHomeTemplate from './home.template.js';
 
+// Утилита для определения окружения
+function getTelegramEnvironment() {
+  const tg = window.Telegram?.WebApp;
+  
+  if (!tg) {
+    return 'external'; // Не в Telegram
+  }
+  
+  const platform = tg.platform || 'unknown';
+  const version = tg.version || '0';
+  
+  // Определяем по user agent и платформе
+  const isMobileApp = platform === 'android' || platform === 'ios' || platform === 'tdesktop';
+  const isWebVersion = platform === 'web' || platform === 'unknown';
+  
+  // Проверяем по user agent
+  const ua = navigator.userAgent.toLowerCase();
+  const isInTelegramWebApp = ua.includes('telegram') || ua.includes('webview');
+  
+  if (isMobileApp) {
+    return 'mobile_app';
+  } else if (isWebVersion && isInTelegramWebApp) {
+    return 'telegram_web';
+  } else {
+    return 'external_browser';
+  }
+}
+
 // API helper (минимальный, чтобы не зависеть от других модулей)
 async function api(url, body) {
   const res = await fetch(url, {
@@ -29,32 +57,60 @@ function getInitDataSafe() {
 
 function openTelegramLink(url) {
   const tg = window.Telegram?.WebApp;
+  const env = getTelegramEnvironment();
   
-  if (!tg) {
-    // Если не в TMA, открываем в новой вкладке
-    window.open(url, '_blank');
-    return;
-  }
+  console.log(`[CreatorHome] Opening link in environment: ${env}`, url);
   
-  try {
-    // Пытаемся использовать Telegram WebApp API
-    if (typeof tg.openLink === 'function') {
-      tg.openLink(url);
-      return;
-    }
-    
-    // Если нет openLink, пробуем через window.open
-    if (typeof tg.platform === 'string' && tg.platform !== 'unknown') {
-      // Мы в мобильном клиенте Telegram
+  switch (env) {
+    case 'mobile_app':
+      // В мобильном приложении Telegram - используем Telegram API
+      try {
+        if (typeof tg.openLink === 'function') {
+          tg.openLink(url);
+          return true;
+        }
+      } catch (e) {
+        console.warn('[CreatorHome] tg.openLink failed, trying fallback:', e);
+      }
+      // Fallback для мобильного приложения
       window.location.href = url;
-    } else {
-      // Веб-версия или десктоп
+      return true;
+      
+    case 'telegram_web':
+      // В веб-версии Telegram (telegram.org) - сложный случай
+      // Пробуем разные методы
+      try {
+        // Метод 1: Telegram API
+        if (typeof tg.openLink === 'function') {
+          tg.openLink(url);
+          return true;
+        }
+        
+        // Метод 2: Через window.open с определенным таргетом
+        const newWindow = window.open('', '_blank');
+        if (newWindow) {
+          newWindow.opener = null;
+          newWindow.location = url;
+          return true;
+        }
+        
+        // Метод 3: location.href с задержкой
+        setTimeout(() => {
+          window.location.href = url;
+        }, 100);
+        return true;
+        
+      } catch (e) {
+        console.error('[CreatorHome] All methods failed in Telegram Web:', e);
+        window.open(url, '_blank');
+        return false;
+      }
+      
+    case 'external_browser':
+    default:
+      // Вне Telegram - обычное открытие
       window.open(url, '_blank');
-    }
-  } catch (error) {
-    console.warn('[CreatorHome] Failed to open link via Telegram API:', error);
-    // Fallback
-    window.open(url, '_blank');
+      return false;
   }
 }
 
@@ -96,12 +152,12 @@ function attachEventListeners(container) {
 
   // Donate
   container.querySelector('[data-creator-action="donate"]')?.addEventListener('click', () => {
-    openTelegramLink('https://t.me/tribute/app?startapp=dA1o');
+    openTMAStartApp('dA1o');
   });
 
   // Subscribe
   container.querySelector('[data-creator-action="subscribe"]')?.addEventListener('click', () => {
-    openTelegramLink('https://t.me/tribute/app?startapp=sHOW');
+    openTMAStartApp('sHOW');
   });
 }
 
@@ -196,14 +252,23 @@ function showCreateGiveawayModal() {
   });
   
   modal.querySelector('.modal-btn-confirm').addEventListener('click', () => {
-    // Закрываем мини-апп (если в TMA)
-    const tg = window.Telegram?.WebApp;
-    if (tg?.close) {
-      tg.close();
-    }
-    
     // Открываем бота с командой /create
     const botUrl = 'https://t.me/prizeme_official_bot?start=create';
+  
+    const env = getTelegramEnvironment();
+  
+    if (env === 'mobile_app') {
+      // В мобильном приложении - закрываем Mini-App и открываем бота
+      const tg = window.Telegram?.WebApp;
+      if (tg?.close) {
+        // Даем время на обработку открытия ссылки
+        setTimeout(() => {
+          tg.close();
+        }, 100);
+      }
+    }
+  
+    // Открываем ссылку
     openTelegramLink(botUrl);
   });
   
@@ -223,3 +288,40 @@ function showCreateGiveawayModal() {
   };
   document.addEventListener('keydown', handleEscape);
 }
+
+// Альтернативный метод открытия ссылок для веб-версии Telegram
+function openLinkInTelegramWeb(url) {
+  console.log('[CreatorHome] Using Telegram Web fallback method');
+  
+  // Создаем скрытый iframe для открытия ссылки
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  
+  // Удаляем через 2 секунды
+  setTimeout(() => {
+    if (iframe.parentNode) {
+      iframe.parentNode.removeChild(iframe);
+    }
+  }, 2000);
+  
+  return true;
+}
+
+// Универсальная функция для открытия TMA Tribute
+function openTMAStartApp(startappParam) {
+  const url = `https://t.me/tribute/app?startapp=${startappParam}`;
+  const env = getTelegramEnvironment();
+  
+  console.log(`[CreatorHome] Opening TMA with startapp: ${startappParam} in ${env}`);
+  
+  // Для веб-версии Telegram используем специальный метод
+  if (env === 'telegram_web') {
+    return openLinkInTelegramWeb(url);
+  }
+  
+  // Для остальных - обычный метод
+  return openTelegramLink(url);
+}
+
