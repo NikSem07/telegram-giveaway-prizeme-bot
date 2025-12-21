@@ -2,32 +2,101 @@
 import creatorHomeTemplate from './home.template.js';
 
 // Утилита для определения окружения
-function getTelegramEnvironment() {
+function isInTelegramWebApp() {
+  // Проверяем наличие Telegram WebApp объекта
   const tg = window.Telegram?.WebApp;
-  
-  if (!tg) {
-    return 'external'; // Не в Telegram
-  }
-  
-  const platform = tg.platform || 'unknown';
-  const version = tg.version || '0';
-  
-  // Определяем по user agent и платформе
-  const isMobileApp = platform === 'android' || platform === 'ios' || platform === 'tdesktop';
-  const isWebVersion = platform === 'web' || platform === 'unknown';
+  if (!tg) return false;
   
   // Проверяем по user agent
   const ua = navigator.userAgent.toLowerCase();
-  const isInTelegramWebApp = ua.includes('telegram') || ua.includes('webview');
+  const hasTelegramUA = ua.includes('telegram') || ua.includes('webview');
   
-  if (isMobileApp) {
-    return 'mobile_app';
-  } else if (isWebVersion && isInTelegramWebApp) {
-    return 'telegram_web';
-  } else {
-    return 'external_browser';
-  }
+  // Проверяем наличие initData (есть только в TMA)
+  const hasInitData = !!tg.initData || !!tg.initDataUnsafe;
+  
+  return hasTelegramUA && hasInitData;
 }
+
+// Функция открытия через tg:// протокол (работает внутри Telegram)
+function openInTelegram(url, fallbackUrl = null) {
+  const tg = window.Telegram?.WebApp;
+  
+  console.log('[CreatorHome] openInTelegram called:', url);
+  
+  // Если есть Telegram WebApp API и openLink - используем его
+  if (tg && typeof tg.openLink === 'function') {
+    try {
+      tg.openLink(url);
+      return true;
+    } catch (e) {
+      console.warn('[CreatorHome] tg.openLink failed:', e);
+    }
+  }
+  
+  // Пробуем открыть через tg:// протокол
+  if (url.startsWith('https://t.me/')) {
+    // Конвертируем https://t.me/ ссылку в tg://
+    const protocolUrl = url.replace('https://t.me/', 'tg://resolve?domain=');
+    
+    // Открываем протокольную ссылку
+    const link = document.createElement('a');
+    link.href = protocolUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    try {
+      link.click();
+      
+      // Проверяем через 500мс, сработало ли
+      setTimeout(() => {
+        if (document.hidden === false && fallbackUrl) {
+          console.log('[CreatorHome] Protocol link failed, using fallback');
+          window.open(fallbackUrl, '_blank');
+        }
+      }, 500);
+      
+      return true;
+    } catch (e) {
+      console.warn('[CreatorHome] Protocol link failed:', e);
+    } finally {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+    }
+  }
+  
+  // Если ничего не сработало, используем fallback или стандартное открытие
+  if (fallbackUrl) {
+    window.open(fallbackUrl, '_blank');
+  } else {
+    window.open(url, '_blank');
+  }
+  
+  return false;
+}
+
+// Специальные функции для TMA Tribute
+function openTributeStartApp(startappParam) {
+  // Две версии ссылки:
+  const webUrl = `https://t.me/tribute/app?startapp=${startappParam}`;
+  const protocolUrl = `tg://t.me/tribute/app?startapp=${startappParam}`;
+  
+  console.log(`[CreatorHome] Opening Tribute with startapp: ${startappParam}`);
+  
+  return openInTelegram(protocolUrl, webUrl);
+}
+
+// Функция для открытия бота
+function openBotWithStart(startParam = '') {
+  const botUsername = 'prizeme_official_bot';
+  const webUrl = `https://t.me/${botUsername}${startParam ? `?start=${startParam}` : ''}`;
+  const protocolUrl = `tg://resolve?domain=${botUsername}${startParam ? `&start=${startParam}` : ''}`;
+  
+  console.log(`[CreatorHome] Opening bot: ${botUsername}, start: ${startParam}`);
+  
+  return openInTelegram(protocolUrl, webUrl);
+}
+
 
 // API helper (минимальный, чтобы не зависеть от других модулей)
 async function api(url, body) {
@@ -56,63 +125,26 @@ function getInitDataSafe() {
 }
 
 function openTelegramLink(url) {
-  const tg = window.Telegram?.WebApp;
-  const env = getTelegramEnvironment();
+  console.log('[CreatorHome] openTelegramLink (legacy) called:', url);
   
-  console.log(`[CreatorHome] Opening link in environment: ${env}`, url);
-  
-  switch (env) {
-    case 'mobile_app':
-      // В мобильном приложении Telegram - используем Telegram API
-      try {
-        if (typeof tg.openLink === 'function') {
-          tg.openLink(url);
-          return true;
-        }
-      } catch (e) {
-        console.warn('[CreatorHome] tg.openLink failed, trying fallback:', e);
-      }
-      // Fallback для мобильного приложения
-      window.location.href = url;
-      return true;
-      
-    case 'telegram_web':
-      // В веб-версии Telegram (telegram.org) - сложный случай
-      // Пробуем разные методы
-      try {
-        // Метод 1: Telegram API
-        if (typeof tg.openLink === 'function') {
-          tg.openLink(url);
-          return true;
-        }
-        
-        // Метод 2: Через window.open с определенным таргетом
-        const newWindow = window.open('', '_blank');
-        if (newWindow) {
-          newWindow.opener = null;
-          newWindow.location = url;
-          return true;
-        }
-        
-        // Метод 3: location.href с задержкой
-        setTimeout(() => {
-          window.location.href = url;
-        }, 100);
-        return true;
-        
-      } catch (e) {
-        console.error('[CreatorHome] All methods failed in Telegram Web:', e);
-        window.open(url, '_blank');
-        return false;
-      }
-      
-    case 'external_browser':
-    default:
-      // Вне Telegram - обычное открытие
-      window.open(url, '_blank');
-      return false;
+  // Для совместимости со старым кодом
+  // Пытаемся определить, что за ссылка
+  if (url.includes('tribute/app')) {
+    // Это Tribute - используем специальную функцию
+    const match = url.match(/startapp=(\w+)/);
+    if (match) {
+      return openTributeStartApp(match[1]);
+    }
+  } else if (url.includes('prizeme_official_bot')) {
+    // Это наш бот
+    const match = url.match(/start=(\w+)/);
+    return openBotWithStart(match ? match[1] : '');
   }
+  
+  // Для других ссылок - используем общий метод
+  return openInTelegram(url);
 }
+
 
 async function loadCreatorTotalGiveaways() {
   const init_data = getInitDataSafe();
@@ -145,20 +177,29 @@ export async function renderCreatorHomePage() {
 }
 
 function attachEventListeners(container) {
-  // Big card: create giveaway (у тебя уже есть window.createGiveaway)
-  container.querySelector('[data-creator-action="create"]')?.addEventListener('click', () => {
+    // Donate
+    container.querySelector('[data-creator-action="donate"]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[CreatorHome] Donate button clicked');
+    openTributeStartApp('dA1o');
+    });
+
+    // Subscribe
+    container.querySelector('[data-creator-action="subscribe"]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[CreatorHome] Subscribe button clicked');
+    openTributeStartApp('sHOW');
+    });
+
+    // Create giveaway
+    container.querySelector('[data-creator-action="create"]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[CreatorHome] Create giveaway button clicked');
     showCreateGiveawayModal();
-  });
-
-  // Donate
-  container.querySelector('[data-creator-action="donate"]')?.addEventListener('click', () => {
-    openTMAStartApp('dA1o');
-  });
-
-  // Subscribe
-  container.querySelector('[data-creator-action="subscribe"]')?.addEventListener('click', () => {
-    openTMAStartApp('sHOW');
-  });
+    });
 }
 
 function showCreateGiveawayModal() {
@@ -251,26 +292,18 @@ function showCreateGiveawayModal() {
     modal.remove();
   });
   
-  modal.querySelector('.modal-btn-confirm').addEventListener('click', () => {
-    // Открываем бота с командой /create
-    const botUrl = 'https://t.me/prizeme_official_bot?start=create';
-  
-    const env = getTelegramEnvironment();
-  
-    if (env === 'mobile_app') {
-      // В мобильном приложении - закрываем Mini-App и открываем бота
-      const tg = window.Telegram?.WebApp;
-      if (tg?.close) {
-        // Даем время на обработку открытия ссылки
-        setTimeout(() => {
-          tg.close();
-        }, 100);
-      }
-    }
-  
-    // Открываем ссылку
-    openTelegramLink(botUrl);
-  });
+    modal.querySelector('.modal-btn-confirm').addEventListener('click', () => {
+    console.log('[CreatorHome] Create confirmation clicked');
+    
+    // Закрываем модальное окно
+    modal.remove();
+    
+    // Небольшая задержка для анимации закрытия
+    setTimeout(() => {
+        // Открываем бота с командой create
+        openBotWithStart('create');
+    }, 200);
+    });
   
   // Закрытие по клику на overlay
   modal.addEventListener('click', (e) => {
