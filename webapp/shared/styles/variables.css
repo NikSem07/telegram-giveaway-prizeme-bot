@@ -1,4 +1,6 @@
 :root {
+  /* ====== ОБЩИЕ ПЕРЕМЕННЫЕ (ТЕМНАЯ ТЕМА ПО УМОЛЧАНИЮ) ====== */
+  
   /* Цвета */
   --color-primary: #007AFF;
   --color-secondary: #5856D6;
@@ -6,13 +8,13 @@
   --color-danger: #FF3B30;
   --color-warning: #FF9500;
     
-  /* Фоны */
-  --color-bg: var(--tg-theme-bg-color, #0f1115);
-  --color-bg-secondary: var(--tg-theme-secondary-bg-color, #1c1c1e);
+  /* Фоны темной темы (по умолчанию) */
+  --color-bg: #0f1115;
+  --color-bg-secondary: #1c1c1e;
   --color-bg-tertiary: #2c2c2e;
     
-  /* Текст */
-  --color-text: var(--tg-theme-text-color, #ffffff);
+  /* Текст темной темы */
+  --color-text: #ffffff;
   --color-text-secondary: rgba(255, 255, 255, 0.6);
   --color-text-tertiary: rgba(255, 255, 255, 0.3);
     
@@ -63,13 +65,13 @@
 
 /* ====== СВЕТЛАЯ ТЕМА ====== */
 :root.theme-light {
-  /* Переопределяем фон светлой темы Telegram */
-  --color-bg: #EFEEF4;
-
+  /* ПЕРЕОПРЕДЕЛЯЕМ ВСЕ ЦВЕТА ДЛЯ СВЕТЛОЙ ТЕМЫ */
+  
   /* Основные фоны */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f5;
-  --color-bg-tertiary: #f0f0f0;
+  --color-bg: #EFEEF4;              /* ← ГЛАВНОЕ: ФОН СВЕТЛОЙ ТЕМЫ */
+  --color-bg-primary: #EFEEF4;
+  --color-bg-secondary: #E5E4EA;
+  --color-bg-tertiary: #DAD9DF;
   
   /* Текст */
   --color-text: #000000;
@@ -116,42 +118,42 @@
   --navbar-border: rgba(0, 0, 0, 0.1);   /* Светлая граница */
 }
 
-/* ====== ТЁМНАЯ ТЕМА (уточняем значения) ====== */
+/* ====== ТЁМНАЯ ТЕМА (ЯВНОЕ ПЕРЕОПРЕДЕЛЕНИЕ) ====== */
 :root.theme-dark {
-  /* Основные фоны */
+  /* ОСНОВНЫЕ ФОНЫ */
+  --color-bg: #0f1115;
   --color-bg-primary: #0f1115;
   --color-bg-secondary: #181818;
   --color-bg-tertiary: #2c2c2e;
   
-  /* Текст */
+  /* ТЕКСТ */
   --color-text: #ffffff;
   --color-text-secondary: #a0a0a0;
   --color-text-tertiary: #737375;
   
-  /* Акцентные цвета */
+  /* АКЦЕНТНЫЕ ЦВЕТА */
   --color-primary: #0a84ff;
   --color-secondary: #5e5ce6;
   
-  /* Карточки */
+  /* КАРТОЧКИ */
   --card-bg: #1c1c1e;
   --card-bg-light: #2c2c2e;
   
-  /* Градиенты */
+  /* ГРАДИЕНТЫ */
   --gradient-primary: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   
-  /* Тени */
+  /* ТЕНИ */
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
   
-  /* Формы */
+  /* ФОРМЫ */
   --input-bg: #1c1c1e;
   --input-border: #38383a;
   --input-text: #ffffff;
   
-  /* Статусы */
+  /* СТАТУСЫ */
   --success: #30d158;
   --warning: #ff9f0a;
   --error: #ff453a;
   --info: #0a84ff;
 }
-
