@@ -1,46 +1,26 @@
 /* webapp/shared/styles/components/mode-switcher.css */
 /* Стили для переключателя режимов Participant/Creator */
 
-/* ====== ОБЩИЕ СТИЛИ ====== */
-.mode-switcher {
-  display: flex;
-  align-items: center;
+/* Индикатор активной кнопки (альтернативный стиль для будущего) */
+.mode-switcher-indicator {
+  position: absolute;
+  background: var(--color-primary);
+  border-radius: 999px;
+  height: calc(100% - 4px);
+  transition: transform var(--transition-normal);
+}
+
+/* Вариант с индикатором */
+.mode-switcher--indicator {
+  position: relative;
   background: var(--color-bg-tertiary);
-  border-radius: 999px;
-  padding: 2px 4px;
-  height: 32px;
-  transition: background-color var(--transition-normal);
 }
 
-/* Кнопки переключателя */
-.mode-btn {
-  flex: 1;
-  padding: 6px 16px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-normal);
-  white-space: nowrap;
+.mode-switcher--indicator .mode-btn {
+  position: relative;
+  z-index: 1;
 }
 
-/* Активная кнопка (тёмная тема по умолчанию) */
-.mode-btn.active {
-  background: #737375;
-  color: #FAFAFA;
-  font-weight: 700;
-}
-
-/* Состояния hover (только для десктопа) */
-@media (hover: hover) {
-  .mode-btn:not(.active):hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--color-text);
-  }
-}
 
 /* ====== СТИЛИ ДЛЯ СВЕТЛОЙ ТЕМЫ ====== */
 :root.theme-light .mode-switcher {
@@ -96,37 +76,60 @@
   }
 }
 
-/* ====== СТИЛИ ДЛЯ ТЁМНОЙ ТЕМЫ (уточнённые) ====== */
+
+/* ====== СТИЛИ ДЛЯ ТЁМНОЙ ТЕМЫ ====== */
 :root.theme-dark .mode-switcher {
-  background: #2c2c2e; /* var(--color-bg-tertiary) */
+  /* ТАКИЕ ЖЕ РАЗМЕРЫ, КАК В СВЕТЛОЙ ТЕМЕ */
+  width: 200px;
+  height: 36px;
+  display: flex;
+  gap: 4px;
+  background: #2c2c2e; /* var(--color-bg-tertiary) - оригинальный цвет тёмной темы */
+  border-radius: 20px;
+  overflow: hidden;
+  padding: 0; /* Убираем старый padding: 2px 4px */
 }
 
 :root.theme-dark .mode-btn {
-  color: #a0a0a0; /* var(--color-text-secondary) */
+  /* ТАКИЕ ЖЕ РАЗМЕРЫ, КАК В СВЕТЛОЙ ТЕМЕ */
+  flex: 1;
+  margin: 4px 0;
+  width: 88px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  overflow: hidden;
+  background: transparent;
+  color: #a0a0a0; /* var(--color-text-secondary) - оригинальный цвет */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+  font-size: 14px; /* Такой же размер, как в светлой */
+  line-height: 1;
+  white-space: nowrap;
+  padding: 0;
+  transition: all var(--transition-normal);
+  border: none;
+  cursor: pointer;
 }
 
 :root.theme-dark .mode-btn.active {
-  background: #737375;
-  color: #FAFAFA;
-  font-weight: 700;
+  /* ТАКИЕ ЖЕ РАЗМЕРЫ, КАК В СВЕТЛОЙ ТЕМЕ, НО ОРИГИНАЛЬНЫЕ ЦВЕТА */
+  background: #737375; /* Оригинальный цвет активной кнопки */
+  color: #FAFAFA; /* Оригинальный цвет текста */
+  font-weight: 700; /* Такая же жирность, как в светлой */
+  font-size: 14px; /* Такой же размер, как в светлой */
+  margin: 4px;
+  width: 88px;
+  height: 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); /* Немного темнее тень для тёмной темы */
 }
 
-/* Индикатор активной кнопки (альтернативный стиль для будущего) */
-.mode-switcher-indicator {
-  position: absolute;
-  background: var(--color-primary);
-  border-radius: 999px;
-  height: calc(100% - 4px);
-  transition: transform var(--transition-normal);
-}
-
-/* Вариант с индикатором */
-.mode-switcher--indicator {
-  position: relative;
-  background: var(--color-bg-tertiary);
-}
-
-.mode-switcher--indicator .mode-btn {
-  position: relative;
-  z-index: 1;
+/* Состояния hover для десктопа в тёмной теме */
+@media (hover: hover) {
+  :root.theme-dark .mode-btn:not(.active):hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff; /* var(--color-text) */
+  }
 }
