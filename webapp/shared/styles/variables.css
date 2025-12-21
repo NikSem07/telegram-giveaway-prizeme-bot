@@ -5,59 +5,142 @@
   --color-success: #34C759;
   --color-danger: #FF3B30;
   --color-warning: #FF9500;
-  
+    
   /* Фоны */
   --color-bg: var(--tg-theme-bg-color, #0f1115);
   --color-bg-secondary: var(--tg-theme-secondary-bg-color, #1c1c1e);
   --color-bg-tertiary: #2c2c2e;
-  
+    
   /* Текст */
   --color-text: var(--tg-theme-text-color, #ffffff);
   --color-text-secondary: rgba(255, 255, 255, 0.6);
   --color-text-tertiary: rgba(255, 255, 255, 0.3);
-  
+    
   /* Отступы */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
-  
+    
   /* Радиусы */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  
+    
   /* Тени */
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
 
   /* Цвета градиентов */
---gradient-primary: linear-gradient(270deg, rgba(21, 81, 229, 1) 0%, rgba(0, 34, 255, 1) 100%);
---gradient-blue: linear-gradient(135deg, #1f4cff, #0a3fa9);
+  --gradient-primary: linear-gradient(270deg, rgba(21, 81, 229, 1) 0%, rgba(0, 34, 255, 1) 100%);
+  --gradient-blue: linear-gradient(135deg, #1f4cff, #0a3fa9);
 
-/* Цвета навбара */
---navbar-bg: rgba(46, 46, 46, 0.1);
---navbar-border: rgba(60, 60, 67, 0.36);
+  /* Цвета навбара */
+  --navbar-bg: rgba(46, 46, 46, 0.1);
+  --navbar-border: rgba(60, 60, 67, 0.36);
 
-/* Цвета карточек */
---card-bg: var(--color-bg-secondary);
---card-bg-light: rgba(255, 255, 255, 0.1);
+  /* Цвета карточек */
+  --card-bg: var(--color-bg-secondary);
+  --card-bg-light: rgba(255, 255, 255, 0.1);
 
-/* Цвета текста навбара */
---nav-text: #8E8E93;
---nav-text-active: #007AFF;
+  /* Цвета текста навбара */
+  --nav-text: #8E8E93;
+  --nav-text-active: #007AFF;
 
-/* Размеры навбара */
---navbar-height: 80px;
---nav-item-width: 72px;
---nav-item-height: 44px;
+  /* Размеры навбара */
+  --navbar-height: 80px;
+  --nav-item-width: 72px;
+  --nav-item-height: 44px;
 
-/* Анимации */
---transition-fast: 0.15s ease;
---transition-normal: 0.2s ease;
---transition-slow: 0.3s ease;
+  /* Анимации */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}
+
+/* ====== СВЕТЛАЯ ТЕМА ====== */
+:root.theme-light {
+  /* Основные фоны */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f5f5f5;
+  --color-bg-tertiary: #f0f0f0;
+  
+  /* Текст */
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+  
+  /* Акцентные цвета */
+  --color-primary: #007aff;
+  --color-secondary: #5856d6;
+  
+  /* Карточки */
+  --card-bg: #ffffff;
+  --card-bg-light: #f8f8f8;
+  
+  /* Градиенты */
+  --gradient-primary: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+  
+  /* Тени */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  
+  /* Формы */
+  --input-bg: #ffffff;
+  --input-border: #e0e0e0;
+  --input-text: #000000;
+  
+  /* Статусы */
+  --success: #34c759;
+  --warning: #ff9500;
+  --error: #ff3b30;
+  --info: #007aff;
+  
+  /* Переменные из макета Figma для переключателя */
+  --shape-light: #f0f0f0;      /* Фон переключателя */
+  --background-light: #ffffff; /* Фон активной кнопки */
+  --top-dark: #000000;         /* Цвет текста */
+}
+
+/* ====== ТЁМНАЯ ТЕМА (уточняем значения) ====== */
+:root.theme-dark {
+  /* Основные фоны */
+  --color-bg-primary: #0f1115;
+  --color-bg-secondary: #181818;
+  --color-bg-tertiary: #2c2c2e;
+  
+  /* Текст */
+  --color-text: #ffffff;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #737375;
+  
+  /* Акцентные цвета */
+  --color-primary: #0a84ff;
+  --color-secondary: #5e5ce6;
+  
+  /* Карточки */
+  --card-bg: #1c1c1e;
+  --card-bg-light: #2c2c2e;
+  
+  /* Градиенты */
+  --gradient-primary: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
+  
+  /* Тени */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  
+  /* Формы */
+  --input-bg: #1c1c1e;
+  --input-border: #38383a;
+  --input-text: #ffffff;
+  
+  /* Статусы */
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --error: #ff453a;
+  --info: #0a84ff;
 }
 

@@ -34,6 +34,48 @@ window.switchMode = switchMode;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[HOME] DOM ready');
     
+    // ====== ИНИЦИАЛИЗАЦИЯ ТЕМЫ TELEGRAM ======
+    const initTheme = () => {
+        try {
+            const tg = window.Telegram?.WebApp;
+            if (tg) {
+                // Определяем тему Telegram (dark/light)
+                const isDark = tg.colorScheme === 'dark';
+                const themeClass = isDark ? 'theme-dark' : 'theme-light';
+                
+                // Применяем класс к корневому элементу
+                document.documentElement.classList.remove('theme-dark', 'theme-light');
+                document.documentElement.classList.add(themeClass);
+                
+                console.log(`[THEME] Applied ${themeClass} (Telegram colorScheme: ${tg.colorScheme})`);
+                
+                // Следим за изменениями темы
+                if (tg.onEvent) {
+                    tg.onEvent('themeChanged', () => {
+                        const newIsDark = tg.colorScheme === 'dark';
+                        const newThemeClass = newIsDark ? 'theme-dark' : 'theme-light';
+                        document.documentElement.classList.remove('theme-dark', 'theme-light');
+                        document.documentElement.classList.add(newThemeClass);
+                        console.log(`[THEME] Theme changed to ${newThemeClass}`);
+                    });
+                }
+            } else {
+                // Fallback: если не в Telegram, определяем по prefers-color-scheme
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const themeClass = prefersDark ? 'theme-dark' : 'theme-light';
+                document.documentElement.classList.add(themeClass);
+                console.log(`[THEME] Applied ${themeClass} (OS preference)`);
+            }
+        } catch (error) {
+            console.error('[THEME] Error initializing theme:', error);
+            // Fallback: тёмная тема по умолчанию
+            document.documentElement.classList.add('theme-dark');
+        }
+    };
+    
+    // Инициализируем тему СРАЗУ после DOM ready
+    initTheme();
+    
     // 1. Сначала гарантируем, что основной контейнер существует
     const mainContainer = document.getElementById('main-content');
     if (!mainContainer) {

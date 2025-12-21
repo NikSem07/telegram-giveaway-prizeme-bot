@@ -1,7 +1,7 @@
 /* webapp/shared/styles/components/mode-switcher.css */
 /* Стили для переключателя режимов Participant/Creator */
 
-/* Контейнер переключателя */
+/* ====== ОБЩИЕ СТИЛИ ====== */
 .mode-switcher {
   display: flex;
   align-items: center;
@@ -9,6 +9,7 @@
   border-radius: 999px;
   padding: 2px 4px;
   height: 32px;
+  transition: background-color var(--transition-normal);
 }
 
 /* Кнопки переключателя */
@@ -26,31 +27,11 @@
   white-space: nowrap;
 }
 
-/* Активная кнопка */
+/* Активная кнопка (тёмная тема по умолчанию) */
 .mode-btn.active {
   background: #737375;
   color: #FAFAFA;
   font-weight: 700;
-}
-
-/* Индикатор активной кнопки (альтернативный стиль) */
-.mode-switcher-indicator {
-  position: absolute;
-  background: var(--color-primary);
-  border-radius: 999px;
-  height: calc(100% - 4px);
-  transition: transform var(--transition-normal);
-}
-
-/* Вариант с индикатором (для будущего использования) */
-.mode-switcher--indicator {
-  position: relative;
-  background: var(--color-bg-tertiary);
-}
-
-.mode-switcher--indicator .mode-btn {
-  position: relative;
-  z-index: 1;
 }
 
 /* Состояния hover (только для десктопа) */
@@ -59,4 +40,92 @@
     background: rgba(255, 255, 255, 0.05);
     color: var(--color-text);
   }
+}
+
+/* ====== СТИЛИ ДЛЯ СВЕТЛОЙ ТЕМЫ ====== */
+:root.theme-light .mode-switcher {
+  /* Фрейм из Figma: width: 160px, height: 32px */
+  width: 160px;
+  height: 32px;
+  display: flex;
+  gap: 4px;
+  background-color: var(--shape-light); /* #f0f0f0 */
+  border-radius: 20px;
+  overflow: hidden;
+  padding: 0; /* Убираем стандартные padding */
+}
+
+:root.theme-light .mode-btn {
+  /* Неактивная кнопка */
+  flex: 1;
+  margin: 4px 0;
+  width: 74px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  overflow: hidden;
+  background-color: transparent;
+  color: var(--top-dark); /* #000000 */
+  font-family: "Roboto-Medium", Helvetica, sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+  padding: 0;
+  transition: all var(--transition-normal);
+}
+
+:root.theme-light .mode-btn.active {
+  /* Активная кнопка (согласно Figma) */
+  background-color: var(--background-light); /* #ffffff */
+  color: var(--top-dark); /* #000000 */
+  font-weight: 500; /* Medium, не Bold */
+  margin: 4px;
+  width: 74px;
+  height: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Состояния hover для десктопа в светлой теме */
+@media (hover: hover) {
+  :root.theme-light .mode-btn:not(.active):hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* ====== СТИЛИ ДЛЯ ТЁМНОЙ ТЕМЫ (уточнённые) ====== */
+:root.theme-dark .mode-switcher {
+  background: #2c2c2e; /* var(--color-bg-tertiary) */
+}
+
+:root.theme-dark .mode-btn {
+  color: #a0a0a0; /* var(--color-text-secondary) */
+}
+
+:root.theme-dark .mode-btn.active {
+  background: #737375;
+  color: #FAFAFA;
+  font-weight: 700;
+}
+
+/* Индикатор активной кнопки (альтернативный стиль для будущего) */
+.mode-switcher-indicator {
+  position: absolute;
+  background: var(--color-primary);
+  border-radius: 999px;
+  height: calc(100% - 4px);
+  transition: transform var(--transition-normal);
+}
+
+/* Вариант с индикатором */
+.mode-switcher--indicator {
+  position: relative;
+  background: var(--color-bg-tertiary);
+}
+
+.mode-switcher--indicator .mode-btn {
+  position: relative;
+  z-index: 1;
 }
