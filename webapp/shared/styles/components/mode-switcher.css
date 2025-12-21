@@ -56,7 +56,7 @@
 }
 
 :root.theme-light .mode-btn {
-  /* Неактивная кнопка */
+  /* Неактивная кнопка - УВЕЛИЧИВАЕМ РАЗМЕР ТЕКСТА */
   flex: 1;
   margin: 4px 0;
   width: 74px;
@@ -68,24 +68,31 @@
   overflow: hidden;
   background-color: transparent;
   color: var(--top-dark); /* #000000 */
-  font-family: "Roboto-Medium", Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; /* Единый шрифт */
   font-weight: 500;
-  font-size: 12px;
-  line-height: 22px;
+  font-size: 14px; /* Увеличиваем с 12px до 14px (как в тёмной теме) */
+  line-height: 1; /* Убираем line-height 22px */
   white-space: nowrap;
   padding: 0;
   transition: all var(--transition-normal);
 }
 
 :root.theme-light .mode-btn.active {
-  /* Активная кнопка (согласно Figma) */
+  /* Активная кнопка - УВЕЛИЧИВАЕМ ЖИРНОСТЬ И РАЗМЕР ТЕКСТА */
   background-color: var(--background-light); /* #ffffff */
   color: var(--top-dark); /* #000000 */
-  font-weight: 500; /* Medium, не Bold */
+  font-weight: 700; /* Меняем с 500 на 700 (Bold как в тёмной теме) */
+  font-size: 14px; /* Увеличиваем с 12px до 14px */
   margin: 4px;
   width: 74px;
   height: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Убираем специфические настройки ширины текста из Figma */
+:root.theme-light .mode-btn[data-mode="participant"],
+:root.theme-light .mode-btn[data-mode="creator"] {
+  min-width: 74px; /* Общая ширина кнопки */
 }
 
 /* Состояния hover для десктопа в светлой теме */
