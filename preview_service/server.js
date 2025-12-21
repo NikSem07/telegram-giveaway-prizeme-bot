@@ -1169,6 +1169,60 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
 });
 
 
+// --- GET /api/chat_avatar/:chatId ---
+// Отдает ПРЯМУЮ ссылку на файл аватара Telegram-канала
+app.get('/api/chat_avatar/:chatId', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        console.log(`[API chat_avatar] Request for chat_id: ${chatId}`);
+
+        const telegramChatId = parseInt(chatId);
+        if (!telegramChatId || !BOT_TOKEN) {
+            // Если что-то не так, возвращаем заглушку через наш прокси
+            return res.redirect('/uploads/avatars/default_channel.png');
+        }
+
+        // 1. Запрашиваем информацию о чате
+        const tgResponse = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/getChat?chat_id=${telegramChatId}`,
+            { timeout: 5000 }
+        );
+
+        const data = await tgResponse.json();
+        if (!data.ok || !data.result.photo) {
+            // Если аватар не найден, редиректим на заглушку
+            return res.redirect('/uploads/avatars/default_channel.png');
+        }
+
+        // 2. Получаем file_id аватара
+        const fileId = data.result.photo.big_file_id;
+        // 3. Запрашиваем путь к файлу у Telegram
+        const fileResponse = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`,
+            { timeout: 5000 }
+        );
+
+        const fileData = await fileResponse.json();
+        if (!fileData.ok) {
+            return res.redirect('/uploads/avatars/default_channel.png');
+        }
+
+        const filePath = fileData.result.file_path;
+        // 4. Формируем прямую ссылку на файл в Telegram
+        const directAvatarUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+
+        console.log(`[API chat_avatar] Redirecting to direct URL for ${chatId}`);
+        // 5. Перенаправляем браузер на загрузку аватара
+        res.redirect(directAvatarUrl);
+
+    } catch (error) {
+        console.error(`[API chat_avatar] Error for ${req.params.chatId}:`, error);
+        // В случае ошибки тоже показываем заглушку
+        res.redirect('/uploads/avatars/default_channel.png');
+    }
+});
+
+
 // --- POST /api/creator_total_giveaways ---
 // Возвращает общее кол-во розыгрышей, созданных текущим создателем
 app.post('/api/creator_total_giveaways', async (req, res) => {
