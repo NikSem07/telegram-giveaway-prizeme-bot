@@ -41,9 +41,14 @@
   transition: opacity var(--transition-normal);
 }
 
-/* Светлая тема: черные иконки для неактивных элементов */
-:root.theme-light .nav-icon:not(.nav-avatar-img) {
+/* Светлая тема: черные иконки для НЕАКТИВНЫХ элементов */
+:root.theme-light .nav-item:not(.active) .nav-icon:not(.nav-avatar-img) {
   filter: brightness(0) saturate(100%) invert(0%) sepia(0%) saturate(0%) hue-rotate(0deg);
+}
+
+/* Светлая тема: активные иконки должны оставаться синими (отменяем черный фильтр) */
+:root.theme-light .nav-item.active .nav-icon:not(.nav-avatar-img) {
+  filter: brightness(0) saturate(100%) invert(35%) sepia(98%) saturate(2500%) hue-rotate(195deg);
 }
 
 /* Аватарка в навбаре */
