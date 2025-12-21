@@ -59,7 +59,7 @@
   /* Неактивная кнопка - УВЕЛИЧИВАЕМ РАЗМЕРЫ */
   flex: 1;
   margin: 4px 0; /* Вертикальный отступ сохраняем */
-  width: 76px;   /* Увеличиваем с 74px до 76px */
+  width: 88px;   /* Увеличиваем с 74px до 88px */
   height: 28px;  /* Увеличиваем с 24px до 28px */
   display: flex;
   align-items: center;
@@ -84,7 +84,7 @@
   font-weight: 700;
   font-size: 14px;
   margin: 4px; /* Отступ со всех сторон 4px */
-  width: 76px;   /* Увеличиваем с 74px до 76px */
+  width: 88px;   /* Увеличиваем с 74px до 88px */
   height: 28px;  /* Увеличиваем с 24px до 28px */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
