@@ -30,6 +30,27 @@
   align-items: center;
   cursor: pointer;
   user-select: none;
+  
+  /* КРИТИЧЕСКИ ВАЖНО: убираем highlight на мобильных */
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+  
+  /* Убираем все возможные состояния */
+  background: transparent;
+  border: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Убираем все эффекты при взаимодействии */
+.nav-item:active,
+.nav-item:focus,
+.nav-item:hover {
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 /* Иконка */
