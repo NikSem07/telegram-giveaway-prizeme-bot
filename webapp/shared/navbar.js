@@ -81,11 +81,6 @@ const Navbar = {
         div.className = `nav-item ${isActive ? 'active' : ''} ${isProfile ? 'nav-profile' : ''}`;
         div.setAttribute('data-page', item.id);
         
-        // Активный фон
-        const activeBg = document.createElement('div');
-        activeBg.className = 'nav-active-bg';
-        div.appendChild(activeBg);
-        
         // Иконка или аватар
         if (isProfile) {
             const avatarContainer = document.createElement('div');

@@ -79,25 +79,6 @@
   transition: color var(--transition-normal);
 }
 
-/* Градиентная подложка (активное состояние) */
-.nav-active-bg {
-  position: absolute;
-  top: 0;
-  width: var(--nav-item-width);
-  height: var(--nav-item-height);
-  border-radius: var(--radius-md);
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-  background: transparent;
-  border: 1px solid transparent;
-  box-sizing: border-box;
-}
-
-/* Активная вкладка */
-.nav-item.active .nav-active-bg {
-  opacity: 1;
-}
-
 .nav-item.active .nav-icon {
   opacity: 1;
   /* Делаем иконку синей, исключая аватар */
