@@ -107,3 +107,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 15 * 60 * 1000); // 15 минут
 });
+
+// ДЛЯ ОТЛАДКИ ТЕМЫ - УДАЛИТЬ ПОСЛЕ ПРОВЕРКИ
+console.log('=== ДИАГНОСТИКА ТЕМЫ ===');
+console.log('1. Telegram.WebApp:', window.Telegram?.WebApp);
+console.log('2. colorScheme:', window.Telegram?.WebApp?.colorScheme);
+console.log('3. HTML классы:', document.documentElement.className);
+console.log('4. CSS переменная --color-bg:', getComputedStyle(document.documentElement).getPropertyValue('--color-bg'));
+console.log('5. body background:', getComputedStyle(document.body).backgroundColor);
