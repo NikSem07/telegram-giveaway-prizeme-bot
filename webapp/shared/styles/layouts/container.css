@@ -72,3 +72,10 @@ body.home-page .wrap {
   min-height: calc(100vh - 90px);
   margin-top: -8px;
 }
+
+/* Фон контейнеров должен следовать теме */
+#main-content,
+.main-content,
+.wrap {
+  background: var(--color-bg);
+}
