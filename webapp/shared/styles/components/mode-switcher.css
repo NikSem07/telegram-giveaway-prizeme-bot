@@ -29,7 +29,7 @@
   height: 36px; /* Увеличиваем с 32px до 36px */
   display: flex;
   gap: 4px;
-  background-color: var(--shape-light); /* #f0f0f0 */
+  background-color: #E6E5EB;
   border-radius: 20px;
   overflow: hidden;
   padding: 0;
