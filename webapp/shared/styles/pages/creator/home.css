@@ -205,3 +205,15 @@
     bottom: -30px;
   }
 }
+
+/* Creator Home - белые карточки в светлой теме (только 2 блока) */
+:root.theme-light .creator-home-v2-card--total,
+:root.theme-light .creator-home-v2-card--donate {
+  background: #ffffff;
+  color: #000000; /* чтобы текст не был белым на белом */
+}
+
+/* Стрелка на белой карточке (только donate) */
+:root.theme-light .creator-home-v2-card--donate .creator-home-v2-arrow {
+  filter: brightness(0) saturate(100%); /* делает иконку чёрной */
+}
