@@ -48,6 +48,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.documentElement.classList.add(themeClass);
                 
                 console.log(`[THEME] Applied ${themeClass} (Telegram colorScheme: ${tg.colorScheme})`);
+
+                // ✅ FIX: синхронизируем системный фон Telegram для СВЕТЛОЙ темы
+                // (тёмную тему намеренно не трогаем)
+                try {
+                    if (!isDark) {
+                        tg.setBackgroundColor('#EFEEF4');
+                        tg.setHeaderColor('#EFEEF4');
+                    }
+                } catch (e) {
+                    console.warn('[THEME] Failed to set Telegram colors', e);
+                }
                 
                 // Следим за изменениями темы
                 if (tg.onEvent) {
@@ -57,39 +68,44 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.documentElement.classList.remove('theme-dark', 'theme-light');
                         document.documentElement.classList.add(newThemeClass);
                         console.log(`[THEME] Theme changed to ${newThemeClass}`);
+
+                        // ✅ FIX: при смене на светлую — снова ставим нужный фон/шапку
+                        try {
+                            if (!newIsDark) {
+                                tg.setBackgroundColor('#EFEEF4');
+                                tg.setHeaderColor('#EFEEF4');
+                            }
+                        } catch (e) {
+                            console.warn('[THEME] Failed to set Telegram colors', e);
+                        }
                     });
                 }
             } else {
-                // Fallback: если не в Telegram, определяем по prefers-color-scheme
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                // Fallback: если не в Telegram, определяем по prefers-color
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                 const themeClass = prefersDark ? 'theme-dark' : 'theme-light';
+                document.documentElement.classList.remove('theme-dark', 'theme-light');
                 document.documentElement.classList.add(themeClass);
-                console.log(`[THEME] Applied ${themeClass} (OS preference)`);
+                console.log(`[THEME] Fallback theme applied: ${themeClass}`);
             }
-        } catch (error) {
-            console.error('[THEME] Error initializing theme:', error);
-            // Fallback: тёмная тема по умолчанию
-            document.documentElement.classList.add('theme-dark');
+        } catch (err) {
+            console.error('[THEME] initTheme error:', err);
         }
     };
     
-    // Инициализируем тему СРАЗУ после DOM ready
+    // 1. Инициализируем тему сразу при загрузке
     initTheme();
     
-    // 1. Сначала гарантируем, что основной контейнер существует
-    const mainContainer = document.getElementById('main-content');
-    if (!mainContainer) {
-        console.error('[HOME] Main content container not found in DOM');
-        return;
-    }
-    
-    console.log('[HOME] Main container found:', mainContainer);
-    
-    // 2. Инициализируем состояние
-    AppState.init();
-    
-    // 3. Инициализируем роутер (он сам найдет контейнер)
+    // 2. Инициализируем роутер
     Router.init();
+    
+    // 3. Навешиваем обработчики для переключателя режима
+    const modeButtons = document.querySelectorAll('.mode-button');
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchMode(btn.dataset.mode);
+        });
+    });
     
     // 4. Инициализируем navbar
     Navbar.init();
@@ -107,11 +123,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 15 * 60 * 1000); // 15 минут
 });
-
-// ДЛЯ ОТЛАДКИ ТЕМЫ - УДАЛИТЬ ПОСЛЕ ПРОВЕРКИ
-console.log('=== ДИАГНОСТИКА ТЕМЫ ===');
-console.log('1. Telegram.WebApp:', window.Telegram?.WebApp);
-console.log('2. colorScheme:', window.Telegram?.WebApp?.colorScheme);
-console.log('3. HTML классы:', document.documentElement.className);
-console.log('4. CSS переменная --color-bg:', getComputedStyle(document.documentElement).getPropertyValue('--color-bg'));
-console.log('5. body background:', getComputedStyle(document.body).backgroundColor);
