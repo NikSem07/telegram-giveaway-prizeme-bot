@@ -571,15 +571,6 @@ def _compose_preview_text(
         lines.append(desc_html)
         lines.append("")
 
-    lines.append("Число участников: 0")
-    lines.append(f"Количество призов: {max(0, prizes)}")
-
-    if end_at_msk:
-        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
-        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
-    else:
-        lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
-
     return "\n".join(lines)
 
 
@@ -605,15 +596,6 @@ def _compose_post_text(
         # БЕЗ escape() - сохраняем пользовательское форматирование из message.html_text
         lines.append(desc_html)
         lines.append("")
-
-    lines.append("Число участников: 0")
-    lines.append(f"Количество призов: {max(0, prizes)}")
-
-    if end_at_msk:
-        tail = f" ({days_left} дней)" if isinstance(days_left, int) and days_left >= 0 else ""
-        lines.append(f"Дата розыгрыша: {end_at_msk}{tail}")
-    else:
-        lines.append("Дата розыгрыша: 00:00, 00.00.0000 (0 дней)")
 
     return "\n".join(lines)
 
@@ -5330,15 +5312,6 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
     if gw.public_description and gw.public_description.strip():
         lines.append(f"{gw.public_description}")
         lines.append("")
-    
-    # Ключевые параметры с жирным форматированием
-    lines.extend([
-        f"Участников: <b>{participants_count}</b>",
-        f"Призовых мест: <b>{gw.winners_count}</b>", 
-        f"Дата розыгрыша: <b>{end_at_str} MSK (завершён)</b>",
-        "",
-        "<b>Победители розыгрыша:</b>"
-    ])
     
     # Добавляем победителей
     if winners:
