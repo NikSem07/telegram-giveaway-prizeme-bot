@@ -1778,6 +1778,8 @@ def kb_event_actions(gid:int, status:str):
         # Для активных розыгрышей - только статистика
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
+        # Перерозыгрыш завершенного розыгрыша
+        kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
         # Для завершенных/отмененных - только статистика
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     
@@ -2075,6 +2077,85 @@ async def cb_confirm_early(cq: CallbackQuery):
         await cq.answer("Ошибка", show_alert=True)
 
 # === Конец блока "Досрочное завершение розыгрыша" ===
+
+# === Блок с перерозыгрышем ===
+# ОБРАБОТЧИК: Кнопка "Перерозыгрыш"
+@dp.callback_query(F.data.startswith("ev:redraw:"))
+async def cb_redraw(cq: CallbackQuery):
+    """Показывает диалог подтверждения перерозыгрыша"""
+    gid = int(cq.data.split(":")[2])
+    
+    # Получаем информацию о розыгрыше
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if not gw or gw.status != GiveawayStatus.FINISHED:
+            await cq.answer("Розыгрыш не найден или не завершен.", show_alert=True)
+            return
+    
+    # Текст подтверждения как в задании
+    confirm_text = (
+        f"<b>🎲 Перерозыгрыш позволяет определить новых победителей розыгрыша</b>\n\n"
+        f"Вы действительно собираетесь провести перерозыгрыш? "
+        f"Подтвердите свое действие, нажав на кнопку \"✅ Да\", если хотите провести перерозыгрыш "
+        f"или \"❌ Нет\", если не хотите ничего менять.\n\n"
+        f"<i>Внимание, после нажатия на кнопку \"✅ Да\", будут определены новые победители розыгрыша "
+        f"и отменить это действие уже будет нельзя!</i>"
+    )
+    
+    # Клавиатура с кнопками Да/Нет
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да", callback_data=f"ev:confirm_redraw:{gid}")
+    kb.button(text="❌ Нет", callback_data="ev:cancel_redraw")
+    kb.adjust(2)
+    
+    # Отправляем сообщение с подтверждением
+    await cq.message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+# ОБРАБОТЧИК: Отмена перерозыгрыша
+@dp.callback_query(F.data == "ev:cancel_redraw")
+async def cb_cancel_redraw(cq: CallbackQuery):
+    """Просто удаляет сообщение с подтверждением"""
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await cq.answer("Перерозыгрыш отменён")
+
+
+# ОБРАБОТЧИК: Подтверждение перерозыгрыша
+@dp.callback_query(F.data.startswith("ev:confirm_redraw:"))
+async def cb_confirm_redraw(cq: CallbackQuery):
+    """Выполняет перерозыгрыш"""
+    gid = int(cq.data.split(":")[2])
+    
+    try:
+        # Удаляем сообщение с подтверждением
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        
+        # Удаляем сообщение с карточкой розыгрыша (как кнопка "Назад")
+        try:
+            await cq.message.bot.delete_message(cq.message.chat.id, cq.message.message_id - 1)
+        except Exception as e:
+            logging.info(f"⚠️ Не удалось удалить карточку розыгрыша: {e}")
+        
+        # Запускаем перерозыгрыш
+        await cq.answer(f"🔄 Провожу перерозыгрыш...")
+        success = await redraw_winners(gid)
+        
+        if success:
+            await cq.message.answer(f"✅ Перерозыгрыш успешно выполнен! Новые победители определены.")
+        else:
+            await cq.message.answer(f"❌ Не удалось выполнить перерозыгрыш. Проверьте, есть ли участники у розыгрыша.")
+        
+    except Exception as e:
+        logging.error(f"❌ Ошибка при перерозыгрыше {gid}: {e}")
+        await cq.message.answer(f"❌ Произошла ошибка при перерозыгрыше: {e}")
+        await cq.answer("Ошибка", show_alert=True)
 
 
 @dp.message(Command("dbg_scan"))
@@ -5208,8 +5289,140 @@ async def finalize_and_draw_job(giveaway_id: int):
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {giveaway_id}")
 
 
+#--- ПЕРЕОПРЕДЕЛЕНИЕ победителей для завершенного розыгрыша ---
+async def redraw_winners(giveaway_id: int):
+    """
+    Адаптированная версия finalize_and_draw_job() без изменения статуса
+    """
+    print(f"🎲 REDRAW_WINNERS ► старт для розыгрыша {giveaway_id}")
+
+    # Получаем бот из глобального контекста
+    from bot import bot  # Импортируем глобальный экземпляр бота
+    
+    async with Session() as s:
+        # ---------- 1. Загружаем розыгрыш ----------
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw or gw.status != GiveawayStatus.FINISHED:
+            print(f"❌ Розыгрыш {giveaway_id} не найден или не завершен")
+            return False
+
+        print(f"🔍 Переопределяем победителей для розыгрыша {gw.id} «{gw.internal_title}»")
+
+        # ---------- 2. Все участники с prelim_ok = true ----------
+        res = await s.execute(
+            text("""
+                SELECT user_id, ticket_code
+                FROM entries
+                WHERE giveaway_id = :gid
+                  AND prelim_ok = true
+            """),
+            {"gid": gw.id}
+        )
+        all_entries = res.fetchall()
+        print(f"📋 Найдено участников для перерозыгрыша: {len(all_entries)}")
+
+        if not all_entries:
+            print(f"⚠️ Для розыгрыша {gw.id} нет участников")
+            return False
+
+        # ---------- 3. Финальная проверка подписок для КАЖДОГО участника ----------
+        eligible_entries = []  # [(user_id, ticket_code)]
+        for row in all_entries:
+            user_id = row[0]
+            ticket_code = row[1]
+            is_ok, debug_reason = await check_membership_on_all(bot, user_id, gw.id)
+            print(f"   • user={user_id} ticket={ticket_code} -> {'OK' if is_ok else 'FAIL'}")
+
+            if is_ok:
+                eligible_entries.append((user_id, ticket_code))
+
+        print(f"✅ Подтверждено участников после проверки: {len(eligible_entries)}")
+
+        if not eligible_entries:
+            print(f"⚠️ Для розыгрыша {gw.id} не осталось участников, подписанных на все каналы")
+            return False
+
+        # ---------- 4. Определяем НОВЫХ победителей ----------
+        user_ids = [u for (u, _) in eligible_entries]
+        winners_to_pick = min(gw.winners_count or 1, len(user_ids))
+        print(f"🎲 Определяем {winners_to_pick} НОВЫХ победителей из {len(user_ids)} участников")
+
+        # Используем новый секрет для перерозыгрыша
+        winners_tuples = deterministic_draw("redraw_secret_" + str(gw.id), gw.id, user_ids, winners_to_pick)
+
+        # ---------- 5. УДАЛЯЕМ старых победителей и добавляем НОВЫХ ----------
+        await s.execute(
+            text("DELETE FROM winners WHERE giveaway_id = :gid"),
+            {"gid": gw.id}
+        )
+
+        for winner_tuple in winners_tuples:
+            user_id = winner_tuple[0]
+            rank = winner_tuple[1] 
+            hash_used_from_draw = winner_tuple[2]
+            
+            await s.execute(
+                text("""
+                    INSERT INTO winners (giveaway_id, user_id, rank, hash_used)
+                    VALUES (:gid, :uid, :rank, :hash_used)
+                """),
+                {"gid": gw.id, "uid": user_id, "rank": rank, "hash_used": hash_used_from_draw}
+            )
+            print(f"   🏅 НОВЫЙ победитель #{rank}: user_id={user_id}")
+
+        # ---------- 6. Обновляем final_ok: false для всех, true только для НОВЫХ победителей ----------
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        await s.execute(
+            text("""
+                UPDATE entries
+                SET final_ok = false,
+                    final_checked_at = :ts
+                WHERE giveaway_id = :gid
+            """),
+            {"gid": gw.id, "ts": now_utc}
+        )
+
+        for winner_tuple in winners_tuples:
+            user_id = winner_tuple[0]
+            await s.execute(
+                text("""
+                    UPDATE entries
+                    SET final_ok = true,
+                        final_checked_at = :ts
+                    WHERE giveaway_id = :gid
+                    AND user_id = :uid
+                """),
+                {"gid": gw.id, "uid": user_id, "ts": now_utc}
+            )
+
+        await s.commit()
+        print(f"✅ Перерозыгрыш {gw.id} успешно выполнен, новых победителей: {len(winners_tuples)}")
+
+    # ---------- 7. После коммита — обновляем посты и уведомления ----------
+    try:
+        await edit_giveaway_post(giveaway_id, bot)
+        print(f"✅ Посты в каналах обновлены с новыми победителями для розыгрыша {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка обновления постов: {e}")
+
+    try:
+        await notify_redraw_organizer(giveaway_id, winners_tuples, len(eligible_entries), bot)
+        print(f"✅ Организатор уведомлен о перерозыгрыше для {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка уведомления организатора: {e}")
+
+    try:
+        await notify_redraw_participants(giveaway_id, winners_tuples, eligible_entries, bot)
+        print(f"✅ Участники уведомлены о перерозыгрыше для {giveaway_id}")
+    except Exception as e:
+        print(f"❌ Ошибка уведомления участников: {e}")
+
+    return True
+
+
+# --- Уведомление организатора о результатах розыгрыша ---
 async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_instance: Bot):
-    """Уведомление организатора о результатах розыгрыша"""
     try:
         print(f"📨 Уведомляем организатора розыгрыша {gid}")
         
@@ -5249,10 +5462,11 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
                     "К сожалению, не удалось определить победителей."
                 )
             
-            # Кнопка "Выгрузить CSV" для организатора            
+            # Кнопка "Выгрузить CSV" для организатора и "Перерозыгрыш"           
             kb = InlineKeyboardBuilder()
             kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
-            kb.adjust(1)
+            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+            kb.adjust(2)
             
             print(f"📤 Отправляем уведомление организатору {gw.owner_user_id}")
             await bot_instance.send_message(
@@ -5264,10 +5478,69 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
             
     except Exception as e:
         print(f"❌ Ошибка уведомления организатора для розыгрыша {gid}: {e}")
-    
 
+
+# --- Уведомление организатора о результатах ПЕРЕРОЗЫГРЫША ---
+async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, bot_instance: Bot):
+    try:
+        print(f"📨 Уведомляем организатора о ПЕРЕРОЗЫГРЫШЕ {gid}")
+        
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, gid)
+            if not gw:
+                print(f"❌ Розыгрыш {gid} не найден")
+                return
+            
+            # Получаем username НОВЫХ победителей
+            winner_usernames = []
+            for winner in winners:
+                uid = winner[0]  # (uid, rank, hash)
+                try:
+                    user = await bot_instance.get_chat(uid)
+                    username = f"@{user.username}" if user.username else f"ID: {uid}"
+                    winner_usernames.append(f"{username}")
+                except Exception as e:
+                    winner_usernames.append(f"ID: {uid}")
+            
+            # Формируем сообщение о ПЕРЕРОЗЫГРЫШЕ
+            if winner_usernames:
+                winners_text = "\n".join([f"{i+1}. {name}" for i, name in enumerate(winner_usernames)])
+                message_text = (
+                    f"🔄 <b>Перерозыгрыш завершён!</b>\n\n"
+                    f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                    f"📊 Участников: {eligible_count}\n"
+                    f"🏆 Новых победителей: {len(winners)}\n\n"
+                    f"<b>НОВЫЙ список победителей:</b>\n{winners_text}\n\n"
+                    f"<i>Свяжитесь с новыми победителями для вручения призов.</i>"
+                )
+            else:
+                message_text = (
+                    f"🔄 <b>Перерозыгрыш завершён!</b>\n\n"
+                    f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                    f"📊 Участников: {eligible_count}\n"
+                    f"🏆 Победителей: {len(winners)}\n\n"
+                    "К сожалению, не удалось определить новых победителей."
+                )
+            
+            # Кнопки
+            kb = InlineKeyboardBuilder()
+            kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
+            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+            kb.adjust(2)
+            
+            await bot_instance.send_message(
+                gw.owner_user_id, 
+                message_text,
+                reply_markup=kb.as_markup(),
+                parse_mode="HTML"
+            )
+            
+    except Exception as e:
+        print(f"❌ Ошибка уведомления организатора о перерозыгрыше: {e}")
+
+
+# --- Уведомление всех участников о результатах розыгрыша ---
 async def notify_participants(gid: int, winners: list, eligible_entries: list, bot_instance: Bot):
-    """Уведомление всех участников о результатах розыгрыша"""
     try:
         print(f"📨 Уведомляем участников розыгрыша {gid}")
         
@@ -5379,6 +5652,97 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
         
     except Exception as e:
         print(f"❌ Ошибка уведомления участников для розыгрыша {gid}: {e}")
+
+
+# --- Уведомление участников о ПЕРЕРОЗЫГРЫШЕ ---
+async def notify_redraw_participants(gid: int, winners: list, eligible_entries: list, bot_instance: Bot):
+    try:
+        print(f"📨 Уведомляем участников о ПЕРЕРОЗЫГРЫШЕ {gid}")
+        
+        # Получаем BOT_USERNAME
+        bot_info = await bot_instance.get_me()
+        BOT_USERNAME = bot_info.username
+        
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, gid)
+            if not gw:
+                return
+            
+            winner_ids = [winner[0] for winner in winners]
+            
+            # Получаем username НОВЫХ победителей
+            winner_usernames = []
+            for winner_id in winner_ids:
+                try:
+                    user = await bot_instance.get_chat(winner_id)
+                    username = f"@{user.username}" if user.username else f"победитель (ID: {winner_id})"
+                    winner_usernames.append(username)
+                except Exception:
+                    winner_usernames.append(f"победитель (ID: {winner_id})")
+            
+            winners_list_text = ", ".join(winner_usernames) if winner_usernames else "новые победители не определены"
+            
+            # Получаем билеты участников
+            participant_tickets = {}
+            res = await s.execute(
+                text("SELECT user_id, ticket_code FROM entries WHERE giveaway_id = :gid"),
+                {"gid": gid}
+            )
+            for row in res.all():
+                participant_tickets[row[0]] = row[1]
+            
+            # Уведомляем всех участников
+            notified_count = 0
+            for user_id, _ in eligible_entries:
+                try:
+                    ticket_code = participant_tickets.get(user_id, "неизвестен")
+                    
+                    if user_id in winner_ids:
+                        # НОВЫЙ победитель
+                        message_text = (
+                            f"🔄 <b>Проведён перерозыгрыш!</b>\n\n"
+                            f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                            f"🎉 <b>ПОЗДРАВЛЯЕМ!</b> Вы стали победителем в перерозыгрыше!\n\n"
+                            f"Ваш билет <b>{ticket_code}</b> оказался выбранным случайным образом.\n\n"
+                            f"Организатор свяжется с вами для вручения приза."
+                        )
+                    else:
+                        # Участник (не победитель в перерозыгрыше)
+                        message_text = (
+                            f"🔄 <b>Проведён перерозыгрыш!</b>\n\n"
+                            f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                            f"Ваш билет: <b>{ticket_code}</b>\n\n"
+                            f"Мы случайным образом определили НОВЫХ победителей и, к сожалению, "
+                            f"Ваш билет не был выбран.\n\n"
+                            f"<b>Новые победители:</b> {winners_list_text}\n\n"
+                            f"Участвуйте в других розыгрышах!"
+                        )
+                    
+                    # Кнопка "Результаты"
+                    kb = InlineKeyboardBuilder()
+                    url = f"https://t.me/{BOT_USERNAME}?startapp=results_{gid}"
+                    kb.button(text="🎲 Результаты", url=url)
+                    kb.adjust(1)
+                    
+                    await bot_instance.send_message(
+                        user_id, 
+                        message_text, 
+                        parse_mode="HTML",
+                        reply_markup=kb.as_markup()
+                    )
+                    
+                    notified_count += 1
+                    await asyncio.sleep(0.1)
+                    
+                except Exception as e:
+                    print(f"⚠️ Не удалось уведомить пользователя {user_id} о перерозыгрыше: {e}")
+                    continue
+                    
+        print(f"✅ Уведомлено {notified_count} участников о перерозыгрыше {gid}")
+        
+    except Exception as e:
+        print(f"❌ Ошибка уведомления участников о перерозыгрыше: {e}")
+
 
 async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
     async with session_scope() as s:
