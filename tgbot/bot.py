@@ -662,7 +662,7 @@ async def render_link_preview_message(
     hidden_link = f'<a href="{media}"> </a>'
 
     if media_top:
-        full = f"{hidden_link}\n\n{txt}"
+        full = f"{hidden_link}\n{txt}"
     else:
         full = f"{txt}\n\n{hidden_link}"
 
@@ -855,7 +855,7 @@ async def _send_launch_preview_message(m: Message, gw: "Giveaway") -> None:
         media_position = getattr(gw, 'media_position', 'bottom')
         
         if media_position == "top":
-            full_text = f"{hidden_link}\n\n{preview_text}"
+            full_text = f"{hidden_link}\n{preview_text}"
         else:
             full_text = f"{preview_text}\n\n{hidden_link}"
 
@@ -4587,7 +4587,7 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 media_position = getattr(gw, 'media_position', 'bottom')
                 
                 if media_position == "top":
-                    full_text = f"{hidden_link}\n\n{preview_text}"
+                    full_text = f"{hidden_link}\n{preview_text}"
                 else:
                     full_text = f"{preview_text}\n\n{hidden_link}"
 
@@ -5447,7 +5447,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
                             
                             if media_position == "top":
-                                full_text_with_preview = f"{hidden_link}\n\n{cleaned_text}"
+                                full_text_with_preview = f"{hidden_link}\n{cleaned_text}"
                             else:
                                 full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
                             
@@ -5866,7 +5866,7 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
             
             if media_position == "top":
-                full_text = f"{hidden_link}\n\n{post_text}"
+                full_text = f"{hidden_link}\n{post_text}"
             else:
                 full_text = f"{post_text}\n\n{hidden_link}"
 
