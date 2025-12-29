@@ -5507,7 +5507,7 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
                 gw.owner_user_id, 
                 message_text,
                 reply_markup=kb.as_markup(),
-                isable_notification=False
+                disable_notification=False
             )
             print(f"✅ Организатор уведомлен")
             
@@ -5578,7 +5578,7 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
                 gw.owner_user_id, 
                 message_text,
                 reply_markup=kb.as_markup(),
-                isable_notification=False,
+                disable_notification=False,
                 parse_mode="HTML"
             )
             
