@@ -1765,7 +1765,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
         )
 
 
-def kb_event_actions(gid:int, status:str):
+def kb_event_actions(gid:int, status:str, user_id: int | None = None):
 
     kb = InlineKeyboardBuilder()
     
@@ -1775,11 +1775,18 @@ def kb_event_actions(gid:int, status:str):
     elif status == GiveawayStatus.ACTIVE:
         # Для активных розыгрышей - кнопка "Звершить досрочно"
         kb.button(text="🏁 Завершить досрочно", callback_data=f"ev:early_finish:{gid}")
-        # Для активных розыгрышей - только статистика
+        # Для активных розыгрышей - только статистика (всегда доступна)
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     elif status in (GiveawayStatus.FINISHED, GiveawayStatus.CANCELLED):
-        # Перерозыгрыш завершенного розыгрыша
-        kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+        # ПЕРЕРОЗЫГРЫШ: проверяем премиум-статус если user_id передан
+        if user_id:
+            # Асинхронная проверка статуса - возвращаем callback_data для стандартных пользователей
+            # Здесь просто создаем кнопку, а проверка будет в обработчике
+            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+        else:
+            # Если user_id не передан (старый вызов), показываем для всех
+            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+        
         # Для завершенных/отмененных - только статистика
         kb.button(text="📊 Статистика", callback_data=f"ev:status:{gid}")
     
@@ -1788,6 +1795,7 @@ def kb_event_actions(gid:int, status:str):
     
     kb.adjust(1)
     return kb.as_markup()
+
 
 @dp.callback_query(F.data == "close_message")
 async def close_message(cq: CallbackQuery):
@@ -1848,6 +1856,7 @@ async def cmd_start(m: Message, state: FSMContext):
         "или нескольких Telegram-каналов и самостоятельно выбирать "
         "победителей в назначенное время.\n\n"
         "Команды бота:\n"
+        "<b>/start</b> – перезапустить бота\n"
         "<b>/create</b> – создать розыгрыш\n"
         "<b>/events</b> – мои розыгрыши\n"
         "<b>/subscriptions</b> – подписки"
@@ -2084,6 +2093,18 @@ async def cb_confirm_early(cq: CallbackQuery):
 async def cb_redraw(cq: CallbackQuery):
     """Показывает диалог подтверждения перерозыгрыша"""
     gid = int(cq.data.split(":")[2])
+
+    # ПРОВЕРКА ПРЕМИУМ СТАТУСА
+    user_id = cq.from_user.id
+    user_status = await get_user_status(user_id)
+    
+    if user_status == 'standard':
+        # Стандартный пользователь - показываем pop-up о необходимости подписки
+        await cq.answer(
+            "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+            show_alert=True
+        )
+        return
     
     # Получаем информацию о розыгрыше
     async with session_scope() as s:
@@ -3969,7 +3990,8 @@ async def show_event_card(chat_id:int, giveaway_id:int):
             if gw.status == GiveawayStatus.DRAFT:
                 reply_markup = kb_draft_actions(giveaway_id)
             else:
-                reply_markup = kb_event_actions(giveaway_id, gw.status)
+                # Передаем chat_id как user_id для проверки статуса
+                reply_markup = kb_event_actions(giveaway_id, gw.status, chat_id)
                 
             await bot.send_message(
                 chat_id, 
@@ -3990,7 +4012,8 @@ async def show_event_card(chat_id:int, giveaway_id:int):
     if gw.status == GiveawayStatus.DRAFT:
         reply_markup = kb_draft_actions(giveaway_id)
     else:
-        reply_markup = kb_event_actions(giveaway_id, gw.status)
+        # Передаем chat_id как user_id для проверки статуса
+        reply_markup = kb_event_actions(giveaway_id, gw.status, chat_id)
     
     if kind == "photo" and fid:
         await bot.send_photo(chat_id, fid, caption=cap, reply_markup=reply_markup)
@@ -5104,7 +5127,7 @@ async def user_join(cq:CallbackQuery):
                     break
                 except Exception:
                     continue
-    await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>")
+    await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>", disable_notification=False)
 
 async def finalize_and_draw_job(giveaway_id: int):
     """
@@ -5462,17 +5485,29 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
                     "К сожалению, не удалось определить победителей."
                 )
             
-            # Кнопка "Выгрузить CSV" для организатора и "Перерозыгрыш"           
+            # Улучшенная клавиатура с проверкой премиум-статуса
             kb = InlineKeyboardBuilder()
-            kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
-            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
-            kb.adjust(2)
+            
+            # Проверяем статус пользователя
+            user_status = await get_user_status(gw.owner_user_id)
+            
+            if user_status == 'premium':
+                # Премиум пользователи: обе кнопки доступны
+                kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
+                kb.button(text="💎🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+            else:
+                # Стандартные пользователи: CSV заблокирован, перерозыгрыш тоже
+                kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{gid}")
+                kb.button(text="🔒🎲 Перерозыгрыш", callback_data=f"premium_required:{gid}")
+            
+            kb.adjust(1)
             
             print(f"📤 Отправляем уведомление организатору {gw.owner_user_id}")
             await bot_instance.send_message(
                 gw.owner_user_id, 
                 message_text,
-                reply_markup=kb.as_markup()
+                reply_markup=kb.as_markup(),
+                isable_notification=False
             )
             print(f"✅ Организатор уведомлен")
             
@@ -5522,16 +5557,28 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
                     "К сожалению, не удалось определить новых победителей."
                 )
             
-            # Кнопки
+            # Клавиатура с проверкой премиум-статуса
             kb = InlineKeyboardBuilder()
-            kb.button(text="📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
-            kb.button(text="🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
-            kb.adjust(2)
+            
+            # Проверяем статус пользователя
+            user_status = await get_user_status(gw.owner_user_id)
+            
+            if user_status == 'premium':
+                # Премиум пользователи: обе кнопки доступны
+                kb.button(text="💎📥 Выгрузить CSV", callback_data=f"stats:csv:{gid}")
+                kb.button(text="💎🎲 Перерозыгрыш", callback_data=f"ev:redraw:{gid}")
+            else:
+                # Стандартные пользователи: CSV заблокирован, перерозыгрыш тоже
+                kb.button(text="🔒📥 Выгрузить CSV", callback_data=f"premium_required:{gid}")
+                kb.button(text="🔒🎲 Перерозыгрыш", callback_data=f"premium_required:{gid}")
+            
+            kb.adjust(1)
             
             await bot_instance.send_message(
                 gw.owner_user_id, 
                 message_text,
                 reply_markup=kb.as_markup(),
+                isable_notification=False,
                 parse_mode="HTML"
             )
             
@@ -5606,7 +5653,8 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             user_id, 
                             message_text, 
                             parse_mode="HTML",
-                            reply_markup=kb.as_markup()
+                            reply_markup=kb.as_markup(),
+                            disable_notification=False
                         )
                         
                     else:
@@ -5635,7 +5683,8 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             user_id, 
                             message_text, 
                             parse_mode="HTML",
-                            reply_markup=kb.as_markup()
+                            reply_markup=kb.as_markup(),
+                            disable_notification=False
                         )
 
                     notified_count += 1
@@ -5728,7 +5777,8 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                         user_id, 
                         message_text, 
                         parse_mode="HTML",
-                        reply_markup=kb.as_markup()
+                        reply_markup=kb.as_markup(),
+                        disable_notification=False
                     )
                     
                     notified_count += 1
