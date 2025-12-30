@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 import time
+import json
 
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
@@ -972,7 +973,7 @@ class GiveawayMechanic(Base):
     giveaway_id: Mapped[int] = mapped_column(ForeignKey("giveaways.id"), index=True)
     mechanic_type: Mapped[str] = mapped_column(String(50))  # 'captcha', 'referral'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    config: Mapped[dict] = mapped_column(JSONB, default=dict)  # Дополнительные настройки
+    config: Mapped[str] = mapped_column(String(1000), default="{}")  # <-- ИЗМЕНЕНО: String(1000) вместо JSONB
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 # ---- DB INIT ----
