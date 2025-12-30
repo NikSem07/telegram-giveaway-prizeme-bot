@@ -321,8 +321,8 @@ def build_final_check_text() -> str:
 def kb_launch_confirm(gid: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Запустить розыгрыш", callback_data=f"launch:do:{gid}")
-    kb.button(text="Настройки розыгрыша", callback_data=f"raffle:settings_menu:{gid}")  # 🔄 ИЗМЕНЕНИЕ: callback_data
-    kb.button(text="Дополнительные механики", callback_data=f"raffle:mechanics_disabled:{gid}")  # 🔄 НОВАЯ КНОПКА
+    kb.button(text="Настройки розыгрыша", callback_data=f"raffle:settings_menu:{gid}")
+    kb.button(text="Дополнительные механики", callback_data=f"raffle:mechanics:{gid}")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -4940,12 +4940,80 @@ async def cb_settings_menu(cq: CallbackQuery):
     await cq.message.answer(text, reply_markup=kb_settings_menu(gid, gw.internal_title, "launch"), parse_mode="HTML")
     await cq.answer()
 
-@dp.callback_query(F.data.startswith("raffle:mechanics_disabled:"))
-async def cb_mechanics_disabled(cq: CallbackQuery):
+
+# === Блок "Дополнительные механики" - показывает описание и кнопки ===
+@dp.callback_query(F.data.startswith("raffle:mechanics:"))
+async def cb_mechanics(cq: CallbackQuery):
+
+    # Извлекаем ID розыгрыша
+    gid = int(cq.data.split(":")[2])
+    
+    # Текстовый блок как в задании
+    text = (
+        "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
+        "🤖 Защита от ботов с Captcha\n"
+        "🤝🏼 Реферальная система\n\n"
+        "Подключенные дополнительные механики:\n"
+        "(пока пусто)"
+    )
+    
+    # Клавиатура с тремя кнопками
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{gid}")
+    kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{gid}")
+    kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{gid}")
+    kb.adjust(1)  # Кнопки вертикально
+    
+    # Редактируем сообщение или отправляем новое
+    try:
+        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    except Exception:
+        # Если не удалось отредактировать, отправляем новое сообщение
+        await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+    
+    await cq.answer()
+
+# Обработчик кнопки "🤖 Подключить Captcha"
+@dp.callback_query(F.data.startswith("mechanics:captcha:"))
+async def cb_mechanics_captcha(cq: CallbackQuery):
     """
-    Pop-up для кнопки "Дополнительные механики"
+    Переключатель Captcha: при первом нажатии подключает, при повторном - отключает
     """
-    await cq.answer("В разработке", show_alert=True)
+    gid = int(cq.data.split(":")[2])
+    
+    # TODO: Здесь будет логика проверки состояния Captcha в БД
+    # Пока просто показываем сообщение
+    await cq.answer("✅ Captcha подключена\n(функция сохранения состояния будет реализована в задаче 2-3)", show_alert=True)
+
+# Обработчик кнопки "🤝🏼 Подключить рефералов" (пока заглушка)
+@dp.callback_query(F.data.startswith("mechanics:referral:"))
+async def cb_mechanics_referral(cq: CallbackQuery):
+    await cq.answer("🛠️ В разработке", show_alert=True)
+
+
+# Обработчик кнопки "⬅️ Назад" в дополнительных механиках
+@dp.callback_query(F.data.startswith("mechanics:back:"))
+async def cb_mechanics_back(cq: CallbackQuery):
+
+    gid = int(cq.data.split(":")[2])
+    
+    # TODO: Здесь нужно будет проверить, какие механики подключены
+    # и добавить их в текст перед "Внимание! После запуска..."
+    
+    # Сначала удаляем сообщение с механиками (испаряется)
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    
+    # TODO: В задаче 4 реализуем возврат к правильному блоку
+    # Пока просто сообщаем
+    await cq.answer("Возвращаемся к блоку запуска...")
+
 
 #--- Обработчики настройки черновика и розыгрышей ---
 
