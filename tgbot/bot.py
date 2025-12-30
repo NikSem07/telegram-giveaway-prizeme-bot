@@ -34,6 +34,7 @@ from sqlalchemy import text as _sqltext
 from sqlalchemy import text as stext
 from sqlalchemy import (text, String, Integer, BigInteger,
                         Boolean, DateTime, ForeignKey)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import (create_async_engine, async_sessionmaker)
 
 # 🔧 ПРИНУДИТЕЛЬНАЯ ЗАГРУЗКА ASYNCPG ДЛЯ ИЗБЕЖАНИЯ КОНФЛИКТА
