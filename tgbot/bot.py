@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 import time
+import json
 
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
@@ -965,6 +966,15 @@ class Winner(Base):
     rank: Mapped[int] = mapped_column(Integer)
     hash_used: Mapped[str] = mapped_column(String(128))
 
+class GiveawayMechanic(Base):
+    __tablename__ = "giveaway_mechanics"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    giveaway_id: Mapped[int] = mapped_column(ForeignKey("giveaways.id"), index=True)
+    mechanic_type: Mapped[str] = mapped_column(String(50))  # 'captcha', 'referral'
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)  # Дополнительные настройки
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 # ---- DB INIT ----
 
 # ID закрытой группы
@@ -1231,6 +1241,165 @@ async def get_user_status(user_id: int) -> str:
         return bot_user.user_status
 
 
+# ============================================================================
+# ФУНКЦИИ ДЛЯ РАБОТЫ С ДОПОЛНИТЕЛЬНЫМИ МЕХАНИКАМИ
+# ============================================================================
+
+# ---  Сохраняет или обновляет механику для розыгрыша / Возвращает True если успешно, False если ошибка ---
+async def save_giveaway_mechanic(giveaway_id: int, mechanic_type: str, is_active: bool = True, config: dict = None) -> bool:
+
+    try:
+        async with session_scope() as s:
+            # Проверяем существующую запись
+            existing = await s.execute(
+                text("SELECT id FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
+                {"gid": giveaway_id, "type": mechanic_type}
+            )
+            existing_row = existing.first()
+            
+            if existing_row:
+                # Обновляем существующую запись
+                await s.execute(
+                    text("""
+                        UPDATE giveaway_mechanics 
+                        SET is_active = :active, config = :config
+                        WHERE giveaway_id = :gid AND mechanic_type = :type
+                    """),
+                    {
+                        "gid": giveaway_id,
+                        "type": mechanic_type,
+                        "active": is_active,
+                        "config": json.dumps(config) if config else '{}'
+                    }
+                )
+                logging.info(f"✅ Обновлена механика {mechanic_type} для розыгрыша {giveaway_id}")
+            else:
+                # Создаем новую запись
+                await s.execute(
+                    text("""
+                        INSERT INTO giveaway_mechanics 
+                        (giveaway_id, mechanic_type, is_active, config)
+                        VALUES (:gid, :type, :active, :config)
+                    """),
+                    {
+                        "gid": giveaway_id,
+                        "type": mechanic_type,
+                        "active": is_active,
+                        "config": json.dumps(config) if config else '{}'
+                    }
+                )
+                logging.info(f"✅ Создана механика {mechanic_type} для розыгрыша {giveaway_id}")
+            
+            return True
+            
+    except Exception as e:
+        logging.error(f"❌ Ошибка сохранения механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        return False
+
+# ---  Удаляет механику для розыгрыша ---
+async def remove_giveaway_mechanic(giveaway_id: int, mechanic_type: str) -> bool:
+
+    try:
+        async with session_scope() as s:
+            await s.execute(
+                text("DELETE FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
+                {"gid": giveaway_id, "type": mechanic_type}
+            )
+            logging.info(f"✅ Удалена механика {mechanic_type} для розыгрыша {giveaway_id}")
+            return True
+    except Exception as e:
+        logging.error(f"❌ Ошибка удаления механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        return False
+
+# --- Возвращает список всех механик для розыгрыша ---
+async def get_giveaway_mechanics(giveaway_id: int) -> list:
+
+    try:
+        async with session_scope() as s:
+            result = await s.execute(
+                text("""
+                    SELECT mechanic_type, is_active, config
+                    FROM giveaway_mechanics 
+                    WHERE giveaway_id = :gid
+                    ORDER BY mechanic_type
+                """),
+                {"gid": giveaway_id}
+            )
+            mechanics = result.fetchall()
+            
+            # Преобразуем в удобный формат
+            mechanics_list = []
+            for mechanic_type, is_active, config in mechanics:
+                try:
+                    config_dict = json.loads(config) if config else {}
+                except:
+                    config_dict = {}
+                    
+                mechanics_list.append({
+                    "type": mechanic_type,
+                    "is_active": is_active,
+                    "config": config_dict
+                })
+            
+            return mechanics_list
+            
+    except Exception as e:
+        logging.error(f"❌ Ошибка получения механик для розыгрыша {giveaway_id}: {e}")
+        return []
+
+# --- Проверяет, активна ли конкретная механика для розыгрыша ---
+async def is_mechanic_active(giveaway_id: int, mechanic_type: str) -> bool:
+
+    try:
+        async with session_scope() as s:
+            result = await s.execute(
+                text("SELECT is_active FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
+                {"gid": giveaway_id, "type": mechanic_type}
+            )
+            row = result.first()
+            return bool(row and row[0])
+    except Exception as e:
+        logging.error(f"❌ Ошибка проверки активности механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        return False
+
+# --- Обновляет текст в блоке "Дополнительные механики" с учетом подключенных механик ---
+async def update_mechanics_text(message: types.Message, giveaway_id: int):
+    
+    # Получаем список подключенных механик
+    mechanics = await get_giveaway_mechanics(giveaway_id)
+    
+    # Формируем базовый текст
+    text = "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
+    text += "🤖 Защита от ботов с Captcha\n"
+    text += "🤝🏼 Реферальная система\n\n"
+    text += "Подключенные дополнительные механики:\n"
+    
+    # Добавляем подключенные механики
+    active_mechanics = [m for m in mechanics if m["is_active"]]
+    if active_mechanics:
+        for mechanic in active_mechanics:
+            if mechanic["type"] == "captcha":
+                text += "✅ Защита от ботов с Captcha\n"
+            elif mechanic["type"] == "referral":
+                text += "✅ Реферальная система\n"
+    else:
+        text += "(пока пусто)"
+    
+    # Клавиатура
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{giveaway_id}")
+    kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{giveaway_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{giveaway_id}")
+    kb.adjust(1)
+    
+    # Редактируем сообщение
+    try:
+        await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    except Exception:
+        pass  # Если не удалось отредактировать - ничего страшного
+
+
+# === продолжение с премиум ===
 #--- Возвращает (лимит_победителей, статус_пользователя) для указанного user_id ---
 
 async def get_winners_limit(user_id: int) -> tuple[int, str]:
@@ -4948,46 +5117,36 @@ async def cb_mechanics(cq: CallbackQuery):
     # Извлекаем ID розыгрыша
     gid = int(cq.data.split(":")[2])
     
-    # Текстовый блок как в задании
-    text = (
-        "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
-        "🤖 Защита от ботов с Captcha\n"
-        "🤝🏼 Реферальная система\n\n"
-        "Подключенные дополнительные механики:\n"
-        "(пока пусто)"
-    )
-    
-    # Клавиатура с тремя кнопками
-    kb = InlineKeyboardBuilder()
-    kb.button(text="🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{gid}")
-    kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{gid}")
-    kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{gid}")
-    kb.adjust(1)  # Кнопки вертикально
-    
-    # Редактируем сообщение или отправляем новое
-    try:
-        await cq.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    except Exception:
-        # Если не удалось отредактировать, отправляем новое сообщение
-        await cq.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-        try:
-            await cq.message.delete()
-        except Exception:
-            pass
-    
+    # Используем функцию для отображения текста с текущими механиками
+    await update_mechanics_text(cq.message, gid)
     await cq.answer()
 
-# Обработчик кнопки "🤖 Подключить Captcha"
+# Обработчик кнопки "🤖 Подключить Captcha" / Переключатель Captcha: при первом нажатии подключает, при повторном - отключает
 @dp.callback_query(F.data.startswith("mechanics:captcha:"))
 async def cb_mechanics_captcha(cq: CallbackQuery):
-    """
-    Переключатель Captcha: при первом нажатии подключает, при повторном - отключает
-    """
+
     gid = int(cq.data.split(":")[2])
     
-    # TODO: Здесь будет логика проверки состояния Captcha в БД
-    # Пока просто показываем сообщение
-    await cq.answer("✅ Captcha подключена\n(функция сохранения состояния будет реализована в задаче 2-3)", show_alert=True)
+    # Проверяем текущее состояние Captcha
+    is_active = await is_mechanic_active(gid, "captcha")
+    
+    # Меняем состояние на противоположное
+    new_state = not is_active
+    
+    # Сохраняем в БД
+    success = await save_giveaway_mechanic(gid, "captcha", new_state)
+    
+    if success:
+        if new_state:
+            await cq.answer("✅ Captcha подключена", show_alert=True)
+        else:
+            await cq.answer("❌ Captcha отключена", show_alert=True)
+        
+        # Обновляем текст в блоке механик, чтобы показать текущее состояние
+        await update_mechanics_text(cq.message, gid)
+    else:
+        await cq.answer("❌ Ошибка сохранения настроек Captcha", show_alert=True)
+
 
 # Обработчик кнопки "🤝🏼 Подключить рефералов" (пока заглушка)
 @dp.callback_query(F.data.startswith("mechanics:referral:"))
