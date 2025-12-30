@@ -12,7 +12,6 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 import time
-import json
 
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
