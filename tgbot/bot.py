@@ -1286,11 +1286,6 @@ async def save_giveaway_mechanic(
     config: dict = None,
     max_retries: int = 3
 ) -> bool:
-    """
-    Сохраняет или обновляет механику для розыгрыша с retry логикой
-    Возвращает True если успешно, False если ошибка
-    """
-    import asyncio
     
     for attempt in range(max_retries):
         try:
@@ -7238,6 +7233,85 @@ async def handle_premium_required(cq: CallbackQuery):
         show_alert=True
     )
 
+
+# --- Мониторинг состояния механик ---
+async def get_mechanics_stats() -> dict:
+    """
+    Возвращает статистику по механикам для мониторинга
+    """
+    stats = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'cache_size': 0,
+        'cache_hits': 0,
+        'cache_misses': 0,
+        'total_mechanics': 0,
+        'active_captcha': 0,
+        'active_referral': 0,
+        'errors_last_hour': 0
+    }
+    
+    try:
+        # Статистика кэша
+        async with _cache_lock:
+            stats['cache_size'] = len(_mechanics_cache)
+        
+        # Статистика из БД
+        async with session_scope() as s:
+            # Общее количество механик
+            result = await s.execute(
+                text("SELECT COUNT(*) FROM giveaway_mechanics")
+            )
+            stats['total_mechanics'] = result.scalar_one() or 0
+            
+            # Активные механики по типам
+            result = await s.execute(
+                text("""
+                    SELECT mechanic_type, COUNT(*) 
+                    FROM giveaway_mechanics 
+                    WHERE is_active = true 
+                    GROUP BY mechanic_type
+                """)
+            )
+            for mechanic_type, count in result.fetchall():
+                if mechanic_type == 'captcha':
+                    stats['active_captcha'] = count
+                elif mechanic_type == 'referral':
+                    stats['active_referral'] = count
+            
+            # Ошибки за последний час
+            result = await s.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM giveaway_mechanics 
+                    WHERE created_at > NOW() - INTERVAL '1 hour'
+                    AND config::text LIKE '%error%'
+                """)
+            )
+            stats['errors_last_hour'] = result.scalar_one() or 0
+        
+        return stats
+        
+    except Exception as e:
+        mechanics_logger.error(f"❌ Ошибка получения статистики механик: {e}")
+        stats['error'] = str(e)
+        return stats
+
+async def log_mechanics_operation(operation: str, giveaway_id: int, mechanic_type: str = None, 
+                                 success: bool = True, details: dict = None):
+    """
+    Логирует операцию с механиками для аудита
+    """
+    audit_log = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'operation': operation,
+        'giveaway_id': giveaway_id,
+        'mechanic_type': mechanic_type,
+        'success': success,
+        'details': details or {},
+        'user_agent': 'bot_system'  # Можно добавить информацию о вызывающем
+    }
+    
+    mechanics_logger.info(f"📋 АУДИТ: {json.dumps(audit_log, ensure_ascii=False)}")
 
 # ---------------- ENTRYPOINT ----------------
 async def main():
