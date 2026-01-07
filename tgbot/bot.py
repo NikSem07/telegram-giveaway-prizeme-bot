@@ -1398,7 +1398,8 @@ _CACHE_TTL = 60  # Время жизни кэша в секундах (1 мин�
 _MAX_CACHE_SIZE = 1000  # Максимальное количество записей в кэше
 
 async def get_giveaway_mechanics(giveaway_id: int, use_cache: bool = True) -> list:
-
+    """Получает список механик для розыгрыша с правильным парсингом JSON"""
+    
     cache_key = f"mechanics_{giveaway_id}"
     current_time = time.time()
     
@@ -1409,89 +1410,72 @@ async def get_giveaway_mechanics(giveaway_id: int, use_cache: bool = True) -> li
                 cached_data, timestamp = _mechanics_cache[cache_key]
                 if current_time - timestamp < _CACHE_TTL:
                     mechanics_logger.debug(f"🔄 Используем кэшированные механики для розыгрыша {giveaway_id}")
-                    return cached_data.copy()  # Возвращаем копию чтобы избежать изменения кэша
+                    return cached_data.copy()
     
     try:
         async with session_scope() as s:
-            # УЛУЧШЕННЫЙ ЗАПРОС С БОЛЬШЕЙ ИНФОРМАЦИЕЙ
+            # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильный SQL запрос
             result = await s.execute(
                 text("""
                     SELECT 
+                        id,
                         mechanic_type, 
                         is_active, 
                         config,
-                        created_at,
-                        id
+                        created_at
                     FROM giveaway_mechanics 
                     WHERE giveaway_id = :gid
-                    ORDER BY created_at DESC, mechanic_type
+                    ORDER BY created_at DESC
                 """),
                 {"gid": giveaway_id}
             )
             rows = result.fetchall()
             
-            # ТРАНСФОРМАЦИЯ ДАННЫХ
             mechanics_list = []
-            for mechanic_type, is_active, config, created_at, mechanic_id in rows:
+            for row in rows:
                 try:
-                    config_dict = json.loads(config) if config else {}
-                except Exception as json_error:
-                    mechanics_logger.warning(f"⚠️ Ошибка парсинга JSON для механики {mechanic_id}: {json_error}")
+                    # 🔥 ИСПРАВЛЕНИЕ: правильно получаем значения из row
+                    mechanic_id = row[0]
+                    mechanic_type = row[1]
+                    is_active = bool(row[2])
+                    config_str = row[3] if row[3] else '{}'
+                    
+                    # 🔥 ПРАВИЛЬНО ПАРСИМ JSON
                     config_dict = {}
-                
-                # ДОПОЛНИТЕЛЬНАЯ ВАЛИДАЦИЯ
-                if mechanic_type not in ['captcha', 'referral']:
-                    mechanics_logger.warning(f"⚠️ Неизвестный тип механики: {mechanic_type} для giveaway_id={giveaway_id}")
-                
-                mechanics_list.append({
-                    "id": mechanic_id,
-                    "type": mechanic_type,
-                    "is_active": bool(is_active),
-                    "config": config_dict,
-                    "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
-                    "has_config": bool(config and config != '{}')
-                })
+                    if config_str and config_str != '{}':
+                        try:
+                            config_dict = json.loads(config_str)
+                        except json.JSONDecodeError:
+                            config_dict = {}
+                    
+                    mechanics_list.append({
+                        "id": mechanic_id,
+                        "type": mechanic_type,
+                        "is_active": is_active,
+                        "config": config_dict,
+                        "created_at": row[4].isoformat() if hasattr(row[4], 'isoformat') else str(row[4]),
+                        "has_config": bool(config_dict)
+                    })
+                    
+                    mechanics_logger.debug(f"📝 Механика прочитана: type={mechanic_type}, active={is_active}, config_len={len(config_str)}")
+                    
+                except Exception as row_error:
+                    mechanics_logger.error(f"❌ Ошибка обработки строки механики: {row_error}, row={row}")
+                    continue
             
-            mechanics_logger.debug(f"📊 Получено {len(mechanics_list)} механик для розыгрыша {giveaway_id}")
+            mechanics_logger.info(f"📊 Получено {len(mechanics_list)} механик для розыгрыша {giveaway_id}")
             
-            # ОБНОВЛЕНИЕ КЭША
-            if use_cache:
+            # Обновляем кэш
+            if use_cache and mechanics_list:
                 async with _cache_lock:
-                    # Очистка устаревшего кэша
-                    expired_keys = []
-                    for key, (_, timestamp) in _mechanics_cache.items():
-                        if current_time - timestamp >= _CACHE_TTL:
-                            expired_keys.append(key)
-                    
-                    for key in expired_keys:
-                        del _mechanics_cache[key]
-                    
-                    # Ограничение размера кэша
-                    if len(_mechanics_cache) >= _MAX_CACHE_SIZE:
-                        # Удаляем самые старые записи
-                        oldest_keys = sorted(
-                            _mechanics_cache.keys(),
-                            key=lambda k: _mechanics_cache[k][1]
-                        )[:len(_mechanics_cache) - _MAX_CACHE_SIZE + 10]
-                        for key in oldest_keys:
-                            del _mechanics_cache[key]
-                    
-                    # Сохраняем в кэш
                     _mechanics_cache[cache_key] = (mechanics_list.copy(), current_time)
             
             return mechanics_list
             
     except Exception as e:
         mechanics_logger.error(f"❌ Ошибка получения механик для розыгрыша {giveaway_id}: {e}")
-        import traceback
-        mechanics_logger.debug(f"🔍 Traceback: {traceback.format_exc()}")
         
-        # 🔄 ПРИ ОШИБКЕ ПРОБУЕМ ВЕРНУТЬ КЭШИРОВАННЫЕ ДАННЫЕ (ДАЖЕ ЕСЛИ УСТАРЕЛИ)
-        if use_cache and cache_key in _mechanics_cache:
-            mechanics_logger.warning(f"⚠️ Используем устаревший кэш из-за ошибки БД для розыгрыша {giveaway_id}")
-            cached_data, _ = _mechanics_cache[cache_key]
-            return cached_data.copy()
-        
+        # При ошибке возвращаем пустой список
         return []
 
 # --- Очищает кэш механик (Если передан giveaway_id - очищает только для этого розыгрыша) ---
@@ -1732,6 +1716,36 @@ async def update_mechanics_text(message: types.Message, giveaway_id: int):
     except Exception:
         pass  # Если не удалось отредактировать - ничего страшного
 
+async def debug_mechanics(giveaway_id: int):
+    """Отладочная функция для проверки механик"""
+    try:
+        async with session_scope() as s:
+            # Прямой SQL запрос для проверки
+            result = await s.execute(
+                text("""
+                    SELECT id, mechanic_type, is_active, config, created_at
+                    FROM giveaway_mechanics 
+                    WHERE giveaway_id = :gid
+                """),
+                {"gid": giveaway_id}
+            )
+            rows = result.fetchall()
+            
+            mechanics_logger.info(f"🔍 DEBUG: Raw rows for giveaway {giveaway_id}:")
+            for i, row in enumerate(rows):
+                mechanics_logger.info(f"🔍 DEBUG: Row {i}: id={row[0]}, type={row[1]}, active={row[2]}, config={row[3]}, created={row[4]}")
+            
+            # Вызываем основную функцию для проверки
+            mechanics = await get_giveaway_mechanics(giveaway_id, use_cache=False)
+            mechanics_logger.info(f"🔍 DEBUG: Processed mechanics: {len(mechanics)} items")
+            for i, m in enumerate(mechanics):
+                mechanics_logger.info(f"🔍 DEBUG: Mech {i}: type={m.get('type')}, active={m.get('is_active')}")
+            
+            return rows, mechanics
+            
+    except Exception as e:
+        mechanics_logger.error(f"❌ DEBUG Error: {e}")
+        return [], []
 
 # === продолжение с премиум ===
 #--- Возвращает (лимит_победителей, статус_пользователя) для указанного user_id ---
@@ -5460,6 +5474,10 @@ async def cb_mechanics(cq: CallbackQuery):
 async def cb_mechanics_captcha(cq: CallbackQuery):
 
     gid = int(cq.data.split(":")[2])
+
+    # ОТЛАДОЧНЫЙ КОД:
+    mechanics_logger.info(f"🔍 CAPTCHA BUTTON CLICKED: giveaway_id={gid}")
+    await debug_mechanics(gid)  # Вызываем отладку
     
     # Проверяем текущее состояние Captcha
     is_active = await is_mechanic_active(gid, "captcha")
@@ -7895,7 +7913,7 @@ def make_internal_app():
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_captcha_and_participate", verify_captcha_and_participate)
-    
+
     return app
 
 
