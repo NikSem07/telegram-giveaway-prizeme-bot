@@ -324,6 +324,34 @@ async function checkFlow() {
 
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
 
+    // 🔄 ДОБАВЛЕНО: Проверка Captcha перед основным потоком
+    const requiresCaptcha = await checkCaptchaRequirement(gid);
+    if (requiresCaptcha) {
+      console.log("[CAPTCHA] Giveaway requires captcha verification");
+      
+      // Получаем site key для отображения Captcha
+      const captchaSiteKey = await getCaptchaSiteKey();
+      if (captchaSiteKey && captchaSiteKey !== "1x00000000000000000000AA") {
+        // 🔄 Сохраняем данные для Captcha проверки
+        sessionStorage.setItem('prizeme_gid', gid);
+        
+        // 🔄 Получаем init_data для использования на странице Captcha
+        const tg = window.Telegram?.WebApp;
+        let init_data = tg?.initData || '';
+        if (init_data) {
+          sessionStorage.setItem('prizeme_init_data', init_data);
+        }
+        
+        // 🔄 Редирект на страницу Captcha (будет создана позже)
+        console.log("[CAPTCHA] Redirecting to captcha page");
+        window.location.href = '/miniapp/captcha';
+        return;
+      } else {
+        // Captcha отключена или в тестовом режиме - продолжаем обычный flow
+        console.log("[CAPTCHA] Captcha disabled or in test mode, continuing normal flow");
+      }
+    }
+
     // Получаем initData
     const tg = window.Telegram?.WebApp;
     let init_data = tg?.initData || '';
@@ -815,6 +843,97 @@ function convertUTCtoMSK(utcDateString) {
   }
 }
 
+
+// Функции для работы с Captcha - Проверяет, требуется ли Captcha для розыгрыша
+async function checkCaptchaRequirement(giveawayId) {
+  try {
+    console.log(`[CAPTCHA] Checking requirement for giveaway ${giveawayId}`);
+    
+    // Проверяем через API, требуется ли Captcha для этого розыгрыша
+    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) {
+      console.log("[CAPTCHA] No init_data available, skipping captcha check");
+      return false;
+    }
+    
+    // Используем существующий endpoint /api/check для получения информации о розыгрыше
+    const checkData = await api("/api/check", { gid: giveawayId, init_data });
+    console.log("[CAPTCHA] Check response for captcha requirement:", checkData);
+    
+    // Если в ответе есть флаг requires_captcha - используем его
+    // Временно заглушка: всегда возвращаем false (Captcha не требуется)
+    // TODO: Добавить реальную проверку когда API будет поддерживать
+    return checkData.requires_captcha || false;
+    
+  } catch (error) {
+    console.error("[CAPTCHA] Error checking requirement:", error);
+    // В случае ошибки - пропускаем Captcha проверку
+    return false;
+  }
+}
+
+// Получает публичный ключ Captcha с сервера
+async function getCaptchaSiteKey() {
+  try {
+    // 🔄 Делаем запрос к API для получения ключа Captcha
+    const response = await fetch("/api/captcha_config", {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log("[CAPTCHA] Site key response:", data);
+      return data.site_key || null;
+    }
+    
+    console.log("[CAPTCHA] Failed to get site key, using default");
+    return null;
+    
+  } catch (error) {
+    console.error("[CAPTCHA] Error getting site key:", error);
+    return null;
+  }
+}
+
+// Проверяет токен Captcha через API
+async function verifyCaptchaToken(token, giveawayId) {
+  try {
+    console.log(`[CAPTCHA] Verifying token for giveaway ${giveawayId}`);
+    
+    const response = await fetch("/api/verify_captcha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: token,
+        giveaway_id: giveawayId
+      })
+    });
+    
+    const result = await response.json();
+    console.log("[CAPTCHA] Verification result:", result);
+    
+    return result.ok === true;
+    
+  } catch (error) {
+    console.error("[CAPTCHA] Error verifying token:", error);
+    // В случае ошибки лучше пропустить проверку
+    return true;
+  }
+}
+
+// Обрабатывает успешное прохождение Captcha
+function handleCaptchaSuccess(giveawayId, token) {
+  console.log(`[CAPTCHA] Success for giveaway ${giveawayId}`);
+  
+  // 🔄 Сохраняем токен в sessionStorage для использования в основном flow
+  sessionStorage.setItem('prizeme_captcha_token', token);
+  sessionStorage.setItem('prizeme_captcha_verified', 'true');
+  
+  // 🔄 Возвращаем к основному flow
+  window.location.href = '/miniapp/loading';
+}
+
 // Инициализация для экрана "Уже участвуете"
 function initializeAlreadyPage() {
   console.log("[ALREADY] Initializing already page");
@@ -1072,6 +1191,10 @@ function initializeCurrentPage() {
           break;
       case '/miniapp/need_subscription':
           initializeNeedSubscriptionPage();
+          break;
+      case '/miniapp/captcha':
+          // Страница Captcha - логика в captcha.html
+          console.log("[MULTI-PAGE] Captcha page, letting captcha.html handle it");
           break;
       case '/miniapp/success':
           initializeSuccessPage();

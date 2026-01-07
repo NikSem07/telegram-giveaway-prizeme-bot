@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrizeMe - Проверка безопасности</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        }
+        
+        body {
+            background: var(--app-bg-color, #0f1115);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+        
+        .description {
+            font-size: 14px;
+            color: #a0a0a0;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+        
+        .captcha-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #captcha-widget {
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, opacity 0.2s;
+            margin-top: 20px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            opacity: 0.95;
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .success-message {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .test-mode-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            color: #ffd54f;
+            font-size: 14px;
+        }
+        
+        .back-button {
+            background: transparent;
+            color: #a0a0a0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 15px;
+        }
+        
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">PrizeMe</div>
+            <h1 class="title">Проверка безопасности</h1>
+            <p class="description">
+                Подтвердите, что вы не робот, чтобы продолжить участие в розыгрыше.
+                Это необходимо для защиты от автоматических систем.
+            </p>
+        </div>
+        
+        <div id="test-mode-notice" class="test-mode-notice" style="display: none;">
+            ⚠️ Тестовый режим Captcha. В продакшене здесь будет виджет Cloudflare Turnstile.
+        </div>
+        
+        <div class="captcha-container">
+            <div id="captcha-widget">
+                <!-- Здесь будет виджет Cloudflare Turnstile -->
+                <div id="turnstile-widget"></div>
+            </div>
+        </div>
+        
+        <div id="error-message" class="error-message">
+            ❌ Ошибка проверки. Пожалуйста, попробуйте еще раз.
+        </div>
+        
+        <div id="success-message" class="success-message">
+            ✅ Проверка пройдена успешно!
+        </div>
+        
+        <button id="verify-button" class="button" onclick="verifyCaptcha()">
+            <span id="button-text">Проверить</span>
+            <span id="button-loading" class="loading" style="display: none;"></span>
+        </button>
+        
+        <button class="button back-button" onclick="goBack()">
+            ⬅️ Назад
+        </button>
+    </div>
+
+    <script src="/miniapp/app.js"></script>
+    <script>
+        // Глобальные переменные
+        let captchaToken = null;
+        let giveawayId = null;
+        
+        // Инициализация страницы
+        function initializeCaptchaPage() {
+            console.log('[CAPTCHA] Initializing captcha page');
+            
+            // Получаем ID розыгрыша из sessionStorage
+            giveawayId = sessionStorage.getItem('prizeme_gid');
+            if (!giveawayId) {
+                console.error('[CAPTCHA] No giveaway ID found');
+                showError('Не удалось определить розыгрыш');
+                return;
+            }
+            
+            console.log(`[CAPTCHA] Giveaway ID: ${giveawayId}`);
+            
+            // Проверяем тестовый режим
+            checkTestMode();
+            
+            // Загружаем виджет Captcha
+            loadCaptchaWidget();
+        }
+        
+        // Проверяем тестовый режим
+        async function checkTestMode() {
+            try {
+                const response = await fetch('/api/captcha_config');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.test_mode || data.site_key === '1x00000000000000000000AA') {
+                        document.getElementById('test-mode-notice').style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.log('[CAPTCHA] Error checking test mode:', error);
+            }
+        }
+        
+        // Загружает виджет Captcha
+        function loadCaptchaWidget() {
+            console.log('[CAPTCHA] Loading captcha widget');
+            
+            // 🔄 В тестовом режиме показываем заглушку
+            // В реальной реализации здесь будет загрузка Cloudflare Turnstile
+            
+            const widgetContainer = document.getElementById('turnstile-widget');
+            widgetContainer.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">🛡️</div>
+                    <div style="color: #a0a0a0; font-size: 14px;">
+                        В тестовом режиме проверка Captcha пропускается автоматически.<br>
+                        Нажмите "Проверить" чтобы продолжить.
+                    </div>
+                </div>
+            `;
+            
+            // В тестовом режиме автоматически "проходим" Captcha
+            setTimeout(() => {
+                captchaToken = 'test_token_' + Date.now();
+                console.log('[CAPTCHA] Test token generated:', captchaToken);
+            }, 1000);
+        }
+        
+        // Проверяет Captcha
+        async function verifyCaptcha() {
+            console.log('[CAPTCHA] Starting verification');
+            
+            if (!captchaToken) {
+                showError('Пожалуйста, пройдите проверку безопасности');
+                return;
+            }
+            
+            // Показываем индикатор загрузки
+            const button = document.getElementById('verify-button');
+            const buttonText = document.getElementById('button-text');
+            const buttonLoading = document.getElementById('button-loading');
+            
+            button.disabled = true;
+            buttonText.textContent = 'Проверяем...';
+            buttonLoading.style.display = 'inline-block';
+            
+            // Скрываем предыдущие сообщения
+            hideError();
+            hideSuccess();
+            
+            try {
+                // Проверяем токен через API
+                const isValid = await verifyCaptchaToken(captchaToken, giveawayId);
+                
+                if (isValid) {
+                    console.log('[CAPTCHA] Verification successful');
+                    showSuccess();
+                    
+                    // Ждем немного чтобы пользователь увидел успех
+                    setTimeout(() => {
+                        // Вызываем функцию обработки успешной Captcha из app.js
+                        if (typeof handleCaptchaSuccess === 'function') {
+                            handleCaptchaSuccess(giveawayId, captchaToken);
+                        } else {
+                            // Фоллбек: возвращаем к основному flow
+                            sessionStorage.setItem('prizeme_captcha_verified', 'true');
+                            window.location.href = '/miniapp/loading';
+                        }
+                    }, 1000);
+                } else {
+                    console.log('[CAPTCHA] Verification failed');
+                    showError('Проверка не пройдена. Попробуйте еще раз.');
+                    resetButton();
+                }
+                
+            } catch (error) {
+                console.error('[CAPTCHA] Verification error:', error);
+                showError('Ошибка при проверке. Попробуйте еще раз.');
+                resetButton();
+            }
+        }
+        
+        // Вспомогательные функции UI
+        function showError(message) {
+            const errorEl = document.getElementById('error-message');
+            errorEl.textContent = message || '❌ Ошибка проверки. Пожалуйста, попробуйте еще раз.';
+            errorEl.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error-message').style.display = 'none';
+        }
+        
+        function showSuccess() {
+            document.getElementById('success-message').style.display = 'block';
+        }
+        
+        function hideSuccess() {
+            document.getElementById('success-message').style.display = 'none';
+        }
+        
+        function resetButton() {
+            const button = document.getElementById('verify-button');
+            const buttonText = document.getElementById('button-text');
+            const buttonLoading = document.getElementById('button-loading');
+            
+            button.disabled = false;
+            buttonText.textContent = 'Проверить';
+            buttonLoading.style.display = 'none';
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+        
+        // Инициализируем страницу при загрузке
+        document.addEventListener('DOMContentLoaded', initializeCaptchaPage);
+    </script>
+</body>
+</html>

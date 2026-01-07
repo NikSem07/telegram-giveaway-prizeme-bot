@@ -1267,6 +1267,63 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/verify_captcha ---
+app.post('/api/verify_captcha', async (req, res) => {
+  console.log('[CAPTCHA] Verify request received');
+  
+  try {
+    const { token, giveaway_id } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ ok: false, error: 'token_required' });
+    }
+    
+    // 🔄 Проверяем токен через функцию из bot.py
+    // Для этого мы создадим отдельную функцию в server.js
+    // Сначала просто заглушка для тестирования
+    
+    console.log(`[CAPTCHA] Token received: ${token ? 'present' : 'missing'}, giveaway_id: ${giveaway_id}`);
+    
+    // 🔄 Заглушка для тестирования - всегда возвращаем успех
+    // В следующем шаге интегрируем с функцией verify_captcha_token из bot.py
+    const isValid = token === 'test_token' || true; // Для тестирования
+    
+    if (isValid) {
+      console.log('[CAPTCHA] Token is valid (test mode)');
+      return res.json({ ok: true });
+    } else {
+      console.log('[CAPTCHA] Token is invalid');
+      return res.json({ ok: false, error: 'invalid_token' });
+    }
+    
+  } catch (error) {
+    console.error('[CAPTCHA] Error:', error);
+    return res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// 🔄 ДОБАВЛЕНО: Конфигурация Captcha
+app.get('/api/captcha_config', async (req, res) => {
+  console.log('[CAPTCHA] Config request received');
+  
+  try {
+    // 🔄 Получаем ключи из переменных окружения
+    const siteKey = process.env.CAPTCHA_SITE_KEY || '1x00000000000000000000AA';
+    const secretKey = process.env.CAPTCHA_SECRET_KEY || '1x0000000000000000000000000000000AA';
+    const enabled = process.env.CAPTCHA_ENABLED === 'true';
+    
+    res.json({
+      ok: true,
+      site_key: siteKey,
+      test_mode: !enabled || siteKey === '1x00000000000000000000AA',
+      enabled: enabled
+    });
+    
+  } catch (error) {
+    console.error('[CAPTCHA] Config error:', error);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
 
 // Start server
 app.listen(PORT, () => {

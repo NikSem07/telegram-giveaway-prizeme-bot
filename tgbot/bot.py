@@ -57,6 +57,7 @@ from apscheduler.triggers.date import DateTrigger
 import aiohttp
 from aiohttp import web
 from aiohttp import ClientSession, ClientTimeout, FormData
+import httpx
 
 def normalize_datetime(dt: datetime) -> datetime:
 
@@ -1362,6 +1363,74 @@ async def is_mechanic_active(giveaway_id: int, mechanic_type: str) -> bool:
     except Exception as e:
         logging.error(f"❌ Ошибка проверки активности механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
         return False
+
+
+# ============================================================================
+# ФУНКЦИИ ДЛЯ РАБОТЫ С CLOUDFLARE TURNSTILE CAPTCHA
+# ============================================================================
+
+async def verify_captcha_token(token: str) -> bool:
+    """
+    Проверяет токен Cloudflare Turnstile Captcha через API Cloudflare
+    Возвращает True если токен валидный, False если нет
+    """
+    if not token or token == "test_token":
+        # Для тестирования
+        return True
+    
+    captcha_secret_key = os.getenv("CAPTCHA_SECRET_KEY")
+    if not captcha_secret_key or captcha_secret_key == "1x0000000000000000000000000000000AA":
+        # Если ключ не настроен или тестовый
+        logging.warning("⚠️ Captcha ключ не настроен, пропускаем проверку")
+        return True
+    
+    try:
+        # URL для проверки токена
+        url = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+        
+        # Данные для отправки
+        data = {
+            "secret": captcha_secret_key,
+            "response": token,
+            "remoteip": ""  # Можно добавить IP пользователя если нужно
+        }
+        
+        # Асинхронный запрос к Cloudflare API
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, data=data)
+            result = response.json()
+            
+            logging.info(f"🔍 Captcha verify response: {result}")
+            
+            # Проверяем результат
+            if result.get("success", False):
+                logging.info("✅ Captcha токен валидный")
+                return True
+            else:
+                logging.warning(f"❌ Captcha проверка не пройдена: {result.get('error-codes', [])}")
+                return False
+                
+    except Exception as e:
+        logging.error(f"❌ Ошибка проверки Captcha токена: {e}")
+        # В случае ошибки сети или API, лучше пропустить проверку
+        return True
+
+
+def get_captcha_site_key() -> str:
+    """
+    Возвращает публичный ключ для Captcha
+    """
+    site_key = os.getenv("CAPTCHA_SITE_KEY", "1x00000000000000000000AA")
+    return site_key
+
+
+def is_captcha_enabled() -> bool:
+    """
+    Проверяет, включена ли Captcha в настройках
+    """
+    enabled = os.getenv("CAPTCHA_ENABLED", "false").lower() == "true"
+    return enabled
+
 
 # --- Обновляет текст в блоке "Дополнительные механики" с учетом подключенных механик ---
 async def update_mechanics_text(message: types.Message, giveaway_id: int):
@@ -5362,6 +5431,24 @@ async def user_check(cq:CallbackQuery):
 @dp.callback_query(F.data.startswith("u:join:"))
 async def user_join(cq:CallbackQuery):
     gid = int(cq.data.split(":")[2])
+    
+    # 🔄 ПРОВЕРКА: Есть ли активная механика Captcha для этого розыгрыша?
+    if await is_mechanic_active(gid, 'captcha'):
+        # 🔄 Если Captcha активна, показываем информационное сообщение
+        captcha_enabled = is_captcha_enabled()
+        if not captcha_enabled:
+            # Если Captcha отключена в настройках (тестовый режим) - пропускаем
+            logging.info(f"⚠️ Captcha отключена в настройках, пропускаем проверку для розыгрыша {gid}")
+        else:
+            # 🔄 Captcha активна и включена - сообщаем пользователю о необходимости пройти проверку
+            await cq.answer(
+                "🛡️ Для участия в этом розыгрыше необходимо пройти проверку безопасности.\n\n"
+                "Пожалуйста, нажмите кнопку \"Участвовать\" в посте розыгрыша в канале, "
+                "чтобы открыть веб-приложение и пройти проверку CAPTCHA.",
+                show_alert=True
+            )
+            return
+    
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
         if gw.status != GiveawayStatus.ACTIVE:
@@ -5394,6 +5481,7 @@ async def user_join(cq:CallbackQuery):
                 except Exception:
                     continue
     await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>", disable_notification=False)
+
 
 async def finalize_and_draw_job(giveaway_id: int):
     """
