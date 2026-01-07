@@ -1616,6 +1616,69 @@ async def verify_captcha_token(token: str) -> bool:
         # В случае ошибки сети или API, лучше пропустить проверку
         return True
 
+async def verify_captcha_and_participate(user_id: int, giveaway_id: int, captcha_token: str) -> tuple[bool, str]:
+    """
+    Проверяет Captcha токен и регистрирует участие пользователя
+    Возвращает (успех, сообщение_или_билет)
+    """
+    
+    # 1. Проверяем Captcha токен
+    captcha_valid = await verify_captcha_token(captcha_token)
+    if not captcha_valid:
+        return False, "❌ Проверка безопасности не пройдена. Попробуйте еще раз."
+    
+    # 2. Проверяем активность розыгрыша
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw or gw.status != GiveawayStatus.ACTIVE:
+            return False, "Розыгрыш не активен."
+    
+    # 3. Проверяем подписки
+    ok, details = await check_membership_on_all(bot, user_id, giveaway_id)
+    if not ok:
+        return False, "Подпишитесь на все каналы и попробуйте снова."
+    
+    # 4. Регистрируем пользователя
+    try:
+        user = await bot.get_chat(user_id)
+        await ensure_bot_user(user_id, user.username, user.first_name)
+    except Exception as e:
+        logging.error(f"❌ Ошибка регистрации пользователя: {e}")
+    
+    # 5. Выдаем билет
+    async with session_scope() as s:
+        # Проверяем, есть ли уже билет
+        res = await s.execute(
+            text("SELECT ticket_code FROM entries WHERE giveaway_id=:gid AND user_id=:u"),
+            {"gid": giveaway_id, "u": user_id}
+        )
+        row = res.first()
+        
+        if row:
+            code = row[0]
+            return True, f"✅ Вы уже участвуете в этом розыгрыше!\nВаш билет: <b>{code}</b>"
+        else:
+            # Генерируем новый билет
+            for _ in range(5):
+                code = gen_ticket_code()
+                try:
+                    await s.execute(
+                        text("""
+                            INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
+                            VALUES (:gid, :u, :code, 1, :ts)
+                        """),
+                        {
+                            "gid": giveaway_id,
+                            "u": user_id,
+                            "code": code,
+                            "ts": datetime.now(timezone.utc)
+                        }
+                    )
+                    return True, f"🎉 Вы успешно участвуете в розыгрыше!\nВаш билет: <b>{code}</b>"
+                except Exception:
+                    continue
+        
+        return False, "❌ Не удалось зарегистрировать участие. Попробуйте еще раз."
 
 def get_captcha_site_key() -> str:
     """
@@ -5629,26 +5692,92 @@ async def user_check(cq:CallbackQuery):
     await cq.message.answer("Проверка подписки:\n"+"\n".join(lines),
                             reply_markup=kb_participate(gid, allow=ok))
 
+# --- Обработчик участия в розыгрыше с поддержкой Captcha ---
 @dp.callback_query(F.data.startswith("u:join:"))
-async def user_join(cq:CallbackQuery):
+async def user_join(cq: CallbackQuery):
+
     gid = int(cq.data.split(":")[2])
+    user_id = cq.from_user.id
     
-    # 🔄 ПРОВЕРКА: Есть ли активная механика Captcha для этого розыгрыша?
-    if await is_mechanic_active(gid, 'captcha'):
-        # 🔄 Если Captcha активна, показываем информационное сообщение
-        captcha_enabled = is_captcha_enabled()
-        if not captcha_enabled:
-            # Если Captcha отключена в настройках (тестовый режим) - пропускаем
-            logging.info(f"⚠️ Captcha отключена в настройках, пропускаем проверку для розыгрыша {gid}")
-        else:
-            # 🔄 Captcha активна и включена - сообщаем пользователю о необходимости пройти проверку
-            await cq.answer(
-                "🛡️ Для участия в этом розыгрыше необходимо пройти проверку безопасности.\n\n"
-                "Пожалуйста, нажмите кнопку \"Участвовать\" в посте розыгрыша в канале, "
-                "чтобы открыть веб-приложение и пройти проверку CAPTCHA.",
-                show_alert=True
-            )
+    # ПРОВЕРКА 1: Активен ли розыгрыш
+    async with session_scope() as s:
+        gw = await s.get(Giveaway, gid)
+        if gw.status != GiveawayStatus.ACTIVE:
+            await cq.answer("Розыгрыш не активен.", show_alert=True)
             return
+
+    # ПРОВЕРКА 2: Есть ли активная механика Captcha?
+    has_captcha = await is_mechanic_active(gid, 'captcha')
+    
+    if has_captcha:
+        # 🔄 ЕСТЬ CAPTCHA: отправляем пользователя в WebApp с флагом Captcha
+        
+        # 1. Проверяем, проходил ли уже пользователь Captcha для этого розыгрыша
+        # (можно добавить кэширование в БД или session, но для простоты - всегда показываем)
+        
+        # 2. Формируем URL для WebApp с параметром captcha
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=captcha_{gid}"
+        
+        # 3. Открываем WebApp
+        await cq.message.answer(
+            "🛡️ <b>Для участия в этом розыгрыше необходимо пройти проверку безопасности.</b>\n\n"
+            "Нажмите кнопку ниже чтобы открыть страницу проверки и продолжить участие.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="🔐 Пройти проверку безопасности",
+                        web_app=WebAppInfo(url=webapp_url)
+                    )
+                ]]
+            ),
+            parse_mode="HTML"
+        )
+        
+        await cq.answer()
+        return
+    
+    # НЕТ CAPTCHA: стандартный процесс участия
+    
+    # Регистрируем пользователя при участии
+    try:
+        await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
+        logging.info(f"✅ Пользователь {cq.from_user.id} зарегистрирован при участии в розыгрыше")
+    except Exception as e:
+        logging.error(f"❌ Ошибка регистрации при участии: {e}")
+
+    # Проверяем подписки
+    ok, details = await check_membership_on_all(bot, cq.from_user.id, gid)
+    if not ok:
+        await cq.answer("Подпишитесь на все каналы и попробуйте снова.", show_alert=True)
+        return
+    
+    # Выдаем билет
+    async with session_scope() as s:
+        res = await s.execute(
+            text("SELECT ticket_code FROM entries WHERE giveaway_id=:gid AND user_id=:u"),
+            {"gid": gid, "u": cq.from_user.id}
+        )
+        row = res.first()
+        
+        if row:
+            code = row[0]
+        else:
+            for _ in range(5):
+                code = gen_ticket_code()
+                try:
+                    await s.execute(
+                        text("""
+                            INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
+                            VALUES (:gid, :u, :code, 1, :ts)
+                        """),
+                        {"gid": gid, "u": cq.from_user.id, "code": code, "ts": datetime.now(timezone.utc)}
+                    )
+                    break
+                except Exception:
+                    continue
+    
+    await cq.message.answer(f"Ваш билет на розыгрыш: <b>{code}</b>", disable_notification=False)
+    await cq.answer()
     
     async with session_scope() as s:
         gw = await s.get(Giveaway, gid)
@@ -7653,9 +7782,120 @@ def make_internal_app():
             finally:
                 await s.close()
 
+
+    async def verify_captcha_and_participate(request: web.Request):
+        """
+        Internal API endpoint для проверки Captcha и регистрации участия
+        Вызывается из Node.js API (preview_service)
+        """
+        try:
+            data = await request.json()
+            user_id = int(data.get("user_id") or 0)
+            giveaway_id = int(data.get("giveaway_id") or 0)
+            captcha_token = data.get("captcha_token") or ""
+            
+            logging.info(f"🔍 [CAPTCHA-API] Received request: user_id={user_id}, giveaway_id={giveaway_id}, token_present={bool(captcha_token)}")
+            
+            if not (user_id and giveaway_id and captcha_token):
+                logging.error(f"❌ [CAPTCHA-API] Missing required parameters")
+                return web.json_response({
+                    "ok": False,
+                    "error": "Missing required parameters",
+                    "message": "Отсутствуют обязательные параметры"
+                }, status=400)
+            
+            # Проверяем, включена ли Captcha в настройках (для тестового режима)
+            if not is_captcha_enabled():
+                logging.info(f"⚠️ [CAPTCHA-API] Captcha disabled in settings, using test mode")
+                # В тестовом режиме пропускаем проверку
+                if captcha_token.startswith('test_token_'):
+                    # Имитируем успешное участие
+                    async with session_scope() as s:
+                        # Проверяем активность розыгрыша
+                        gw = await s.get(Giveaway, giveaway_id)
+                        if not gw or gw.status != GiveawayStatus.ACTIVE:
+                            return web.json_response({
+                                "ok": False,
+                                "message": "Розыгрыш не активен."
+                            })
+                        
+                        # Проверяем, есть ли уже билет
+                        res = await s.execute(
+                            text("SELECT ticket_code FROM entries WHERE giveaway_id=:gid AND user_id=:u"),
+                            {"gid": giveaway_id, "u": user_id}
+                        )
+                        row = res.first()
+                        
+                        if row:
+                            code = row[0]
+                            return web.json_response({
+                                "ok": True,
+                                "message": f"✅ Вы уже участвуете в этом розыгрыше!\nВаш билет: <b>{code}</b>"
+                            })
+                        else:
+                            # Генерируем новый билет
+                            for _ in range(5):
+                                code = gen_ticket_code()
+                                try:
+                                    await s.execute(
+                                        text("""
+                                            INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
+                                            VALUES (:gid, :u, :code, 1, :ts)
+                                        """),
+                                        {
+                                            "gid": giveaway_id,
+                                            "u": user_id,
+                                            "code": code,
+                                            "ts": datetime.now(timezone.utc)
+                                        }
+                                    )
+                                    return web.json_response({
+                                        "ok": True,
+                                        "message": f"🎉 Вы успешно участвуете в розыгрыше!\nВаш билет: <b>{code}</b>"
+                                    })
+                                except Exception:
+                                    continue
+                    
+                    return web.json_response({
+                        "ok": False,
+                        "message": "❌ Не удалось зарегистрировать участие. Попробуйте еще раз."
+                    })
+                else:
+                    return web.json_response({
+                        "ok": False,
+                        "message": "❌ Неверный токен проверки."
+                    })
+            
+            # 🔄 РЕАЛЬНАЯ ПРОВЕРКА CAPTCHA
+            # Используем функцию verify_captcha_and_participate которая уже есть в вашем коде
+            success, message = await verify_captcha_and_participate(
+                user_id, giveaway_id, captcha_token
+            )
+            
+            logging.info(f"🔍 [CAPTCHA-API] Verification result: success={success}, message={message[:50]}...")
+            
+            return web.json_response({
+                "ok": success,
+                "message": message
+            })
+            
+        except Exception as e:
+            logging.error(f"❌ [CAPTCHA-API] Error in verify_captcha_and_participate: {e}", exc_info=True)
+            import traceback
+            logging.error(f"❌ [CAPTCHA-API] Traceback: {traceback.format_exc()}")
+            
+            # В случае ошибки возвращаем сообщение для пользователя
+            return web.json_response({
+                "ok": False,
+                "error": "Internal server error",
+                "message": "❌ Ошибка при проверке. Попробуйте еще раз."
+            }, status=500)
+
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/api/giveaway_results", giveaway_results)
+    app.router.add_post("/api/verify_captcha_and_participate", verify_captcha_and_participate)
+    
     return app
 
 

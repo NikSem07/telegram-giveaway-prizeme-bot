@@ -1272,33 +1272,81 @@ app.post('/api/verify_captcha', async (req, res) => {
   console.log('[CAPTCHA] Verify request received');
   
   try {
-    const { token, giveaway_id } = req.body;
+    const { token, giveaway_id, user_id } = req.body;
     
-    if (!token) {
-      return res.status(400).json({ ok: false, error: 'token_required' });
+    if (!token || !giveaway_id || !user_id) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Missing required parameters' 
+      });
     }
     
-    // 🔄 Проверяем токен через функцию из bot.py
-    // Для этого мы создадим отдельную функцию в server.js
-    // Сначала просто заглушка для тестирования
+    console.log(`[CAPTCHA] Token received for giveaway ${giveaway_id}, user ${user_id}`);
     
-    console.log(`[CAPTCHA] Token received: ${token ? 'present' : 'missing'}, giveaway_id: ${giveaway_id}`);
-    
-    // 🔄 Заглушка для тестирования - всегда возвращаем успех
-    // В следующем шаге интегрируем с функцией verify_captcha_token из bot.py
-    const isValid = token === 'test_token' || true; // Для тестирования
-    
-    if (isValid) {
-      console.log('[CAPTCHA] Token is valid (test mode)');
-      return res.json({ ok: true });
-    } else {
-      console.log('[CAPTCHA] Token is invalid');
-      return res.json({ ok: false, error: 'invalid_token' });
+    // 🔄 ИНТЕГРАЦИЯ С PYTHON БОТОМ
+    // Отправляем запрос к внутреннему API бота (порт 8088)
+    try {
+      const botApiResponse = await fetch('http://127.0.0.1:8088/api/verify_captcha_and_participate', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: parseInt(user_id),
+          giveaway_id: parseInt(giveaway_id),
+          captcha_token: token
+        }),
+        timeout: 10000  // 10 секунд таймаут
+      });
+      
+      console.log(`[CAPTCHA] Bot API response status: ${botApiResponse.status}`);
+      
+      if (!botApiResponse.ok) {
+        console.error(`[CAPTCHA] Bot API error: ${botApiResponse.status}`);
+        
+        // Если бот недоступен, проверяем в тестовом режиме
+        if (process.env.CAPTCHA_ENABLED !== 'true') {
+          console.log('[CAPTCHA] Using test mode fallback');
+          const isValid = token.startsWith('test_token_');
+          return res.json({ 
+            ok: isValid, 
+            message: isValid ? '✅ Проверка пройдена (тестовый режим)' : '❌ Неверный токен'
+          });
+        }
+        
+        throw new Error(`Bot API error: ${botApiResponse.status}`);
+      }
+      
+      const botApiData = await botApiResponse.json();
+      console.log(`[CAPTCHA] Bot API data:`, JSON.stringify(botApiData));
+      
+      // Возвращаем результат от бота
+      return res.json(botApiData);
+      
+    } catch (botError) {
+      console.error('[CAPTCHA] Bot API connection error:', botError);
+      
+      // Fallback для тестового режима
+      if (process.env.CAPTCHA_ENABLED !== 'true') {
+        console.log('[CAPTCHA] Using test mode due to bot connection error');
+        const isValid = token.startsWith('test_token_');
+        return res.json({ 
+          ok: isValid, 
+          message: isValid ? '✅ Проверка пройдена (тестовый режим)' : '❌ Неверный токен'
+        });
+      }
+      
+      throw botError;
     }
     
   } catch (error) {
     console.error('[CAPTCHA] Error:', error);
-    return res.status(500).json({ ok: false, error: 'server_error' });
+    return res.status(500).json({ 
+      ok: false, 
+      error: 'Internal server error',
+      message: 'Ошибка проверки. Попробуйте позже.'
+    });
   }
 });
 
@@ -1323,6 +1371,11 @@ app.get('/api/captcha_config', async (req, res) => {
     console.error('[CAPTCHA] Config error:', error);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
+});
+
+// Captcha page route
+app.get('/miniapp/captcha', (req, res) => {
+    res.sendFile(path.join(__dirname, '../webapp/captcha.html'));
 });
 
 // Start server
