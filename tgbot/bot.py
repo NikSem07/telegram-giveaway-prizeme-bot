@@ -14,6 +14,8 @@ from urllib.parse import urlencode
 import time
 import json
 
+from functools import lru_cache
+
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import ChatMemberUpdated, ChatJoinRequest
@@ -75,6 +77,35 @@ def normalize_datetime(dt: datetime) -> datetime:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 load_dotenv()
+
+
+# --- ОТДЕЛЬНЫЙ ЛОГГЕР ДЛЯ МЕХАНИК ---
+mechanics_logger = logging.getLogger('mechanics')
+mechanics_logger.setLevel(logging.DEBUG)
+
+# Обработчик для файла
+try:
+    mechanics_handler = logging.FileHandler('/var/log/prizeme/mechanics.log')
+    mechanics_handler.setLevel(logging.DEBUG)
+    
+    # Форматирование логов
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    mechanics_handler.setFormatter(formatter)
+    
+    mechanics_logger.addHandler(mechanics_handler)
+    
+    # Не дублируем логи в корневой логгер
+    mechanics_logger.propagate = False
+    
+except Exception as e:
+    print(f"⚠️ Не удалось создать файловый логгер для механик: {e}")
+    # Используем стандартный логгер как fallback
+    mechanics_logger = logging.getLogger()
+
+# --- Конец блока логирования механик ---
 
 MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "https://media.prizeme.ru")
 WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
@@ -1248,55 +1279,106 @@ async def get_user_status(user_id: int) -> str:
 # ============================================================================
 
 # ---  Сохраняет или обновляет механику для розыгрыша / Возвращает True если успешно, False если ошибка ---
-async def save_giveaway_mechanic(giveaway_id: int, mechanic_type: str, is_active: bool = True, config: dict = None) -> bool:
-
-    try:
-        async with session_scope() as s:
-            # Проверяем существующую запись
-            existing = await s.execute(
-                text("SELECT id FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
-                {"gid": giveaway_id, "type": mechanic_type}
-            )
-            existing_row = existing.first()
+async def save_giveaway_mechanic(
+    giveaway_id: int, 
+    mechanic_type: str, 
+    is_active: bool = True, 
+    config: dict = None,
+    max_retries: int = 3
+) -> bool:
+    """
+    Сохраняет или обновляет механику для розыгрыша с retry логикой
+    Возвращает True если успешно, False если ошибка
+    """
+    import asyncio
+    
+    for attempt in range(max_retries):
+        try:
+            config_json = json.dumps(config) if config else '{}'
             
-            if existing_row:
-                # Обновляем существующую запись
-                await s.execute(
+            async with session_scope() as s:
+                # Проверяем существующую запись
+                existing = await s.execute(
                     text("""
-                        UPDATE giveaway_mechanics 
-                        SET is_active = :active, config = :config
+                        SELECT id, config 
+                        FROM giveaway_mechanics 
                         WHERE giveaway_id = :gid AND mechanic_type = :type
                     """),
-                    {
-                        "gid": giveaway_id,
-                        "type": mechanic_type,
-                        "active": is_active,
-                        "config": json.dumps(config) if config else '{}'
-                    }
+                    {"gid": giveaway_id, "type": mechanic_type}
                 )
-                logging.info(f"✅ Обновлена механика {mechanic_type} для розыгрыша {giveaway_id}")
+                existing_row = existing.first()
+                
+                if existing_row:
+                    # Обновляем существующую запись
+                    existing_id, existing_config = existing_row
+                    
+                    # Проверяем, нужно ли обновлять (изменения есть)
+                    should_update = True
+                    if existing_config:
+                        try:
+                            existing_config_dict = json.loads(existing_config)
+                            if (existing_config_dict == config) and (existing_row[0] == is_active):
+                                # Нет изменений - пропускаем обновление
+                                should_update = False
+                        except:
+                            pass
+                    
+                    if should_update:
+                        await s.execute(
+                            text("""
+                                UPDATE giveaway_mechanics 
+                                SET is_active = :active, config = :config, created_at = CURRENT_TIMESTAMP
+                                WHERE id = :id
+                            """),
+                            {
+                                "id": existing_id,
+                                "active": is_active,
+                                "config": config_json
+                            }
+                        )
+                        mechanics_logger.info(f"✅ Обновлена механика {mechanic_type} для розыгрыша {giveaway_id} (attempt {attempt + 1})")
+                    else:
+                        mechanics_logger.info(f"ℹ️ Механика {mechanic_type} не изменилась, пропускаем обновление")
+                else:
+                    # Создаем новую запись
+                    await s.execute(
+                        text("""
+                            INSERT INTO giveaway_mechanics 
+                            (giveaway_id, mechanic_type, is_active, config, created_at)
+                            VALUES (:gid, :type, :active, :config, CURRENT_TIMESTAMP)
+                        """),
+                        {
+                            "gid": giveaway_id,
+                            "type": mechanic_type,
+                            "active": is_active,
+                            "config": config_json
+                        }
+                    )
+                    mechanics_logger.info(f"✅ Создана механика {mechanic_type} для розыгрыша {giveaway_id} (attempt {attempt + 1})")
+                
+                # Детальное логирование
+                mechanics_logger.debug(f"📝 Механика сохранена: giveaway_id={giveaway_id}, type={mechanic_type}, "
+                            f"active={is_active}, config={config_json[:50]}...")
+                
+                return True
+                
+        except Exception as e:
+            mechanics_logger.error(f"❌ Ошибка сохранения механики {mechanic_type} для розыгрыша {giveaway_id} "
+                         f"(attempt {attempt + 1}/{max_retries}): {e}")
+            
+            if attempt < max_retries - 1:
+                # Экспоненциальная задержка перед повторной попыткой
+                wait_time = 2 ** attempt  # 1, 2, 4 секунды
+                mechanics_logger.info(f"⏳ Повтор через {wait_time} сек...")
+                await asyncio.sleep(wait_time)
             else:
-                # Создаем новую запись
-                await s.execute(
-                    text("""
-                        INSERT INTO giveaway_mechanics 
-                        (giveaway_id, mechanic_type, is_active, config)
-                        VALUES (:gid, :type, :active, :config)
-                    """),
-                    {
-                        "gid": giveaway_id,
-                        "type": mechanic_type,
-                        "active": is_active,
-                        "config": json.dumps(config) if config else '{}'
-                    }
-                )
-                logging.info(f"✅ Создана механика {mechanic_type} для розыгрыша {giveaway_id}")
-            
-            return True
-            
-    except Exception as e:
-        logging.error(f"❌ Ошибка сохранения механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
-        return False
+                # Все попытки исчерпаны
+                import traceback
+                mechanics_logger.error(f"🔥 Все попытки сохранения механики исчерпаны. Traceback: {traceback.format_exc()}")
+                return False
+    
+    return False
+
 
 # ---  Удаляет механику для розыгрыша ---
 async def remove_giveaway_mechanic(giveaway_id: int, mechanic_type: str) -> bool:
@@ -1307,61 +1389,185 @@ async def remove_giveaway_mechanic(giveaway_id: int, mechanic_type: str) -> bool
                 text("DELETE FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
                 {"gid": giveaway_id, "type": mechanic_type}
             )
-            logging.info(f"✅ Удалена механика {mechanic_type} для розыгрыша {giveaway_id}")
+            mechanics_logger.info(f"✅ Удалена механика {mechanic_type} для розыгрыша {giveaway_id}")
             return True
     except Exception as e:
-        logging.error(f"❌ Ошибка удаления механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        mechanics_logger.error(f"❌ Ошибка удаления механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
         return False
 
-# --- Возвращает список всех механик для розыгрыша ---
-async def get_giveaway_mechanics(giveaway_id: int) -> list:
+# --- Возвращает список всех механик для розыгрыша с поддержкой кэширования ---
+# ГЛОБАЛЬНЫЙ КЭШ ДЛЯ МЕХАНИК
+_mechanics_cache = {}
+_cache_lock = asyncio.Lock()
+_CACHE_TTL = 60  # Время жизни кэша в секундах (1 минута)
+_MAX_CACHE_SIZE = 1000  # Максимальное количество записей в кэше
 
+async def get_giveaway_mechanics(giveaway_id: int, use_cache: bool = True) -> list:
+
+    cache_key = f"mechanics_{giveaway_id}"
+    current_time = time.time()
+    
+    # Проверка кэша
+    if use_cache:
+        async with _cache_lock:
+            if cache_key in _mechanics_cache:
+                cached_data, timestamp = _mechanics_cache[cache_key]
+                if current_time - timestamp < _CACHE_TTL:
+                    mechanics_logger.debug(f"🔄 Используем кэшированные механики для розыгрыша {giveaway_id}")
+                    return cached_data.copy()  # Возвращаем копию чтобы избежать изменения кэша
+    
     try:
         async with session_scope() as s:
+            # УЛУЧШЕННЫЙ ЗАПРОС С БОЛЬШЕЙ ИНФОРМАЦИЕЙ
             result = await s.execute(
                 text("""
-                    SELECT mechanic_type, is_active, config
+                    SELECT 
+                        mechanic_type, 
+                        is_active, 
+                        config,
+                        created_at,
+                        id
                     FROM giveaway_mechanics 
                     WHERE giveaway_id = :gid
-                    ORDER BY mechanic_type
+                    ORDER BY created_at DESC, mechanic_type
                 """),
                 {"gid": giveaway_id}
             )
-            mechanics = result.fetchall()
+            rows = result.fetchall()
             
-            # Преобразуем в удобный формат
+            # ТРАНСФОРМАЦИЯ ДАННЫХ
             mechanics_list = []
-            for mechanic_type, is_active, config in mechanics:
+            for mechanic_type, is_active, config, created_at, mechanic_id in rows:
                 try:
                     config_dict = json.loads(config) if config else {}
-                except:
+                except Exception as json_error:
+                    mechanics_logger.warning(f"⚠️ Ошибка парсинга JSON для механики {mechanic_id}: {json_error}")
                     config_dict = {}
-                    
+                
+                # ДОПОЛНИТЕЛЬНАЯ ВАЛИДАЦИЯ
+                if mechanic_type not in ['captcha', 'referral']:
+                    mechanics_logger.warning(f"⚠️ Неизвестный тип механики: {mechanic_type} для giveaway_id={giveaway_id}")
+                
                 mechanics_list.append({
+                    "id": mechanic_id,
                     "type": mechanic_type,
-                    "is_active": is_active,
-                    "config": config_dict
+                    "is_active": bool(is_active),
+                    "config": config_dict,
+                    "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at),
+                    "has_config": bool(config and config != '{}')
                 })
+            
+            mechanics_logger.debug(f"📊 Получено {len(mechanics_list)} механик для розыгрыша {giveaway_id}")
+            
+            # ОБНОВЛЕНИЕ КЭША
+            if use_cache:
+                async with _cache_lock:
+                    # Очистка устаревшего кэша
+                    expired_keys = []
+                    for key, (_, timestamp) in _mechanics_cache.items():
+                        if current_time - timestamp >= _CACHE_TTL:
+                            expired_keys.append(key)
+                    
+                    for key in expired_keys:
+                        del _mechanics_cache[key]
+                    
+                    # Ограничение размера кэша
+                    if len(_mechanics_cache) >= _MAX_CACHE_SIZE:
+                        # Удаляем самые старые записи
+                        oldest_keys = sorted(
+                            _mechanics_cache.keys(),
+                            key=lambda k: _mechanics_cache[k][1]
+                        )[:len(_mechanics_cache) - _MAX_CACHE_SIZE + 10]
+                        for key in oldest_keys:
+                            del _mechanics_cache[key]
+                    
+                    # Сохраняем в кэш
+                    _mechanics_cache[cache_key] = (mechanics_list.copy(), current_time)
             
             return mechanics_list
             
     except Exception as e:
-        logging.error(f"❌ Ошибка получения механик для розыгрыша {giveaway_id}: {e}")
+        mechanics_logger.error(f"❌ Ошибка получения механик для розыгрыша {giveaway_id}: {e}")
+        import traceback
+        mechanics_logger.debug(f"🔍 Traceback: {traceback.format_exc()}")
+        
+        # 🔄 ПРИ ОШИБКЕ ПРОБУЕМ ВЕРНУТЬ КЭШИРОВАННЫЕ ДАННЫЕ (ДАЖЕ ЕСЛИ УСТАРЕЛИ)
+        if use_cache and cache_key in _mechanics_cache:
+            mechanics_logger.warning(f"⚠️ Используем устаревший кэш из-за ошибки БД для розыгрыша {giveaway_id}")
+            cached_data, _ = _mechanics_cache[cache_key]
+            return cached_data.copy()
+        
         return []
 
-# --- Проверяет, активна ли конкретная механика для розыгрыша ---
-async def is_mechanic_active(giveaway_id: int, mechanic_type: str) -> bool:
+# --- Очищает кэш механик (Если передан giveaway_id - очищает только для этого розыгрыша) ---
+async def clear_mechanics_cache(giveaway_id: int = None):
 
+    async with _cache_lock:
+        if giveaway_id:
+            cache_key = f"mechanics_{giveaway_id}"
+            if cache_key in _mechanics_cache:
+                del _mechanics_cache[cache_key]
+                mechanics_logger.info(f"🧹 Очищен кэш механик для розыгрыша {giveaway_id}")
+        else:
+            _mechanics_cache.clear()
+            mechanics_logger.info("🧹 Очищен весь кэш механик")
+
+
+# --- Проверяет, активна ли конкретная механика для розыгрыша с кэшированием ---
+async def is_mechanic_active(giveaway_id: int, mechanic_type: str, use_cache: bool = True) -> bool:
+
+    cache_key = f"active_{giveaway_id}_{mechanic_type}"
+    current_time = time.time()
+    
+    # ПРОВЕРКА КЭША
+    if use_cache:
+        async with _cache_lock:
+            if cache_key in _mechanics_cache:
+                cached_result, timestamp = _mechanics_cache[cache_key]
+                if current_time - timestamp < _CACHE_TTL:
+                    mechanics_logger.debug(f"🔄 Используем кэшированный статус активности для {mechanic_type} розыгрыша {giveaway_id}")
+                    return cached_result
+    
     try:
         async with session_scope() as s:
+            # УЛУЧШЕННЫЙ ЗАПРОС С БОЛЬШЕЙ ИНФОРМАЦИЕЙ
             result = await s.execute(
-                text("SELECT is_active FROM giveaway_mechanics WHERE giveaway_id = :gid AND mechanic_type = :type"),
+                text("""
+                    SELECT is_active, config 
+                    FROM giveaway_mechanics 
+                    WHERE giveaway_id = :gid AND mechanic_type = :type
+                """),
                 {"gid": giveaway_id, "type": mechanic_type}
             )
             row = result.first()
-            return bool(row and row[0])
+            
+            is_active = bool(row and row[0])
+            
+            # ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ДЛЯ ЛОГИРОВАНИЯ
+            if row:
+                config = row[1] if len(row) > 1 else None
+                mechanics_logger.debug(f"🔍 Проверка активности: giveaway_id={giveaway_id}, "
+                            f"type={mechanic_type}, active={is_active}, "
+                            f"config_present={bool(config)}")
+            else:
+                mechanics_logger.debug(f"🔍 Механика {mechanic_type} не найдена для розыгрыша {giveaway_id}")
+            
+            # 🔄 ОБНОВЛЕНИЕ КЭША
+            if use_cache:
+                async with _cache_lock:
+                    _mechanics_cache[cache_key] = (is_active, current_time)
+            
+            return is_active
+            
     except Exception as e:
-        logging.error(f"❌ Ошибка проверки активности механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        mechanics_logger.error(f"❌ Ошибка проверки активности механики {mechanic_type} для розыгрыша {giveaway_id}: {e}")
+        
+        # ПРИ ОШИБКЕ ПРОБУЕМ ВЕРНУТЬ КЭШИРОВАННЫЙ РЕЗУЛЬТАТ
+        if use_cache and cache_key in _mechanics_cache:
+            mechanics_logger.warning(f"⚠️ Используем устаревший кэш статуса из-за ошибки БД")
+            cached_result, _ = _mechanics_cache[cache_key]
+            return cached_result
+        
         return False
 
 
