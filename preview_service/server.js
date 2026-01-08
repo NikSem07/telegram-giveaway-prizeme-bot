@@ -24,6 +24,8 @@ console.log('   BOT_TOKEN:', process.env.BOT_TOKEN ? '***SET***' : 'NOT SET');
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../webapp')));
+app.use('/miniapp', express.static(path.join(__dirname, '../webapp')));
+
 
 // Конфигурация из .env
 const BOT_TOKEN = process.env.BOT_TOKEN?.trim();
