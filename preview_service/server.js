@@ -1269,24 +1269,24 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
 
 // --- POST /api/verify_captcha ---
 app.post('/api/verify_captcha', async (req, res) => {
-  console.log('[CAPTCHA] Verify request received');
+  console.log('[SIMPLE-CAPTCHA] Verify request received');
   
   try {
-    const { token, giveaway_id, user_id } = req.body;
+    const { token, giveaway_id, user_id, answer } = req.body;  // Добавлен answer
     
-    if (!token || !giveaway_id || !user_id) {
+    if (!token || !giveaway_id || !user_id || !answer) {
       return res.status(400).json({ 
         ok: false, 
-        error: 'Missing required parameters' 
+        error: 'missing_parameters',
+        message: 'Отсутствуют обязательные параметры' 
       });
     }
     
-    console.log(`[CAPTCHA] Token received for giveaway ${giveaway_id}, user ${user_id}`);
+    console.log(`[SIMPLE-CAPTCHA] For giveaway ${giveaway_id}, user ${user_id}, answer: ${answer}`);
     
-    // 🔄 ИНТЕГРАЦИЯ С PYTHON БОТОМ
-    // Отправляем запрос к внутреннему API бота (порт 8088)
+    // 🔄 ИНТЕГРАЦИЯ С PYTHON БОТОМ - НОВЫЙ ENDPOINT
     try {
-      const botApiResponse = await fetch('http://127.0.0.1:8088/api/verify_captcha_and_participate', {
+      const botApiResponse = await fetch('http://127.0.0.1:8088/api/verify_simple_captcha_and_participate', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1295,45 +1295,38 @@ app.post('/api/verify_captcha', async (req, res) => {
         body: JSON.stringify({
           user_id: parseInt(user_id),
           giveaway_id: parseInt(giveaway_id),
-          captcha_token: token
+          captcha_answer: answer,      // Введенные пользователем цифры
+          captcha_token: token         // Токен для проверки
         }),
-        timeout: 10000  // 10 секунд таймаут
+        timeout: 10000
       });
       
-      console.log(`[CAPTCHA] Bot API response status: ${botApiResponse.status}`);
+      console.log(`[SIMPLE-CAPTCHA] Bot API response status: ${botApiResponse.status}`);
       
       if (!botApiResponse.ok) {
-        console.error(`[CAPTCHA] Bot API error: ${botApiResponse.status}`);
-        
-        // Если бот недоступен, проверяем в тестовом режиме
-        if (process.env.CAPTCHA_ENABLED !== 'true') {
-          console.log('[CAPTCHA] Using test mode fallback');
-          const isValid = token.startsWith('test_token_');
-          return res.json({ 
-            ok: isValid, 
-            message: isValid ? '✅ Проверка пройдена (тестовый режим)' : '❌ Неверный токен'
-          });
-        }
-        
+        console.error(`[SIMPLE-CAPTCHA] Bot API error: ${botApiResponse.status}`);
         throw new Error(`Bot API error: ${botApiResponse.status}`);
       }
       
       const botApiData = await botApiResponse.json();
-      console.log(`[CAPTCHA] Bot API data:`, JSON.stringify(botApiData));
+      console.log(`[SIMPLE-CAPTCHA] Bot API data:`, JSON.stringify(botApiData));
       
       // Возвращаем результат от бота
       return res.json(botApiData);
       
     } catch (botError) {
-      console.error('[CAPTCHA] Bot API connection error:', botError);
+      console.error('[SIMPLE-CAPTCHA] Bot API connection error:', botError);
       
       // Fallback для тестового режима
       if (process.env.CAPTCHA_ENABLED !== 'true') {
-        console.log('[CAPTCHA] Using test mode due to bot connection error');
-        const isValid = token.startsWith('test_token_');
+        console.log('[SIMPLE-CAPTCHA] Using test mode due to bot connection error');
+        // Простая проверка для тестового режима
+        const isValid = token.startsWith('test_token_') && answer === '1234';
         return res.json({ 
           ok: isValid, 
-          message: isValid ? '✅ Проверка пройдена (тестовый режим)' : '❌ Неверный токен'
+          message: isValid ? '✅ Проверка пройдена (тестовый режим)' : '❌ Неверные цифры',
+          ticket_code: isValid ? 'TEST123' : null,
+          already_participating: false
         });
       }
       
@@ -1341,16 +1334,16 @@ app.post('/api/verify_captcha', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('[CAPTCHA] Error:', error);
+    console.error('[SIMPLE-CAPTCHA] Error:', error);
     return res.status(500).json({ 
       ok: false, 
-      error: 'Internal server error',
+      error: 'server_error',
       message: 'Ошибка проверки. Попробуйте позже.'
     });
   }
 });
 
-// 🔄 ДОБАВЛЕНО: Конфигурация Captcha
+// ДОБАВЛЕНО: Конфигурация Captcha
 app.get('/api/captcha_config', async (req, res) => {
   console.log('[CAPTCHA] Config request received');
   
