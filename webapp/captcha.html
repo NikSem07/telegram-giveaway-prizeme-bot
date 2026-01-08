@@ -5,29 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PrizeMe - Проверка безопасности</title>
     <link rel="stylesheet" href="/miniapp/captcha.css">
+    <!-- УБИРАЕМ Cloudflare Turnstile script -->
 </head>
 <body>
     <div class="captcha-container">
         <div class="captcha-header">
             <div class="captcha-logo">PrizeMe</div>
-            <h1 class="captcha-title">Проверка безопасности</h1>
+            <h1 class="captcha-title" id="giveaway-title">Проверка безопасности</h1>
             <p class="captcha-description">
                 Подтвердите, что вы не робот, чтобы продолжить участие в розыгрыше.
                 Это необходимо для защиты от автоматических систем.
             </p>
         </div>
         
-        <div id="test-mode-notice" class="captcha-test-mode-notice" style="display: none;">
-            ⚠️ Тестовый режим Captcha. В продакшене здесь будет виджет Cloudflare Turnstile.
-        </div>
-        
-        <div class="captcha-widget-container">
-            <div id="captcha-widget">
-                <!-- Здесь будет виджет Cloudflare Turnstile -->
-                <div id="turnstile-widget"></div>
+        <!-- НОВЫЙ: Контейнер для цифр Captcha -->
+        <div class="captcha-digits-container">
+            <div class="captcha-instruction">Перепишите цифры ниже:</div>
+            <div class="captcha-digits-display" id="captcha-digits">
+                <!-- Сюда будут загружены цифры (например: 7 0 9 4) -->
+            </div>
+            <div class="captcha-timer" id="captcha-timer">
+                ⏳ Время: <span id="timer-seconds">60</span> сек
             </div>
         </div>
         
+        <!-- НОВЫЙ: Поле для ввода цифр -->
+        <div class="captcha-input-container">
+            <input 
+                type="text" 
+                id="captcha-input" 
+                class="captcha-input" 
+                placeholder="Введите 4 цифры"
+                maxlength="4"
+                inputmode="numeric"
+                pattern="[0-9]*"
+            >
+            <div class="captcha-input-hint">
+                Введите 4 цифры, которые видите выше
+            </div>
+        </div>
+        
+        <!-- Сообщения об ошибках и успехе -->
         <div id="error-message" class="captcha-error-message">
             ❌ Ошибка проверки. Пожалуйста, попробуйте еще раз.
         </div>
@@ -36,215 +54,24 @@
             ✅ Проверка пройдена успешно!
         </div>
         
+        <!-- Кнопка проверки -->
         <button id="verify-button" class="captcha-button" onclick="verifyCaptcha()">
             <span id="button-text">Проверить</span>
             <span id="button-loading" class="captcha-loading" style="display: none;"></span>
         </button>
         
+        <!-- Кнопка обновления Captcha -->
+        <button id="refresh-button" class="captcha-button captcha-refresh-button" onclick="refreshCaptcha()">
+            🔄 Обновить цифры
+        </button>
+        
+        <!-- Кнопка назад -->
         <button class="captcha-button captcha-back-button" onclick="goBack()">
             ⬅️ Назад
         </button>
     </div>
 
-    <script src="/miniapp/app.js"></script>
+    <!-- ПОДКЛЮЧАЕМ ТОЛЬКО ОДИН JS ФАЙЛ (без дублирования) -->
     <script src="/miniapp/captcha.js"></script>
-    <script>
-        // 🔄 ВЫНЕСЕННАЯ ЛОГИКА CAPTCHA
-        
-        // Глобальные переменные
-        let captchaToken = null;
-        let giveawayId = null;
-        
-        // Инициализация страницы
-        function initializeCaptchaPage() {
-            console.log('[CAPTCHA] Initializing captcha page');
-            
-            // Получаем ID розыгрыша из sessionStorage
-            giveawayId = sessionStorage.getItem('prizeme_gid');
-            if (!giveawayId) {
-                console.error('[CAPTCHA] No giveaway ID found');
-                showError('Не удалось определить розыгрыш');
-                return;
-            }
-            
-            console.log(`[CAPTCHA] Giveaway ID: ${giveawayId}`);
-            
-            // Проверяем тестовый режим
-            checkTestMode();
-            
-            // Загружаем виджет Captcha
-            loadCaptchaWidget();
-        }
-        
-        // Проверяем тестовый режим
-        async function checkTestMode() {
-            try {
-                const response = await fetch('/api/captcha_config');
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.test_mode || data.site_key === '1x00000000000000000000AA') {
-                        document.getElementById('test-mode-notice').style.display = 'block';
-                    }
-                }
-            } catch (error) {
-                console.log('[CAPTCHA] Error checking test mode:', error);
-            }
-        }
-        
-        // Загружает виджет Captcha
-        function loadCaptchaWidget() {
-            console.log('[CAPTCHA] Loading captcha widget');
-            
-            const siteKey = '0x4AAAAAACLE0aRcmDlHJuzo'; // Из .env файла
-            
-            // 🔄 ЗАГРУЗКА CLOUDFLARE TURNSTILE
-            const widgetContainer = document.getElementById('turnstile-widget');
-            
-            // Очищаем контейнер
-            widgetContainer.innerHTML = '';
-            
-            // Создаем div для Turnstile
-            const turnstileDiv = document.createElement('div');
-            turnstileDiv.id = 'cf-turnstile';
-            turnstileDiv.setAttribute('data-sitekey', siteKey);
-            turnstileDiv.setAttribute('data-theme', 'dark');
-            turnstileDiv.setAttribute('data-callback', 'onCaptchaSuccess');
-            
-            widgetContainer.appendChild(turnstileDiv);
-            
-            // Загружаем скрипт Turnstile
-            const script = document.createElement('script');
-            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-            script.async = true;
-            script.defer = true;
-            
-            script.onload = function() {
-                console.log('[CAPTCHA] Turnstile script loaded');
-                // Виджет автоматически отрендерится
-            };
-            
-            script.onerror = function() {
-                console.error('[CAPTCHA] Failed to load Turnstile script');
-                // Fallback к тестовому режиму
-                widgetContainer.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">🛡️</div>
-                        <div style="color: #a0a0a0; font-size: 14px;">
-                            Не удалось загрузить проверку безопасности.<br>
-                            Продолжаем в тестовом режиме.
-                        </div>
-                    </div>
-                `;
-                
-                setTimeout(() => {
-                    captchaToken = 'fallback_token_' + Date.now();
-                    console.log('[CAPTCHA] Fallback token generated:', captchaToken);
-                }, 1000);
-            };
-            
-            document.head.appendChild(script);
-        }
-
-        // 🔄 CALLBACK ФУНКЦИЯ ДЛЯ TURNSTILE
-        function onCaptchaSuccess(token) {
-            console.log('[CAPTCHA] Turnstile callback with token:', token);
-            captchaToken = token;
-            
-            // Активируем кнопку проверки
-            const button = document.getElementById('verify-button');
-            button.disabled = false;
-            document.getElementById('button-text').textContent = 'Проверить';
-        }
-        
-        // Проверяет Captcha
-        async function verifyCaptcha() {
-            console.log('[CAPTCHA] Starting verification');
-            
-            if (!captchaToken) {
-                showError('Пожалуйста, пройдите проверку безопасности');
-                return;
-            }
-            
-            // Показываем индикатор загрузки
-            const button = document.getElementById('verify-button');
-            const buttonText = document.getElementById('button-text');
-            const buttonLoading = document.getElementById('button-loading');
-            
-            button.disabled = true;
-            buttonText.textContent = 'Проверяем...';
-            buttonLoading.style.display = 'inline-block';
-            
-            // Скрываем предыдущие сообщения
-            hideError();
-            hideSuccess();
-            
-            try {
-                // Проверяем токен через API
-                const isValid = await verifyCaptchaToken(captchaToken, giveawayId);
-                
-                if (isValid) {
-                    console.log('[CAPTCHA] Verification successful');
-                    showSuccess();
-                    
-                    // Ждем немного чтобы пользователь увидел успех
-                    setTimeout(() => {
-                        // Вызываем функцию обработки успешной Captcha из app.js
-                        if (typeof handleCaptchaSuccess === 'function') {
-                            handleCaptchaSuccess(giveawayId, captchaToken);
-                        } else {
-                            // Фоллбек: возвращаем к основному flow
-                            sessionStorage.setItem('prizeme_captcha_verified', 'true');
-                            window.location.href = '/miniapp/loading';
-                        }
-                    }, 1000);
-                } else {
-                    console.log('[CAPTCHA] Verification failed');
-                    showError('Проверка не пройдена. Попробуйте еще раз.');
-                    resetButton();
-                }
-                
-            } catch (error) {
-                console.error('[CAPTCHA] Verification error:', error);
-                showError('Ошибка при проверке. Попробуйте еще раз.');
-                resetButton();
-            }
-        }
-        
-        // Вспомогательные функции UI
-        function showError(message) {
-            const errorEl = document.getElementById('error-message');
-            errorEl.textContent = message || '❌ Ошибка проверки. Пожалуйста, попробуйте еще раз.';
-            errorEl.style.display = 'block';
-        }
-        
-        function hideError() {
-            document.getElementById('error-message').style.display = 'none';
-        }
-        
-        function showSuccess() {
-            document.getElementById('success-message').style.display = 'block';
-        }
-        
-        function hideSuccess() {
-            document.getElementById('success-message').style.display = 'none';
-        }
-        
-        function resetButton() {
-            const button = document.getElementById('verify-button');
-            const buttonText = document.getElementById('button-text');
-            const buttonLoading = document.getElementById('button-loading');
-            
-            button.disabled = false;
-            buttonText.textContent = 'Проверить';
-            buttonLoading.style.display = 'none';
-        }
-        
-        function goBack() {
-            window.history.back();
-        }
-        
-        // Инициализируем страницу при загрузке
-        document.addEventListener('DOMContentLoaded', initializeCaptchaPage);
-    </script>
 </body>
 </html>

@@ -1,229 +1,182 @@
-// CAPTCHA PAGE LOGIC - ПОЛНАЯ ИНТЕГРАЦИЯ С TELEGRAM WEBAPP
+// SIMPLE TEXT CAPTCHA PAGE LOGIC - ПРОСТАЯ ТЕКСТОВАЯ CAPTCHA
 
 // Глобальные переменные
 let captchaToken = null;
 let giveawayId = null;
 let userId = null;
+let captchaDigits = null;
+let timerInterval = null;
 
 // Инициализация страницы
-function initializeCaptchaPage() {
-    console.log('[CAPTCHA] Initializing captcha page with Telegram WebApp');
+async function initializeCaptchaPage() {
+    console.log('[SIMPLE-CAPTCHA] Initializing simple text captcha page');
     
-    // 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Получаем данные из Telegram WebApp
+    // 1. Получаем данные из Telegram WebApp или sessionStorage
     const tg = window.Telegram?.WebApp;
-    if (!tg) {
-        console.error('[CAPTCHA] Telegram WebApp not found');
-        showError('Ошибка загрузки приложения Telegram');
+    
+    if (tg) {
+        // Используем Telegram WebApp
+        tg.expand();
+        
+        try {
+            // Извлекаем user_id из initData
+            const initData = tg.initData || '';
+            const params = new URLSearchParams(initData);
+            const userEncoded = params.get('user');
+            
+            if (userEncoded) {
+                const userJson = decodeURIComponent(userEncoded);
+                const user = JSON.parse(userJson);
+                userId = user.id;
+                console.log(`[SIMPLE-CAPTCHA] User ID from Telegram: ${userId}`);
+            }
+            
+            // Получаем giveaway_id из start_param
+            const startParam = tg.initDataUnsafe?.start_param;
+            if (startParam && startParam.startsWith('captcha_')) {
+                giveawayId = startParam.replace('captcha_', '');
+                console.log(`[SIMPLE-CAPTCHA] Giveaway ID from start_param: ${giveawayId}`);
+            }
+        } catch (error) {
+            console.error('[SIMPLE-CAPTCHA] Error parsing Telegram data:', error);
+        }
+    }
+    
+    // 2. Fallback: получаем данные из sessionStorage
+    if (!giveawayId) {
+        giveawayId = sessionStorage.getItem('prizeme_gid');
+        console.log(`[SIMPLE-CAPTCHA] Giveaway ID from sessionStorage: ${giveawayId}`);
+    }
+    
+    if (!userId) {
+        userId = sessionStorage.getItem('prizeme_user_id');
+        console.log(`[SIMPLE-CAPTCHA] User ID from sessionStorage: ${userId}`);
+    }
+    
+    // 3. Проверяем наличие обязательных данных
+    if (!giveawayId || !userId) {
+        console.error('[SIMPLE-CAPTCHA] Missing required data:', { giveawayId, userId });
+        showError('Не удалось определить параметры розыгрыша');
         return;
     }
     
-    // Расширяем приложение на весь экран
-    tg.expand();
+    // 4. Сохраняем данные
+    sessionStorage.setItem('prizeme_gid', giveawayId);
+    sessionStorage.setItem('prizeme_user_id', userId);
     
-    // 🔥 ИЗВЛЕКАЕМ ДАННЫЕ ИЗ TELEGRAM
-    try {
-        // 1. Извлекаем user_id из initData
-        const initData = tg.initData || '';
-        const params = new URLSearchParams(initData);
-        const userEncoded = params.get('user');
-        
-        if (userEncoded) {
-            const userJson = decodeURIComponent(userEncoded);
-            const user = JSON.parse(userJson);
-            userId = user.id;
-            console.log(`[CAPTCHA] User ID extracted from Telegram: ${userId}`);
-        } else {
-            console.warn('[CAPTCHA] No user data in initData');
-        }
-        
-        // 2. Получаем giveaway_id из start_param или sessionStorage
-        const startParam = tg.initDataUnsafe?.start_param;
-        if (startParam && startParam.startsWith('captcha_')) {
-            giveawayId = startParam.replace('captcha_', '');
-            console.log(`[CAPTCHA] Giveaway ID from start_param: ${giveawayId}`);
-        } else {
-            // Fallback: из sessionStorage
-            giveawayId = sessionStorage.getItem('prizeme_gid');
-            console.log(`[CAPTCHA] Giveaway ID from sessionStorage: ${giveawayId}`);
-        }
-        
-        if (!giveawayId || !userId) {
-            console.error('[CAPTCHA] Missing required data:', { giveawayId, userId });
-            showError('Не удалось определить параметры розыгрыша');
-            return;
-        }
-        
-        // Сохраняем данные для дальнейшего использования
-        sessionStorage.setItem('prizeme_gid', giveawayId);
-        sessionStorage.setItem('prizeme_user_id', userId);
-        
-    } catch (error) {
-        console.error('[CAPTCHA] Error parsing Telegram data:', error);
-        showError('Ошибка загрузки данных. Пожалуйста, перезагрузите страницу.');
-        return;
-    }
+    console.log(`[SIMPLE-CAPTCHA] Ready: user_id=${userId}, giveaway_id=${giveawayId}`);
     
-    console.log(`[CAPTCHA] Ready: user_id=${userId}, giveaway_id=${giveawayId}`);
+    // 5. Загружаем Captcha
+    await loadCaptcha();
     
-    // Проверяем тестовый режим
-    checkTestMode();
-    
-    // Загружаем виджет Captcha
-    loadCaptchaWidget();
+    // 6. Стартуем таймер
+    startTimer(60); // 60 секунд
 }
 
-// Проверяем тестовый режим
-async function checkTestMode() {
+// Загружает новую Captcha
+async function loadCaptcha() {
+    console.log('[SIMPLE-CAPTCHA] Loading new captcha');
+    
     try {
-        const response = await fetch('/api/captcha_config');
-        if (response.ok) {
-            const data = await response.json();
-            if (data.test_mode || data.site_key === '1x00000000000000000000AA') {
-                document.getElementById('test-mode-notice').style.display = 'block';
-                console.log('[CAPTCHA] Test mode detected');
-            }
-        }
+        // Показываем индикатор загрузки
+        document.getElementById('captcha-digits').innerHTML = '<div class="captcha-loading-small"></div>';
+        document.getElementById('captcha-input').value = '';
+        document.getElementById('captcha-input').disabled = true;
+        
+        // 🔥 В РЕАЛЬНОЙ СИТУАЦИИ: здесь был бы запрос к боту для генерации Captcha
+        // 🔥 НО для тестирования: генерируем случайные 4 цифры
+        
+        // Генерируем случайные 4 цифры
+        captchaDigits = generateRandomDigits(4);
+        captchaToken = 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        console.log(`[SIMPLE-CAPTCHA] Generated digits: ${captchaDigits}, token: ${captchaToken.substring(0, 20)}...`);
+        
+        // Отображаем цифры
+        displayCaptchaDigits(captchaDigits);
+        
+        // Активируем поле ввода
+        document.getElementById('captcha-input').disabled = false;
+        document.getElementById('captcha-input').focus();
+        
+        // Сбрасываем кнопку
+        resetButton();
+        
     } catch (error) {
-        console.log('[CAPTCHA] Error checking test mode:', error);
+        console.error('[SIMPLE-CAPTCHA] Error loading captcha:', error);
+        showError('Не удалось загрузить проверку');
+        
+        // Fallback: показываем тестовые цифры
+        captchaDigits = '1234';
+        displayCaptchaDigits(captchaDigits);
     }
 }
 
-// Загружает виджет Cloudflare Turnstile Captcha
-function loadCaptchaWidget() {
-    console.log('[CAPTCHA] Loading Cloudflare Turnstile widget');
-    
-    // Получаем конфигурацию из API
-    fetch('/api/captcha_config')
-        .then(response => response.json())
-        .then(config => {
-            console.log('[CAPTCHA] Config received:', config);
-            
-            if (config.test_mode || !config.enabled) {
-                // 🔄 ТЕСТОВЫЙ РЕЖИМ: показываем заглушку
-                showTestWidget();
-                return;
-            }
-            
-            // 🔥 РЕАЛЬНЫЙ РЕЖИМ: загружаем Cloudflare Turnstile
-            const siteKey = config.site_key;
-            const widgetContainer = document.getElementById('turnstile-widget');
-            
-            // Очищаем контейнер
-            widgetContainer.innerHTML = '<div id="cf-turnstile"></div>';
-            
-            // Добавляем скрипт Turnstile
-            const script = document.createElement('script');
-            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-            script.async = true;
-            script.defer = true;
-            
-            script.onload = () => {
-                console.log('[CAPTCHA] Turnstile script loaded');
-                
-                // Рендерим виджет
-                window.turnstile.render('#cf-turnstile', {
-                    sitekey: siteKey,
-                    theme: 'dark', // или 'light' в зависимости от темы
-                    callback: function(token) {
-                        console.log('[CAPTCHA] Turnstile callback with token:', token);
-                        captchaToken = token;
-                        
-                        // Активируем кнопку проверки
-                        const button = document.getElementById('verify-button');
-                        button.disabled = false;
-                        button.classList.add('enabled');
-                        document.getElementById('button-text').textContent = '✅ Проверить и участвовать';
-                    },
-                    'expired-callback': function() {
-                        console.log('[CAPTCHA] Turnstile token expired');
-                        captchaToken = null;
-                        showError('Время проверки истекло. Пожалуйста, пройдите проверку снова.');
-                    },
-                    'error-callback': function() {
-                        console.error('[CAPTCHA] Turnstile error');
-                        captchaToken = null;
-                        showError('Ошибка проверки. Пожалуйста, попробуйте еще раз.');
-                    }
-                });
-            };
-            
-            script.onerror = (error) => {
-                console.error('[CAPTCHA] Failed to load Turnstile script:', error);
-                showError('Не удалось загрузить виджет проверки');
-                showTestWidget(); // Fallback к тестовому режиму
-            };
-            
-            document.head.appendChild(script);
-        })
-        .catch(error => {
-            console.error('[CAPTCHA] Error loading config:', error);
-            showTestWidget(); // Fallback к тестовому режиму
-        });
+// Генерирует случайные цифры
+function generateRandomDigits(length) {
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += Math.floor(Math.random() * 10);
+    }
+    return result;
 }
 
-// Показывает тестовый виджет
-function showTestWidget() {
-    const widgetContainer = document.getElementById('turnstile-widget');
-    widgetContainer.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div style="font-size: 48px; margin-bottom: 10px;">🛡️</div>
-            <div style="color: #a0a0a0; font-size: 14px; margin-bottom: 20px;">
-                <b>Тестовый режим проверки безопасности</b><br>
-                В реальной системе здесь будет виджет Cloudflare Turnstile.<br>
-                Нажмите "Проверить и участвовать" чтобы продолжить.
-            </div>
-            <button onclick="generateTestToken()" style="
-                background: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 14px;
-            ">
-                Сгенерировать тестовый токен
-            </button>
-        </div>
-    `;
+// Отображает цифры Captcha
+function displayCaptchaDigits(digits) {
+    const container = document.getElementById('captcha-digits');
+    container.innerHTML = '';
+    
+    for (let i = 0; i < digits.length; i++) {
+        const digitSpan = document.createElement('span');
+        digitSpan.className = 'captcha-digit';
+        digitSpan.textContent = digits[i];
+        container.appendChild(digitSpan);
+    }
 }
 
-// Генерирует тестовый токен
-function generateTestToken() {
-    captchaToken = 'test_token_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    console.log('[CAPTCHA] Test token generated:', captchaToken);
+// Запускает таймер
+function startTimer(seconds) {
+    clearInterval(timerInterval);
     
-    // Показываем успех
-    document.getElementById('turnstile-widget').innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
-            <div style="color: #4CAF50; font-size: 14px;">
-                <b>Тестовый токен сгенерирован</b><br>
-                Нажмите "Проверить и участвовать" чтобы продолжить.
-            </div>
-        </div>
-    `;
+    let timeLeft = seconds;
+    const timerElement = document.getElementById('timer-seconds');
     
-    // Активируем кнопку
-    const button = document.getElementById('verify-button');
-    button.disabled = false;
-    button.classList.add('enabled');
-    document.getElementById('button-text').textContent = '✅ Проверить и участвовать';
+    timerElement.textContent = timeLeft;
+    
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        timerElement.textContent = timeLeft;
+        
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            showError('Время проверки истекло. Пожалуйста, обновите цифры.');
+            document.getElementById('verify-button').disabled = true;
+        } else if (timeLeft <= 10) {
+            // Меняем цвет при малом времени
+            document.getElementById('captcha-timer').style.color = '#ff6b6b';
+        }
+    }, 1000);
 }
 
 // Проверяет Captcha через API
 async function verifyCaptcha() {
-    console.log('[CAPTCHA] Starting verification and participation');
+    console.log('[SIMPLE-CAPTCHA] Starting verification');
     
-    if (!captchaToken) {
-        showError('Пожалуйста, пройдите проверку безопасности');
+    // Получаем введенные цифры
+    const userInput = document.getElementById('captcha-input').value.trim();
+    
+    // Валидация ввода
+    if (!userInput || userInput.length !== 4 || !/^\d{4}$/.test(userInput)) {
+        showError('Пожалуйста, введите ровно 4 цифры');
         return;
     }
     
-    if (!userId || !giveawayId) {
-        console.error('[CAPTCHA] Missing user_id or giveaway_id');
-        showError('Ошибка данных. Пожалуйста, перезагрузите страницу.');
+    if (!captchaToken || !giveawayId || !userId) {
+        showError('Ошибка данных. Пожалуйста, обновите страницу.');
         return;
     }
+    
+    console.log(`[SIMPLE-CAPTCHA] Verification: input=${userInput}, expected=${captchaDigits}`);
     
     // Показываем индикатор загрузки
     const button = document.getElementById('verify-button');
@@ -231,7 +184,7 @@ async function verifyCaptcha() {
     const buttonLoading = document.getElementById('button-loading');
     
     button.disabled = true;
-    buttonText.textContent = 'Проверяем и регистрируем...';
+    buttonText.textContent = 'Проверяем...';
     buttonLoading.style.display = 'inline-block';
     
     // Скрываем предыдущие сообщения
@@ -239,8 +192,13 @@ async function verifyCaptcha() {
     hideSuccess();
     
     try {
-        // Отправляем запрос на проверку Captcha и участие
-        console.log('[CAPTCHA] Sending request:', { userId, giveawayId, token: captchaToken.substring(0, 20) + '...' });
+        // 🔥 ОТПРАВЛЯЕМ ЗАПРОС НА ПРОВЕРКУ В NODE.JS API
+        console.log('[SIMPLE-CAPTCHA] Sending to API:', { 
+            giveaway_id: giveawayId, 
+            user_id: userId,
+            token: captchaToken,
+            answer: userInput
+        });
         
         const response = await fetch('/api/verify_captcha', {
             method: 'POST',
@@ -249,47 +207,68 @@ async function verifyCaptcha() {
             },
             body: JSON.stringify({
                 token: captchaToken,
-                giveaway_id: giveawayId,
-                user_id: userId
+                giveaway_id: parseInt(giveawayId),
+                user_id: parseInt(userId),
+                answer: userInput
             })
         });
         
         const data = await response.json();
-        console.log('[CAPTCHA] API response:', data);
+        console.log('[SIMPLE-CAPTCHA] API response:', data);
         
         if (data.ok) {
-            console.log('[CAPTCHA] Verification successful:', data.message);
+            console.log('[SIMPLE-CAPTCHA] Verification successful:', data.message);
             
             // Показываем успех
             showSuccess();
-            
-            // Обновляем сообщение успеха
             document.getElementById('success-message').innerHTML = 
                 '✅ ' + (data.message || 'Проверка пройдена успешно!');
             
-            // 🔥 ЗАКРЫВАЕМ WEBAPP ЧЕРЕЗ TELEGRAM API
+            // 🔥 ЗАКРЫВАЕМ WEBAPP ИЛИ РЕДИРЕКТИМ
             setTimeout(() => {
                 const tg = window.Telegram?.WebApp;
                 if (tg && typeof tg.close === 'function') {
-                    console.log('[CAPTCHA] Closing WebApp');
+                    console.log('[SIMPLE-CAPTCHA] Closing WebApp');
                     tg.close();
                 } else {
-                    console.log('[CAPTCHA] Telegram WebApp close not available');
+                    console.log('[SIMPLE-CAPTCHA] Telegram WebApp close not available');
                     // Fallback: редирект на success страницу
                     window.location.href = '/miniapp/success?gid=' + giveawayId;
                 }
             }, 2000);
             
         } else {
-            console.log('[CAPTCHA] Verification failed:', data.error);
-            showError(data.message || data.error || 'Проверка не пройдена. Попробуйте еще раз.');
+            console.log('[SIMPLE-CAPTCHA] Verification failed:', data.error);
+            showError(data.message || data.error || 'Неверные цифры. Попробуйте еще раз.');
+            
+            // Сбрасываем кнопку и очищаем поле
             resetButton();
+            document.getElementById('captcha-input').value = '';
+            document.getElementById('captcha-input').focus();
         }
         
     } catch (error) {
-        console.error('[CAPTCHA] Verification error:', error);
+        console.error('[SIMPLE-CAPTCHA] Verification error:', error);
         showError('Ошибка при проверке. Попробуйте еще раз.');
         resetButton();
+    }
+}
+
+// Обновляет Captcha
+function refreshCaptcha() {
+    console.log('[SIMPLE-CAPTCHA] Refreshing captcha');
+    loadCaptcha();
+    startTimer(60); // Сбрасываем таймер
+    hideError();
+}
+
+// Навигация назад
+function goBack() {
+    const tg = window.Telegram?.WebApp;
+    if (tg && typeof tg.close === 'function') {
+        tg.close();
+    } else {
+        window.history.back();
     }
 }
 
@@ -325,19 +304,8 @@ function resetButton() {
     const buttonLoading = document.getElementById('button-loading');
     
     button.disabled = false;
-    button.classList.remove('enabled');
-    buttonText.textContent = 'Проверить и участвовать';
+    buttonText.textContent = 'Проверить';
     buttonLoading.style.display = 'none';
-}
-
-function goBack() {
-    // Используем Telegram WebApp для навигации
-    const tg = window.Telegram?.WebApp;
-    if (tg && typeof tg.close === 'function') {
-        tg.close();
-    } else {
-        window.history.back();
-    }
 }
 
 // Инициализируем страницу при загрузке
