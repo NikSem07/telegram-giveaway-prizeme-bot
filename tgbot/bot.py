@@ -5792,6 +5792,9 @@ async def user_check(cq:CallbackQuery):
 # --- Обработчик участия в розыгрыше с поддержкой Captcha ---
 @dp.callback_query(F.data.startswith("u:join:"))
 async def user_join(cq: CallbackQuery):
+    # Константы
+    WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "https://prizeme.ru")
+    
     gid = int(cq.data.split(":")[2])
     user_id = cq.from_user.id
     
@@ -5802,7 +5805,7 @@ async def user_join(cq: CallbackQuery):
             await cq.answer("Розыгрыш не активен.", show_alert=True)
             return
 
-    # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем подписки ДО Captcha!
+    # Проверяем подписки ДО Captcha!
     # Регистрируем пользователя при участии
     try:
         await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
@@ -5829,7 +5832,13 @@ async def user_join(cq: CallbackQuery):
         
         # Используем start_param для Telegram WebApp
         start_param = f"captcha_{gid}_{user_id}_{captcha_digits}_{captcha_token}"
-        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/captcha?tgWebAppStartParam={start_param}"
+        
+        # Правильный URL с .html
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/captcha.html?tgWebAppStartParam={start_param}"
+        
+        # Логирование для отладки
+        logging.info(f"📱 [CAPTCHA] Generated start_param: {start_param}")
+        logging.info(f"📱 [CAPTCHA] WebApp URL: {webapp_url}")
 
         # Открываем WebApp
         await cq.message.answer(
@@ -5846,7 +5855,7 @@ async def user_join(cq: CallbackQuery):
             parse_mode="HTML"
         )
         
-        await cq.answer()
+        await cq.answer(f"Открываю проверку безопасности...")
         return
     
     # НЕТ CAPTCHA: стандартный процесс участия
@@ -6970,7 +6979,7 @@ async def generate_csv_in_memory(giveaway_id: int):
         logging.error(f"Ошибка генерации CSV: {e}")
         raise
     finally:
-        # 🔥 КРИТИЧЕСКИ ВАЖНО: Явная очистка памяти
+        # КРИТИЧЕСКИ ВАЖНО: Явная очистка памяти
         if output:
             output.close()
         if writer:
