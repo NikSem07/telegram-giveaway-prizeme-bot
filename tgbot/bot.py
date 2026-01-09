@@ -1586,7 +1586,7 @@ async def generate_simple_captcha(giveaway_id: int, user_id: int) -> dict:
                 "uid": user_id,
                 "digits": digits,
                 "token": captcha_token,
-                "expires": datetime.utcnow() + timedelta(minutes=10)
+                "expires": datetime.now(timezone.utc) + timedelta(minutes=10)
             }
         )
     
