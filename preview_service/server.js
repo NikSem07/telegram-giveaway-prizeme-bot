@@ -1345,26 +1345,42 @@ app.post('/api/verify_captcha', async (req, res) => {
   }
 });
 
-// ДОБАВЛЕНО: Конфигурация Captcha
-app.get('/api/captcha_config', async (req, res) => {
-  console.log('[CAPTCHA] Config request received');
-  
+// GET /api/captcha_config
+app.get('/api/captcha_config', (req, res) => {
+  res.json({
+    site_key: process.env.CAPTCHA_SITE_KEY || '0x4AAAAAACLE0aRcmDlHJuzo',
+    test_mode: process.env.NODE_ENV !== 'production',
+    enabled: process.env.CAPTCHA_ENABLED === 'true'
+  });
+});
+
+// Check if giveaway requires captcha
+app.post('/api/requires_captcha', async (req, res) => {
   try {
-    // 🔄 Получаем ключи из переменных окружения
-    const siteKey = process.env.CAPTCHA_SITE_KEY || '1x00000000000000000000AA';
-    const secretKey = process.env.CAPTCHA_SECRET_KEY || '1x0000000000000000000000000000000AA';
-    const enabled = process.env.CAPTCHA_ENABLED === 'true';
+    console.log('[CAPTCHA] Checking requirement for giveaway:', req.body);
     
-    res.json({
-      ok: true,
-      site_key: siteKey,
-      test_mode: !enabled || siteKey === '1x00000000000000000000AA',
-      enabled: enabled
-    });
+    const { giveaway_id } = req.body;
+    
+    if (!giveaway_id) {
+      return res.status(400).json({ error: 'giveaway_id is required' });
+    }
+    
+    // Проверяем в БД, активна ли механика Captcha для этого розыгрыша
+    const result = await pool.query(
+      `SELECT is_active FROM giveaway_mechanics 
+       WHERE giveaway_id = $1 AND mechanic_type = 'captcha'`,
+      [giveaway_id]
+    );
+    
+    const requires_captcha = result.rows.length > 0 && result.rows[0].is_active === true;
+    
+    console.log('[CAPTCHA] Result:', { giveaway_id, requires_captcha });
+    
+    res.json({ requires_captcha });
     
   } catch (error) {
-    console.error('[CAPTCHA] Config error:', error);
-    res.status(500).json({ ok: false, error: 'server_error' });
+    console.error('[CAPTCHA] Error checking requirement:', error);
+    res.status(500).json({ error: 'server_error' });
   }
 });
 

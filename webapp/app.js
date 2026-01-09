@@ -846,28 +846,29 @@ function convertUTCtoMSK(utcDateString) {
 
 // Функции для работы с Captcha - Проверяет, требуется ли Captcha для розыгрыша
 async function checkCaptchaRequirement(giveawayId) {
+  console.log('[CAPTCHA] Checking requirement for giveaway', giveawayId);
+  
   try {
-    console.log(`[CAPTCHA] Checking requirement for giveaway ${giveawayId}`);
+    // Реальная проверка через Node.js API
+    const response = await fetch('/api/requires_captcha', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ giveaway_id: giveawayId })
+    });
     
-    // Проверяем через API, требуется ли Captcha для этого розыгрыша
-    const init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
-    if (!init_data) {
-      console.log("[CAPTCHA] No init_data available, skipping captcha check");
+    if (!response.ok) {
+      console.error('[CAPTCHA] Error response:', response.status);
       return false;
     }
     
-    // Используем существующий endpoint /api/check для получения информации о розыгрыше
-    const checkData = await api("/api/check", { gid: giveawayId, init_data });
-    console.log("[CAPTCHA] Check response for captcha requirement:", checkData);
-    
-    // Если в ответе есть флаг requires_captcha - используем его
-    // Временно заглушка: всегда возвращаем false (Captcha не требуется)
-    // TODO: Добавить реальную проверку когда API будет поддерживать
-    return checkData.requires_captcha || false;
+    const data = await response.json();
+    console.log('[CAPTCHA] Captcha requirement check result:', data);
+    return data.requires_captcha || false;
     
   } catch (error) {
-    console.error("[CAPTCHA] Error checking requirement:", error);
-    // В случае ошибки - пропускаем Captcha проверку
+    console.error('[CAPTCHA] Error checking requirement:', error);
     return false;
   }
 }
