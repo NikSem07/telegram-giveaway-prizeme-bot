@@ -5820,16 +5820,17 @@ async def user_join(cq: CallbackQuery):
     has_captcha = await is_mechanic_active(gid, 'captcha')
     
     if has_captcha:
-        # 🔄 ЕСТЬ CAPTCHA: отправляем пользователя в WebApp с простой Captcha
+        # ЕСТЬ CAPTCHA: отправляем пользователя в WebApp с простой Captcha
         
         # Генерируем Captcha и получаем цифры
         captcha_data = await generate_simple_captcha(gid, user_id)
         captcha_digits = captcha_data["digits"]
         captcha_token = captcha_data["token"]
         
-        # 🔥 НОВЫЙ URL: передаем все параметры для простой Captcha
-        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/captcha?gid={gid}&uid={user_id}&digits={captcha_digits}&token={captcha_token}"
-        
+        # Используем start_param для Telegram WebApp
+        start_param = f"captcha_{gid}_{user_id}_{captcha_digits}_{captcha_token}"
+        webapp_url = f"{WEBAPP_BASE_URL}/miniapp/captcha?tgWebAppStartParam={start_param}"
+
         # Открываем WebApp
         await cq.message.answer(
             "🛡️ <b>Для участия в этом розыгрыше необходимо пройти проверку безопасности.</b>\n\n"
@@ -5848,7 +5849,7 @@ async def user_join(cq: CallbackQuery):
         await cq.answer()
         return
     
-    # 🔥 НЕТ CAPTCHA: стандартный процесс участия
+    # НЕТ CAPTCHA: стандартный процесс участия
     # Выдаем билет
     async with session_scope() as s:
         res = await s.execute(
