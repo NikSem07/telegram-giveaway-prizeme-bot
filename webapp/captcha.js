@@ -388,18 +388,15 @@ async function verifyCaptcha() {
             document.getElementById('success-message').innerHTML = 
                 '✅ ' + (data.message || 'Проверка пройдена успешно!');
             
-            // 🔥 ЗАКРЫВАЕМ WEBAPP ИЛИ РЕДИРЕКТИМ
-            setTimeout(() => {
-                const tg = window.Telegram?.WebApp;
-                if (tg && typeof tg.close === 'function') {
-                    console.log('[SIMPLE-CAPTCHA] Closing WebApp');
-                    tg.close();
-                } else {
-                    console.log('[SIMPLE-CAPTCHA] Telegram WebApp close not available');
-                    // Fallback: редирект на success страницу
-                    window.location.href = '/miniapp/success?gid=' + giveawayId;
-                }
-            }, 2000);
+            // ✅ НЕ закрываем WebApp — показываем нужный экран
+            const ticket = encodeURIComponent(data.ticket_code || '');
+            const gid = encodeURIComponent(giveawayId || '');
+
+            if (data.already_participating) {
+                window.location.href = `/miniapp/already_participating.html?gid=${gid}&ticket_code=${ticket}`;
+            } else {
+                window.location.href = `/miniapp/success.html?gid=${gid}&ticket_code=${ticket}`;
+            }
             
         } else {
             console.log('[SIMPLE-CAPTCHA] Verification failed:', data.error);
@@ -419,11 +416,56 @@ async function verifyCaptcha() {
 }
 
 // Обновляет Captcha
-function refreshCaptcha() {
+async function refreshCaptcha() {
     console.log('[SIMPLE-CAPTCHA] Refreshing captcha');
-    loadCaptcha();
-    startTimer(60); // Сбрасываем таймер
+
     hideError();
+
+    if (!giveawayId || !userId) {
+        showError('Ошибка данных. Обновите страницу.');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/create_captcha_session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                giveaway_id: parseInt(giveawayId, 10),
+                user_id: parseInt(userId, 10)
+            })
+        });
+
+        const data = await resp.json().catch(() => ({}));
+        console.log('[SIMPLE-CAPTCHA] Refresh API response:', data);
+
+        if (!resp.ok || !data.ok) {
+            showError(data.message || 'Не удалось обновить цифры. Попробуйте ещё раз.');
+            return;
+        }
+
+        // ✅ обновляем глобальные значения
+        captchaDigits = data.digits;
+        captchaToken = data.token;
+
+        // ✅ сохраняем, чтобы не терялось при перезагрузках
+        sessionStorage.setItem('captchaDigits', captchaDigits);
+        sessionStorage.setItem('captchaToken', captchaToken);
+
+        // ✅ обновляем UI
+        loadCaptcha();
+        startTimer(60);
+
+        // очищаем поле ввода
+        const input = document.getElementById('captcha-input');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    } catch (e) {
+        console.error('[SIMPLE-CAPTCHA] Refresh error:', e);
+        showError('Ошибка сети при обновлении. Попробуйте ещё раз.');
+    }
 }
 
 // Навигация назад
