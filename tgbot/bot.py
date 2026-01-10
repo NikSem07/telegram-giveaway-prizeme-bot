@@ -1689,16 +1689,20 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                         await s.execute(
                             text("""
                                 INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
-                                VALUES (:gid, :u, :code, 1, :ts)
+                                VALUES (:gid, :u, :code, :prelim_ok, :ts)
                             """),
                             {
                                 "gid": giveaway_id,
                                 "u": user_id,
                                 "code": code,
-                                # ✅ timestamp WITHOUT time zone -> передаём NAIVE datetime
-                                "ts": datetime.utcnow()
+                                "prelim_ok": True,          # ✅ boolean
+                                "ts": datetime.utcnow()     # ✅ naive datetime под timestamp without tz
                             }
                         )
+
+                        # ВАЖНО: фиксируем транзакцию
+                        await s.commit()
+
                         return {
                             "ok": True,
                             "message": "✅ Вы успешно участвуете в розыгрыше!",
@@ -1711,6 +1715,7 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                             f"❌ Ticket insert failed (captcha) gid={giveaway_id} uid={user_id} attempt={attempt+1} code={code}: {e}",
                             exc_info=True
                         )
+                        await s.rollback()
                         continue
                     
                 return {"ok": False, "message": "Ошибка при выдаче билета. Попробуйте еще раз.", "ticket_code": None, "already_participating": False}
@@ -5893,9 +5898,9 @@ async def user_join(cq: CallbackQuery):
                     await s.execute(
                         text("""
                             INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
-                            VALUES (:gid, :u, :code, 1, :ts)
+                            VALUES (:gid, :u, :code, :prelim_ok, :ts)
                         """),
-                        {"gid": gid, "u": user_id, "code": code, "ts": datetime.utcnow()}
+                        {"gid": gid, "u": user_id, "code": code, "prelim_ok": True, "ts": datetime.utcnow()}
                     )
                     await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False)
                     break
