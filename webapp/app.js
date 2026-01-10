@@ -1217,7 +1217,19 @@ function initializeCurrentPage() {
       case '/miniapp/results_lose':
           initializeResultsLosePage();
           break;
-      default:
+      default: {
+          // ✅ Разрешаем статические страницы (не SPA), чтобы роутер их НЕ редиректил на index
+          const allowedStaticPages = new Set([
+              '/miniapp/success.html',
+              '/miniapp/already_participating.html',
+              '/miniapp/captcha.html'
+          ]);
+
+          if (allowedStaticPages.has(path)) {
+              console.log('[MULTI-PAGE] Allowed static page, skipping SPA redirect:', path);
+              return;
+          }
+
           // Для неизвестных путей редиректим на главную SPA
           if (path.startsWith('/miniapp/')) {
               console.log("[MULTI-PAGE] Unknown miniapp path, redirecting to index:", path);
@@ -1225,6 +1237,8 @@ function initializeCurrentPage() {
           } else {
               console.log("[MULTI-PAGE] Not a miniapp path, staying on:", path);
           }
+          break;
+      }
   }
 }
 

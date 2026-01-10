@@ -392,6 +392,10 @@ async function verifyCaptcha() {
             const ticket = encodeURIComponent(data.ticket_code || '');
             const gid = encodeURIComponent(giveawayId || '');
 
+            sessionStorage.setItem('prizeme_ticket_code', data.ticket_code || '');
+            sessionStorage.setItem('prizeme_gid', giveawayId || '');
+            sessionStorage.setItem('prizeme_already', data.already_participating ? '1' : '0');
+
             if (data.already_participating) {
                 window.location.href = `/miniapp/already_participating.html?gid=${gid}&ticket_code=${ticket}`;
             } else {
