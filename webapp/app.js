@@ -324,7 +324,7 @@ async function checkFlow() {
 
     console.log("[MULTI-PAGE] Starting check with gid:", gid);
 
-    // 🔄 ДОБАВЛЕНО: Проверка Captcha перед основным потоком
+    // Проверка Captcha перед основным потоком
     const requiresCaptcha = await checkCaptchaRequirement(gid);
     if (requiresCaptcha) {
       console.log("[CAPTCHA] Giveaway requires captcha verification");
@@ -332,17 +332,25 @@ async function checkFlow() {
       // Получаем site key для отображения Captcha
       const captchaSiteKey = await getCaptchaSiteKey();
       if (captchaSiteKey && captchaSiteKey !== "1x00000000000000000000AA") {
-        // 🔄 Сохраняем данные для Captcha проверки
+        // Сохраняем данные для Captcha проверки
         sessionStorage.setItem('prizeme_gid', gid);
         
-        // 🔄 Получаем init_data для использования на странице Captcha
+        // Получаем init_data для использования на странице Captcha
         const tg = window.Telegram?.WebApp;
         let init_data = tg?.initData || '';
         if (init_data) {
           sessionStorage.setItem('prizeme_init_data', init_data);
         }
         
-        // 🔄 Редирект на страницу Captcha (будет создана позже)
+        // Сохраняем user_id (fallback для captcha.html)
+        try {
+          const uid = tg?.initDataUnsafe?.user?.id;
+          if (uid) {
+            sessionStorage.setItem('prizeme_user_id', String(uid));
+          }
+        } catch (e) {}
+
+        // Редирект на страницу Captcha (будет создана позже)
         console.log("[CAPTCHA] Redirecting to captcha.html page");
         window.location.href = `/miniapp/captcha.html?gid=${encodeURIComponent(gid)}`;
         return;

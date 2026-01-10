@@ -140,6 +140,26 @@ async function initializeCaptchaPage() {
         console.log(`[SIMPLE-CAPTCHA] User ID from initDataUnsafe: ${userId}`);
     }
     
+    // Fallback: пробуем достать userId из сохраненного init_data
+    if (!userId) {
+        try {
+            const storedInit = sessionStorage.getItem('prizeme_init_data') || '';
+            if (storedInit) {
+                const params = new URLSearchParams(storedInit);
+                const userEncoded = params.get('user');
+                if (userEncoded) {
+                    const user = JSON.parse(decodeURIComponent(userEncoded));
+                    if (user?.id) {
+                        userId = String(user.id);
+                        console.log(`[SIMPLE-CAPTCHA] User ID from sessionStorage.prizeme_init_data: ${userId}`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[SIMPLE-CAPTCHA] Error parsing prizeme_init_data:', e);
+        }
+    }
+
     if (!userId) {
         userId = sessionStorage.getItem('prizeme_user_id');
         console.log(`[SIMPLE-CAPTCHA] User ID from sessionStorage: ${userId}`);
