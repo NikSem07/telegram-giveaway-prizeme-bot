@@ -1299,8 +1299,16 @@ function initializeCurrentPage() {
           ]);
 
           if (allowedStaticPages.has(path)) {
-              console.log('[MULTI-PAGE] Allowed static page, skipping SPA redirect:', path);
-              return;
+            console.log('[MULTI-PAGE] Allowed static page, skipping SPA redirect:', path);
+
+            // ✅ Запускаем нужную инициализацию для статических страниц
+            if (path === '/miniapp/success.html') {
+              initializeSuccessPage();
+            } else if (path === '/miniapp/already_participating.html') {
+              initializeAlreadyPage();
+            }
+            // captcha.html сам инициализируется своим captcha.js
+            return;
           }
 
           // Для неизвестных путей редиректим на главную SPA
