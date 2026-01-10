@@ -383,24 +383,53 @@ async function verifyCaptcha() {
         if (data.ok) {
             console.log('[SIMPLE-CAPTCHA] Verification successful:', data.message);
             
-            // Показываем успех
             showSuccess();
-            document.getElementById('success-message').innerHTML = 
-                '✅ ' + (data.message || 'Проверка пройдена успешно!');
-            
-            // ✅ НЕ закрываем WebApp — показываем нужный экран
+            document.getElementById('success-message').innerHTML = '✅ ' + (data.message || 'Проверка пройдена успешно!');
+
+            // Показываем успех
+            // Подготовим данные для success/already экранов (они читают prizeme_ticket и prizeme_end_at)
+            try {
+                sessionStorage.setItem('prizeme_ticket', data.ticket_code || '');  // ✅ ключ как в app.js
+                sessionStorage.setItem('prizeme_gid', giveawayId || '');
+
+                // Достаём end_at_utc через /api/check (как в обычном флоу)
+                const tg = window.Telegram?.WebApp;
+                let init_data = tg?.initData || '';
+
+                if (!init_data) {
+                    const storedInit = sessionStorage.getItem('prizeme_init_data');
+                    if (storedInit) init_data = storedInit;
+                }
+
+                if (init_data) {
+                    const resp = await fetch('/api/check', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            gid: parseInt(giveawayId, 10),
+                            init_data: init_data
+                        })
+                    });
+
+                    const checkData = await resp.json().catch(() => ({}));
+                    if (resp.ok && checkData && checkData.end_at_utc) {
+                        sessionStorage.setItem('prizeme_end_at', checkData.end_at_utc); // ✅ ключ как в app.js
+                    }
+                }
+            } catch (e) {
+                console.error('[SIMPLE-CAPTCHA] Failed to prepare success/already storage:', e);
+            }
+
+            // ✅ Редирект на нужную статическую страницу
             const ticket = encodeURIComponent(data.ticket_code || '');
             const gid = encodeURIComponent(giveawayId || '');
-
-            sessionStorage.setItem('prizeme_ticket_code', data.ticket_code || '');
-            sessionStorage.setItem('prizeme_gid', giveawayId || '');
-            sessionStorage.setItem('prizeme_already', data.already_participating ? '1' : '0');
 
             if (data.already_participating) {
                 window.location.href = `/miniapp/already_participating.html?gid=${gid}&ticket_code=${ticket}`;
             } else {
                 window.location.href = `/miniapp/success.html?gid=${gid}&ticket_code=${ticket}`;
             }
+
             
         } else {
             console.log('[SIMPLE-CAPTCHA] Verification failed:', data.error);
