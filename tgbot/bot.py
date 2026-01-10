@@ -1683,7 +1683,7 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                 }
             else:
                 # Выдаем новый билет
-                for _ in range(5):
+                for attempt in range(5):
                     code = gen_ticket_code()
                     try:
                         await s.execute(
@@ -1692,21 +1692,27 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                                 VALUES (:gid, :u, :code, 1, :ts)
                             """),
                             {
-                                "gid": giveaway_id, 
-                                "u": user_id, 
-                                "code": code, 
-                                "ts": datetime.now(timezone.utc)
+                                "gid": giveaway_id,
+                                "u": user_id,
+                                "code": code,
+                                # ✅ timestamp WITHOUT time zone -> передаём NAIVE datetime
+                                "ts": datetime.utcnow()
                             }
                         )
                         return {
-                            "ok": True, 
-                            "message": "✅ Вы успешно участвуете в розыгрыше!", 
+                            "ok": True,
+                            "message": "✅ Вы успешно участвуете в розыгрыше!",
                             "ticket_code": code,
                             "already_participating": False
                         }
-                    except Exception:
+
+                    except Exception as e:
+                        logging.error(
+                            f"❌ Ticket insert failed (captcha) gid={giveaway_id} uid={user_id} attempt={attempt+1} code={code}: {e}",
+                            exc_info=True
+                        )
                         continue
-                
+                    
                 return {"ok": False, "message": "Ошибка при выдаче билета. Попробуйте еще раз.", "ticket_code": None, "already_participating": False}
                 
     except Exception as e:
@@ -5889,7 +5895,7 @@ async def user_join(cq: CallbackQuery):
                             INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
                             VALUES (:gid, :u, :code, 1, :ts)
                         """),
-                        {"gid": gid, "u": user_id, "code": code, "ts": datetime.now(timezone.utc)}
+                        {"gid": gid, "u": user_id, "code": code, "ts": datetime.utcnow()}
                     )
                     await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False)
                     break
