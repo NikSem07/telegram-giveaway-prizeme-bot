@@ -343,8 +343,8 @@ async function checkFlow() {
         }
         
         // 🔄 Редирект на страницу Captcha (будет создана позже)
-        console.log("[CAPTCHA] Redirecting to captcha page");
-        window.location.href = '/miniapp/captcha';
+        console.log("[CAPTCHA] Redirecting to captcha.html page");
+        window.location.href = `/miniapp/captcha.html?gid=${encodeURIComponent(gid)}`;
         return;
       } else {
         // Captcha отключена или в тестовом режиме - продолжаем обычный flow

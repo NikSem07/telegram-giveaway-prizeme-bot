@@ -7901,10 +7901,44 @@ def make_internal_app():
                 "message": "❌ Ошибка при проверке. Попробуйте еще раз."
             }, status=500)
 
+    async def create_simple_captcha_session(request: web.Request):
+        """
+        Internal API: создать captcha-сессию и вернуть digits+token
+        """
+        try:
+            data = await request.json()
+            user_id = int(data.get("user_id") or 0)
+            giveaway_id = int(data.get("giveaway_id") or 0)
+
+            if not user_id or not giveaway_id:
+                return web.json_response(
+                    {"ok": False, "error": "missing_parameters", "message": "user_id и giveaway_id обязательны"},
+                    status=400
+                )
+
+            captcha_data = await generate_simple_captcha(giveaway_id, user_id)
+
+            return web.json_response({
+                "ok": True,
+                "giveaway_id": giveaway_id,
+                "user_id": user_id,
+                "digits": captcha_data["digits"],
+                "token": captcha_data["token"],
+                "expires_in": captcha_data.get("expires_in", 600),
+            })
+
+        except Exception as e:
+            logging.error(f"❌ [SIMPLE-CAPTCHA-API] create_session error: {e}", exc_info=True)
+            return web.json_response(
+                {"ok": False, "error": "server_error", "message": "Ошибка генерации captcha"},
+                status=500
+            )
+
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_simple_captcha_and_participate", verify_simple_captcha_and_participate)
+    app.router.add_post("/api/create_simple_captcha_session", create_simple_captcha_session)
 
     return app
 

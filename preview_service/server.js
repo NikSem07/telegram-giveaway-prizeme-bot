@@ -1345,6 +1345,32 @@ app.post('/api/verify_captcha', async (req, res) => {
   }
 });
 
+app.post("/api/create_captcha_session", async (req, res) => {
+  try {
+    const giveaway_id = parseInt(req.body?.giveaway_id, 10);
+    const user_id = parseInt(req.body?.user_id, 10);
+
+    if (!giveaway_id || !user_id) {
+      return res.status(400).json({ ok: false, error: "missing_parameters", message: "giveaway_id и user_id обязательны" });
+    }
+
+    const botUrl = (process.env.BOT_INTERNAL_URL || "http://127.0.0.1:8088") + "/api/create_simple_captcha_session";
+
+    const r = await fetch(botUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ giveaway_id, user_id }),
+    });
+
+    const data = await r.json().catch(() => ({}));
+    return res.status(r.status).json(data);
+
+  } catch (e) {
+    console.error("[API] /api/create_captcha_session error:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
 // GET /api/captcha_config
 app.get('/api/captcha_config', (req, res) => {
   res.json({

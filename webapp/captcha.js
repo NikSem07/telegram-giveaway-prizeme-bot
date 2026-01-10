@@ -97,7 +97,16 @@ async function initializeCaptchaPage() {
             console.error('[SIMPLE-CAPTCHA] Error parsing URL:', error);
         }
     }
-    
+
+    let gidFromUrl = null;
+    try {
+        const url = new URL(window.location.href);
+        gidFromUrl = url.searchParams.get('gid');
+        if (gidFromUrl) {
+            console.log(`[SIMPLE-CAPTCHA] gid from URL: ${gidFromUrl}`);
+        }
+    } catch (e) {}
+
     // 3. Парсим start_param если он есть и имеет правильный формат
     if (startParam && startParam.startsWith('captcha_')) {
         const parsed = parseStartParam(startParam);
@@ -126,22 +135,9 @@ async function initializeCaptchaPage() {
         console.log(`[SIMPLE-CAPTCHA] Giveaway ID from sessionStorage: ${giveawayId}`);
     }
     
-    if (!userId && tg) {
-        // Пробуем получить user_id из Telegram WebApp
-        try {
-            const initData = tg.initData || '';
-            const params = new URLSearchParams(initData);
-            const userEncoded = params.get('user');
-            
-            if (userEncoded) {
-                const userJson = decodeURIComponent(userEncoded);
-                const user = JSON.parse(userJson);
-                userId = user.id;
-                console.log(`[SIMPLE-CAPTCHA] User ID from Telegram WebApp: ${userId}`);
-            }
-        } catch (error) {
-            console.error('[SIMPLE-CAPTCHA] Error parsing Telegram user data:', error);
-        }
+    if (!userId && tg?.initDataUnsafe?.user?.id) {
+        userId = String(tg.initDataUnsafe.user.id);
+        console.log(`[SIMPLE-CAPTCHA] User ID from initDataUnsafe: ${userId}`);
     }
     
     if (!userId) {
@@ -149,6 +145,10 @@ async function initializeCaptchaPage() {
         console.log(`[SIMPLE-CAPTCHA] User ID from sessionStorage: ${userId}`);
     }
     
+    if (!giveawayId && gidFromUrl) {
+        giveawayId = gidFromUrl;
+    }
+
     // 5. Проверяем наличие обязательных данных
     if (!giveawayId || !userId) {
         console.error('[SIMPLE-CAPTCHA] Missing required data:', { giveawayId, userId });
@@ -162,6 +162,35 @@ async function initializeCaptchaPage() {
     
     console.log(`[SIMPLE-CAPTCHA] Ready: user_id=${userId}, giveaway_id=${giveawayId}`);
     
+    // Если digits/token не пришли из start_param — создаем captcha-сессию через backend
+    if (!captchaDigits || !captchaToken) {
+        console.log("[SIMPLE-CAPTCHA] No captcha data in start_param, creating session via API...");
+
+        const resp = await fetch("/api/create_captcha_session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                giveaway_id: parseInt(giveawayId, 10),
+                user_id: parseInt(userId, 10),
+            }),
+        });
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok || !data.ok) {
+            console.error("[SIMPLE-CAPTCHA] Failed to create captcha session:", data);
+            showError(data.message || "Не удалось создать проверку. Попробуйте еще раз.");
+            return;
+        }
+
+        captchaDigits = data.digits;
+        captchaToken = data.token;
+
+        console.log("[SIMPLE-CAPTCHA] Captcha session created:", {
+            giveawayId, userId, captchaDigits, tokenLen: captchaToken?.length
+        });
+    }
+
     // 7. Загружаем Captcha (будет использовать переданные цифры из start_param)
     await loadCaptcha();
     
