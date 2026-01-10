@@ -1657,6 +1657,18 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
         logging.info(f"[DB][captcha] DATABASE_URL env = {os.getenv('DATABASE_URL')}")
         logging.info(f"[DB][captcha] DB_PATH env = {os.getenv('DB_PATH')}")
 
+        # 2.5 Проверяем подписки ДО выдачи билета (как в обычном user_join)
+        ok, details = await check_membership_on_all(bot, user_id, giveaway_id)
+        if not ok:
+            logging.info(f"🚫 [SIMPLE-CAPTCHA] Membership not ok for user={user_id}, giveaway={giveaway_id}")
+            return {
+                "ok": False,
+                "message": "Подпишитесь на все каналы и попробуйте снова.",
+                "ticket_code": None,
+                "already_participating": False,
+                "need_subscription_required": True
+            }
+
         # 3. Выдаем билет
         async with session_scope() as s:
 

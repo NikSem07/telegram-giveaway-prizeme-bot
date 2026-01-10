@@ -328,6 +328,35 @@ async function checkFlow() {
     const requiresCaptcha = await checkCaptchaRequirement(gid);
     if (requiresCaptcha) {
       console.log("[CAPTCHA] Giveaway requires captcha verification");
+
+      // ✅ Сначала проверяем выполнение условий (подписки) как в обычном флоу
+      const tg = window.Telegram?.WebApp;
+      let init_data = tg?.initData || '';
+
+      if (!init_data) {
+        const storedInit = sessionStorage.getItem('prizeme_init_data');
+        if (storedInit) init_data = storedInit;
+      }
+
+      if (!init_data) {
+        console.log("[CAPTCHA] No init_data, redirecting to need_subscription");
+        sessionStorage.setItem('prizeme_gid', gid);
+        window.location.href = '/miniapp/need_subscription';
+        return;
+      }
+
+      const check = await api("/api/check", { gid, init_data });
+      console.log("[CAPTCHA] Pre-check before captcha:", check);
+
+      // Если условия не выполнены — показываем экран подписок, НЕ показываем капчу
+      if (!check.ok || (check.need && check.need.length > 0)) {
+        console.log("[CAPTCHA] Need subscription before captcha, redirecting to need_subscription");
+        sessionStorage.setItem('prizeme_gid', gid);
+        sessionStorage.setItem('prizeme_init_data', init_data);
+        sessionStorage.setItem('prizeme_need_data', JSON.stringify(check.need || []));
+        window.location.href = '/miniapp/need_subscription';
+        return;
+      }
       
       // Получаем site key для отображения Captcha
       const captchaSiteKey = await getCaptchaSiteKey();

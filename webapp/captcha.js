@@ -433,8 +433,31 @@ async function verifyCaptcha() {
             
         } else {
             console.log('[SIMPLE-CAPTCHA] Verification failed:', data.error);
+
+            // ✅ Если backend сказал, что не выполнены условия подписки — уводим на экран подписок
+            if (data.need_subscription_required) {
+                try {
+                    sessionStorage.setItem('prizeme_gid', giveawayId || '');
+
+                    const tg = window.Telegram?.WebApp;
+                    const init_data = tg?.initData || sessionStorage.getItem('prizeme_init_data') || '';
+                    if (init_data) {
+                        sessionStorage.setItem('prizeme_init_data', init_data);
+                    }
+                } catch (e) {
+                    console.error('[SIMPLE-CAPTCHA] Failed to store subscription context:', e);
+                }
+
+                // На всякий случай сбросим кнопку, чтобы не зависла
+                resetButton();
+
+                window.location.href = '/miniapp/need_subscription';
+                return;
+            }
+
+            // Обычная ошибка капчи
             showError(data.message || data.error || 'Неверные цифры. Попробуйте еще раз.');
-            
+
             // Сбрасываем кнопку и очищаем поле
             resetButton();
             document.getElementById('captcha-input').value = '';
