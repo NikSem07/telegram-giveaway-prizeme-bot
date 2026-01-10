@@ -644,14 +644,69 @@ function openChannel(url) {
   }
 }
 
+function getQueryParam(name) {
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function ensureEndAtInStorage(gid) {
+  try {
+    if (!gid) return;
+
+    // если уже есть — ничего не делаем
+    const existing = sessionStorage.getItem('prizeme_end_at');
+    if (existing) return;
+
+    let init_data = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    if (!init_data) {
+      const storedInit = sessionStorage.getItem('prizeme_init_data');
+      if (storedInit) init_data = storedInit;
+    }
+    if (!init_data) return;
+
+    const resp = await fetch('/api/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gid: parseInt(gid, 10), init_data })
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data && data.end_at_utc) {
+      sessionStorage.setItem('prizeme_end_at', data.end_at_utc);
+      console.log('[END_AT] Stored end_at_utc:', data.end_at_utc);
+    }
+  } catch (e) {
+    console.error('[END_AT] Failed to ensure end_at:', e);
+  }
+}
+
 
 // Инициализация для экрана "Успех"
-function initializeSuccessPage() {
+async function initializeSuccessPage() {
   console.log("[SUCCESS] Initializing new success page");
   
-  const ticket = sessionStorage.getItem('prizeme_ticket');
-  const endAt = sessionStorage.getItem('prizeme_end_at');
-  const gid = sessionStorage.getItem('prizeme_gid');
+  let ticket = sessionStorage.getItem('prizeme_ticket');
+  let endAt  = sessionStorage.getItem('prizeme_end_at');
+  let gid    = sessionStorage.getItem('prizeme_gid');
+
+  const ticketFromUrl = getQueryParam('ticket_code');
+  const gidFromUrl = getQueryParam('gid');
+
+  if (!gid && gidFromUrl) {
+    gid = gidFromUrl;
+    sessionStorage.setItem('prizeme_gid', gid);
+  }
+
+  if (!ticket && ticketFromUrl) {
+    ticket = ticketFromUrl;
+    sessionStorage.setItem('prizeme_ticket', ticket);
+  }
+
+  await ensureEndAtInStorage(gid);
+  endAt = sessionStorage.getItem('prizeme_end_at');
   
   // Устанавливаем номер билета
   if (ticket) {
@@ -944,12 +999,30 @@ function handleCaptchaSuccess(giveawayId, token) {
 }
 
 // Инициализация для экрана "Уже участвуете"
-function initializeAlreadyPage() {
+async function initializeAlreadyPage() {
   console.log("[ALREADY] Initializing already page");
 
-  const ticket = sessionStorage.getItem('prizeme_ticket');
-  const endAt = sessionStorage.getItem('prizeme_end_at');
-  const gid    = sessionStorage.getItem('prizeme_gid');
+  let ticket = sessionStorage.getItem('prizeme_ticket');
+  let endAt  = sessionStorage.getItem('prizeme_end_at');
+  let gid    = sessionStorage.getItem('prizeme_gid');
+
+  // ✅ Fallback из URL (когда пришли после captcha-redirect)
+  const ticketFromUrl = getQueryParam('ticket_code');
+  const gidFromUrl = getQueryParam('gid');
+
+  if (!gid && gidFromUrl) {
+    gid = gidFromUrl;
+    sessionStorage.setItem('prizeme_gid', gid);
+  }
+
+  if (!ticket && ticketFromUrl) {
+    ticket = ticketFromUrl;
+    sessionStorage.setItem('prizeme_ticket', ticket);
+  }
+
+  // ✅ если endAt нет — попробуем догрузить через /api/check
+  await ensureEndAtInStorage(gid);
+  endAt = sessionStorage.getItem('prizeme_end_at');
 
   // 1. Номер билета — те же ID, что на success
   const ticketElement = document.getElementById('ticket-number');
