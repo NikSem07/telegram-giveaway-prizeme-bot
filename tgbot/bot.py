@@ -1654,8 +1654,18 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
             if gw.status != GiveawayStatus.ACTIVE:
                 return {"ok": False, "message": "Розыгрыш не активен.", "ticket_code": None, "already_participating": False}
         
+        logging.info(f"[DB][captcha] DATABASE_URL env = {os.getenv('DATABASE_URL')}")
+        logging.info(f"[DB][captcha] DB_PATH env = {os.getenv('DB_PATH')}")
+
         # 3. Выдаем билет
         async with session_scope() as s:
+
+            try:
+                bind = s.get_bind()
+                logging.info(f"[DB][captcha] SQLAlchemy bind = {bind}")
+            except Exception as e:
+                logging.error(f"[DB][captcha] Cannot get bind: {e}")
+
             # Проверяем, участвует ли уже пользователь
             res = await s.execute(
                 text("SELECT ticket_code FROM entries WHERE giveaway_id=:gid AND user_id=:u"),
@@ -5883,7 +5893,8 @@ async def user_join(cq: CallbackQuery):
                     )
                     await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False)
                     break
-                except Exception:
+                except Exception as e:
+                    logging.error(f"❌ Ticket insert failed (gid={giveaway_id}, uid={user_id}): {e}", exc_info=True)
                     continue
     
     await cq.answer()
