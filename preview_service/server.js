@@ -458,57 +458,49 @@ app.get('/health', (req, res) => {
 // Serve static files from webapp directory
 app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
 
-app.get('/miniapp', (req, res) => {
-  res.redirect(301, '/miniapp/');
-});
-
 // HTML endpoints for Mini App
 app.get('/miniapp/', (req, res) => {
   const tgWebAppStartParam = req.query.tgWebAppStartParam;
   console.log('🎯 [ROOT] Request to /miniapp/, tgWebAppStartParam:', tgWebAppStartParam);
-  
-  if (tgWebAppStartParam && tgWebAppStartParam !== 'demo') {
-    console.log('🎯 [ROOT] Serving loading page with gid:', tgWebAppStartParam);
-    
-    // Отправляем HTML который сохранит параметр и init_data и сразу перейдет на loading
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>PrizeMe - Loading</title>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <script>
-          (function() {
-            try {
-              var tg = window.Telegram && Telegram.WebApp;
-              if (tg && tg.initData) {
-                sessionStorage.setItem('prizeme_init_data', tg.initData);
-                console.log('🎯 [ROOT-SCRIPT] Saved init_data to sessionStorage, length:', tg.initData.length);
-              } else {
-                console.log('⚠️ [ROOT-SCRIPT] Telegram WebApp or initData not available on root page');
-              }
-            } catch (e) {
-              console.log('❌ [ROOT-SCRIPT] Error while reading initData:', e);
-            }
 
-            // Сохраняем gid
-            sessionStorage.setItem('prizeme_gid', '${tgWebAppStartParam}');
-            console.log('🎯 [ROOT-SCRIPT] Saved gid to sessionStorage:', '${tgWebAppStartParam}');
-            
-            // Немедленный переход на loading
-            window.location.href = '/miniapp/loading?gid=${tgWebAppStartParam}';
-          })();
-        </script>
-      </head>
-      <body>
-        <p>Redirecting to participation...</p>
-      </body>
-      </html>
-    `);
-  } else {
-    console.log('❌ [ROOT] No valid start param, redirecting to index');
-    res.redirect('/miniapp/index');
+  // Если нет параметра розыгрыша — просто отдаём index.html (БЕЗ redirect)
+  if (!tgWebAppStartParam || tgWebAppStartParam === 'demo') {
+    console.log('ℹ️ [ROOT] No valid start param, serving index.html');
+    return res.sendFile(path.join(__dirname, '../webapp/index.html'));
   }
+
+  const gid = String(tgWebAppStartParam).replace(/'/g, "\\'");
+
+  // Если параметр есть — отдаем маленькую страницу, которая сохраняет initData+gid
+  // и делает replace на /miniapp/loading (replace = без истории, меньше шансов на циклы)
+  return res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>PrizeMe - Loading</title>
+      <script src="https://telegram.org/js/telegram-web-app.js"></script>
+      <script>
+        (function () {
+          try {
+            var tg = window.Telegram && Telegram.WebApp;
+            if (tg && tg.initData) {
+              sessionStorage.setItem('prizeme_init_data', tg.initData);
+            }
+          } catch (e) {}
+
+          try {
+            sessionStorage.setItem('prizeme_gid', '${gid}');
+          } catch (e) {}
+
+          // Важно: replace, не href
+          window.location.replace('/miniapp/loading?gid=${gid}');
+        })();
+      </script>
+    </head>
+    <body></body>
+    </html>
+  `);
 });
 
 app.get('/miniapp/loading', (req, res) => {
