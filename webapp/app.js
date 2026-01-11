@@ -345,15 +345,16 @@ async function checkFlow() {
         return;
       }
 
-      const check = await api("/api/check", { gid, init_data });
-      console.log("[CAPTCHA] Pre-check before captcha:", check);
+      const pre = await api("/api/check_membership_only", { gid, init_data });
+      console.log("[CAPTCHA] Pre-check before captcha (membership only):", pre);
 
-      // Если условия не выполнены — показываем экран подписок, НЕ показываем капчу
-      if (!check.ok || (check.need && check.need.length > 0)) {
-        console.log("[CAPTCHA] Need subscription before captcha, redirecting to need_subscription");
+      if (!pre.ok) throw new Error("Membership pre-check failed");
+
+      if (pre.need && pre.need.length > 0) {
+        // отправляем на need_subscription
         sessionStorage.setItem('prizeme_gid', gid);
         sessionStorage.setItem('prizeme_init_data', init_data);
-        sessionStorage.setItem('prizeme_need_data', JSON.stringify(check.need || []));
+        sessionStorage.setItem('prizeme_need_data', JSON.stringify(pre.need || []));
         window.location.href = '/miniapp/need_subscription';
         return;
       }
