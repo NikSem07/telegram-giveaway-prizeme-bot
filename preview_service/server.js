@@ -24,7 +24,7 @@ console.log('   BOT_TOKEN:', process.env.BOT_TOKEN ? '***SET***' : 'NOT SET');
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../webapp')));
-app.use('/miniapp', express.static(path.join(__dirname, '../webapp')));
+app.use('/miniapp', express.static(path.join(__dirname, '../webapp'), { index: false }));
 
 
 // Конфигурация из .env
@@ -457,6 +457,10 @@ app.get('/health', (req, res) => {
 
 // Serve static files from webapp directory
 app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
+
+app.get('/miniapp', (req, res) => {
+  res.redirect(301, '/miniapp/');
+});
 
 // HTML endpoints for Mini App
 app.get('/miniapp/', (req, res) => {
