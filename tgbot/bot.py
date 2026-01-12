@@ -5654,8 +5654,8 @@ async def cb_mechanics(cq: CallbackQuery):
     # Извлекаем ID розыгрыша
     gid = int(cq.data.split(":")[2])
     
-    # 🔥 ИСПРАВЛЕНИЕ: Используем новую функцию с явным user_id
-    user_id = cq.from_user.id  # Это реальный ID пользователя, а не бота!
+    # ИСПОЛЬЗУЕМ cq.from_user.id - это реальный ID пользователя
+    user_id = cq.from_user.id
     
     # Диагностический лог
     logging.info(f"🔍 [DIAGNOSTICS] cb_mechanics: user_id={user_id}, giveaway_id={gid}")
@@ -5689,7 +5689,7 @@ async def cb_mechanics_captcha(cq: CallbackQuery):
             show_alert=True
         )
         return
-
+    
     gid = int(cq.data.split(":")[2])
 
     # ОТЛАДОЧНЫЙ КОД:
@@ -5711,8 +5711,8 @@ async def cb_mechanics_captcha(cq: CallbackQuery):
         else:
             await cq.answer("❌ Captcha отключена", show_alert=True)
         
-        # Обновляем текст в блоке механик, чтобы показать текущее состояние
-        await update_mechanics_text(cq.message, gid)
+        # Используем правильный user_id для обновления сообщения
+        await update_mechanics_text_with_user(cq.message, gid, user_id)  # 🔥 user_id из cq.from_user.id
     else:
         await cq.answer("❌ Ошибка сохранения настроек Captcha", show_alert=True)
 
@@ -5726,8 +5726,11 @@ async def cb_mechanics_referral(cq: CallbackQuery):
 # Обработчик кнопки "⬅️ Назад" в дополнительных механиках
 @dp.callback_query(F.data.startswith("mechanics:back:"))
 async def cb_mechanics_back(cq: CallbackQuery):
-    """Обработчик кнопки 'Назад' в дополнительных механиках - возвращает к финальному подтверждению"""
+
     gid = int(cq.data.split(":")[2])
+    
+    # ПЕРЕДАЕМ user_id ДЛЯ КОРРЕКТНОГО ОТОБРАЖЕНИЯ КНОПКИ
+    user_id = cq.from_user.id
     
     # Получаем данные розыгрыша для предпросмотра
     async with session_scope() as s:
