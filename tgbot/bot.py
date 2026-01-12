@@ -1794,97 +1794,116 @@ def is_captcha_enabled() -> bool:
 # --- Проверка с явным указанием user_id ---
 async def update_mechanics_text_with_user(message: types.Message, giveaway_id: int, user_id: int):
 
-    # Получаем список подключенных механик
-    mechanics = await get_giveaway_mechanics(giveaway_id)
-    
-    # Формируем базовый текст
-    text = "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
-    text += "🤖 Защита от ботов с Captcha <i>(только для ПРЕМИУМ)</i>\n"
-    text += "🤝🏼 Реферальная система\n\n"
-    text += "Подключенные дополнительные механики:\n"
-    
-    # Добавляем подключенные механики
-    active_mechanics = [m for m in mechanics if m["is_active"]]
-    if active_mechanics:
-        for mechanic in active_mechanics:
-            if mechanic["type"] == "captcha":
-                text += "✅ Защита от ботов с Captcha\n"
-            elif mechanic["type"] == "referral":
-                text += "✅ Реферальная система\n"
-    else:
-        text += "(пока пусто)"
-    
-    # Клавиатура
-    kb = InlineKeyboardBuilder()
-    
-    # Используем переданный user_id
-    user_status = await get_user_status(user_id)
-    
-    # ТЕСТОВЫЙ ЛОГ
-    logging.info(f"🔍 [DIAGNOSTICS] update_mechanics_text_with_user: user_id={user_id}, status={user_status}")
-    
-    if user_status == 'premium':
-        # Премиум пользователи: кнопка с алмазом
-        kb.button(text="💎🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{giveaway_id}")
-    else:
-        # Стандартные пользователи: заблокированная кнопка
-        kb.button(text="🔒🤖 Подключить Captcha", callback_data=f"mechanics:captcha_blocked:{giveaway_id}")
-    
-    kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{giveaway_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{giveaway_id}")
-    kb.adjust(1)
-    
-    # Редактируем сообщение
     try:
-        await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass  # Если не удалось отредактировать - ничего страшного
-
-
-# --- Обновляет текст в блоке "Дополнительные механики" с учетом подключенных механик ---
-async def update_mechanics_text(message: types.Message, giveaway_id: int):
-    """
-    Старая версия для совместимости
-    """
-    # Пытаемся определить user_id
-    user_id = None
-    
-    if hasattr(message, 'from_user') and message.from_user:
-        user_id = message.from_user.id
-    elif hasattr(message, 'chat') and message.chat:
-        user_id = message.chat.id
-    
-    if user_id:
-        # Используем новую функцию
-        await update_mechanics_text_with_user(message, giveaway_id, user_id)
-    else:
-        # Fallback: показываем заблокированную версию
+        # ДИАГНОСТИЧЕСКИЙ ЛОГ
+        logging.info(f"🔍 [DIAGNOSTICS] update_mechanics_text_with_user: user_id={user_id}, giveaway_id={giveaway_id}")
+        
+        # Получаем статус пользователя
+        user_status = await get_user_status(user_id)
+        logging.info(f"🔍 [DIAGNOSTICS] Статус пользователя {user_id}: {user_status}")
+        
+        # Получаем список подключенных механик
+        mechanics = await get_giveaway_mechanics(giveaway_id)
+        
+        # Формируем базовый текст
         text = "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
         text += "🤖 Защита от ботов с Captcha <i>(только для ПРЕМИУМ)</i>\n"
         text += "🤝🏼 Реферальная система\n\n"
         text += "Подключенные дополнительные механики:\n"
         
-        mechanics = await get_giveaway_mechanics(giveaway_id)
-        active_mechanics = [m for m in mechanics if m["is_active"]]
+        # Добавляем подключенные механики
+        active_mechanics = [m for m in mechanics if m.get("is_active", False)]
         if active_mechanics:
             for mechanic in active_mechanics:
-                if mechanic["type"] == "captcha":
+                if mechanic.get("type") == "captcha":
                     text += "✅ Защита от ботов с Captcha\n"
-                elif mechanic["type"] == "referral":
+                elif mechanic.get("type") == "referral":
                     text += "✅ Реферальная система\n"
         else:
             text += "(пока пусто)"
         
+        # Клавиатура
         kb = InlineKeyboardBuilder()
-        kb.button(text="🔒🤖 Подключить Captcha", callback_data=f"mechanics:captcha_blocked:{giveaway_id}")
+        
+        # Динамическая кнопка в зависимости от статуса
+        if user_status == 'premium':
+            # Премиум пользователи: кнопка с алмазом
+            kb.button(text="💎🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{giveaway_id}")
+            logging.info(f"🔍 [DIAGNOSTICS] Показана PREMIUM кнопка для пользователя {user_id}")
+        else:
+            # Стандартные пользователи: заблокированная кнопка
+            kb.button(text="🔒🤖 Подключить Captcha", callback_data=f"mechanics:captcha_blocked:{giveaway_id}")
+            logging.info(f"🔍 [DIAGNOSTICS] Показана STANDARD кнопка для пользователя {user_id}")
+        
         kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{giveaway_id}")
         kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{giveaway_id}")
         kb.adjust(1)
         
+        # Редактируем сообщение
         try:
             await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-        except Exception:
-            pass
+            logging.info(f"✅ [DIAGNOSTICS] Сообщение обновлено для пользователя {user_id}")
+            return True
+        except Exception as e:
+            logging.error(f"❌ [DIAGNOSTICS] Ошибка редактирования сообщения: {e}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"❌ [DIAGNOSTICS] Ошибка в update_mechanics_text_with_user: {e}")
+        return False
+
+
+# --- Обновляет текст в блоке "Дополнительные механики" с учетом подключенных механик ---
+async def update_mechanics_text(message: types.Message, giveaway_id: int):
+
+    try:
+        # Пытаемся определить user_id
+        user_id = None
+        
+        if hasattr(message, 'from_user') and message.from_user:
+            user_id = message.from_user.id
+        elif hasattr(message, 'chat') and message.chat:
+            user_id = message.chat.id
+        
+        logging.info(f"🔍 [DIAGNOSTICS] update_mechanics_text: user_id={user_id}, giveaway_id={giveaway_id}")
+        
+        if user_id:
+            # Используем новую функцию
+            return await update_mechanics_text_with_user(message, giveaway_id, user_id)
+        else:
+            # Fallback: показываем заблокированную версию
+            text = "<b>Вы можете подключить дополнительные механики к розыгрышу</b>\n\n"
+            text += "🤖 Защита от ботов с Captcha <i>(только для ПРЕМИУМ)</i>\n"
+            text += "🤝🏼 Реферальная система\n\n"
+            text += "Подключенные дополнительные механики:\n"
+            
+            mechanics = await get_giveaway_mechanics(giveaway_id)
+            active_mechanics = [m for m in mechanics if m.get("is_active", False)]
+            if active_mechanics:
+                for mechanic in active_mechanics:
+                    if mechanic.get("type") == "captcha":
+                        text += "✅ Защита от ботов с Captcha\n"
+                    elif mechanic.get("type") == "referral":
+                        text += "✅ Реферальная система\n"
+            else:
+                text += "(пока пусто)"
+            
+            kb = InlineKeyboardBuilder()
+            kb.button(text="🔒🤖 Подключить Captcha", callback_data=f"mechanics:captcha_blocked:{giveaway_id}")
+            kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{giveaway_id}")
+            kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{giveaway_id}")
+            kb.adjust(1)
+            
+            try:
+                await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+                return True
+            except Exception as e:
+                logging.error(f"❌ Ошибка fallback редактирования: {e}")
+                return False
+                
+    except Exception as e:
+        logging.error(f"❌ Ошибка в update_mechanics_text: {e}")
+        return False
 
 # --- Отладочная функция для проверки механик ---
 async def debug_mechanics(giveaway_id: int):
