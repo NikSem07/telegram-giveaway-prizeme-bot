@@ -182,18 +182,18 @@ function checkImmediateResults() {
 
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_lose for gid:", gid);
-      window.location.replace(`/miniapp/results_lose?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING (results mode), gid:", gid);
+      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
       return true;
     }
 
     // Проверяем initData на случай запуска через startapp
     const initParam = tg.initDataUnsafe?.start_param;
-    
+
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] 🎲 Redirecting to results_lose from initData, gid:", gid);
-      window.location.replace(`/miniapp/results_lose?gid=${gid}`);
+      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING from initData (results mode), gid:", gid);
+      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
       return true;
     }
   } catch (e) {
@@ -201,6 +201,29 @@ function checkImmediateResults() {
   }
 
   return false;
+}
+
+// =========================
+// RESULTS: определяем, победитель ли текущий юзер
+// =========================
+function isCurrentUserWinner(results, tgApp) {
+  try {
+    // 1) Прямой флаг (если бэк его кладет)
+    if (results?.user?.is_winner === true) return true;
+
+    // 2) Сверяем user_id победителей с текущим telegram user id
+    const uid = tgApp?.initDataUnsafe?.user?.id;
+    if (!uid) return false;
+
+    const winners = Array.isArray(results?.winners) ? results.winners : [];
+    return winners.some(w =>
+      w?.is_current_user === true ||
+      (w?.user_id != null && Number(w.user_id) === Number(uid))
+    );
+  } catch (e) {
+    console.log("[RESULTS] isCurrentUserWinner error:", e);
+    return false;
+  }
 }
 
 
@@ -513,6 +536,54 @@ function initializeLoadingPage() {
   sessionStorage.setItem('prizeme_gid', gid);
   console.log('🎯 [LOADING] Saved gid to sessionStorage:', gid);
   
+  // RESULTS MODE (results_XXX)
+  if (gid && String(gid).startsWith("results_")) {
+    const realGid = String(gid).replace("results_", "");
+    console.log("[LOADING][RESULTS] Results mode detected, gid:", realGid);
+
+    // Берем init_data как обычно
+    const tgApp = window.Telegram?.WebApp;
+    let init_data = tgApp?.initData || '';
+
+    if (!init_data) {
+      try {
+        const storedInit = sessionStorage.getItem('prizeme_init_data');
+        if (storedInit) init_data = storedInit;
+      } catch (e) {}
+    }
+
+    if (!init_data) {
+      console.log("[LOADING][RESULTS] No init_data, redirecting to index");
+      window.location.href = '/miniapp/index';
+      return;
+    }
+
+    (async () => {
+      try {
+        const results = await api("/api/results", { gid: parseInt(realGid, 10), init_data });
+        console.log("[LOADING][RESULTS] /api/results response:", results);
+
+        // Сохраняем, чтобы win/lose быстро отрисовались
+        try { sessionStorage.setItem("prizeme_results", JSON.stringify(results)); } catch (e) {}
+
+        const winner = isCurrentUserWinner(results, tgApp);
+        console.log("[LOADING][RESULTS] winner =", winner);
+
+        if (winner) {
+          window.location.replace(`/miniapp/results_win?gid=${encodeURIComponent(realGid)}`);
+        } else {
+          window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(realGid)}`);
+        }
+      } catch (e) {
+        console.error("[LOADING][RESULTS] Failed to load results:", e);
+        // Фоллбек — если API не ответил, ведем на lose
+        window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(realGid)}`);
+      }
+    })();
+
+    return; // важно: не запускать checkFlow()
+  }
+
   // Запускаем проверку через 1 секунду (дает время для инициализации)
   setTimeout(() => {
     checkFlow();
@@ -1100,7 +1171,14 @@ function initializeResultsWinPage() {
     console.log("[RESULTS-WIN] Failed to parse stored results:", e);
   }
 
-  if (stored && stored.user && stored.user.is_winner) {
+  if (stored) {
+    const tgApp = window.Telegram?.WebApp;
+    const winner = isCurrentUserWinner(stored, tgApp);
+    if (!winner) {
+      console.log("[RESULTS-WIN] Stored says NOT winner, redirecting to lose");
+      window.location.replace(`/miniapp/results_lose?gid=${gid || ''}`);
+      return;
+    }
     renderResultsWin(stored);
     return;
   }
@@ -1390,7 +1468,14 @@ function initializeResultsLosePage() {
   }
 
   // Если есть сохранённые результаты и пользователь НЕ победитель — рендерим сразу
-  if (stored && stored.user && !stored.user.is_winner) {
+  if (stored) {
+    const tgApp = window.Telegram?.WebApp;
+    const winner = isCurrentUserWinner(stored, tgApp);
+    if (winner) {
+      console.log("[RESULTS-LOSE] Stored says WINNER, redirecting to win");
+      window.location.replace(`/miniapp/results_win?gid=${gid || ''}`);
+      return;
+    }
     renderResultsLose(stored);
     return;
   }
