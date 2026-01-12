@@ -1817,7 +1817,18 @@ async def update_mechanics_text(message: types.Message, giveaway_id: int):
     
     # Клавиатура
     kb = InlineKeyboardBuilder()
-    kb.button(text="🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{giveaway_id}")
+
+    # ПОЛУЧАЕМ СТАТУС ПОЛЬЗОВАТЕЛЯ ДЛЯ ДИНАМИЧЕСКОЙ КНОПКИ
+    user_id = message.from_user.id
+    user_status = await get_user_status(user_id)
+
+    if user_status == 'premium':
+        # Премиум пользователи: кнопка с алмазом
+        kb.button(text="💎🤖 Подключить Captcha", callback_data=f"mechanics:captcha:{giveaway_id}")
+    else:
+        # Стандартные пользователи: заблокированная кнопка
+        kb.button(text="🔒🤖 Подключить Captcha", callback_data=f"mechanics:captcha_blocked:{giveaway_id}")
+
     kb.button(text="🤝🏼 Подключить рефералов", callback_data=f"mechanics:referral:{giveaway_id}")
     kb.button(text="⬅️ Назад", callback_data=f"mechanics:back:{giveaway_id}")
     kb.adjust(1)
@@ -5581,9 +5592,30 @@ async def cb_mechanics(cq: CallbackQuery):
     await update_mechanics_text(cq.message, gid)
     await cq.answer()
 
-# Обработчик кнопки "🤖 Подключить Captcha" / Переключатель Captcha: при первом нажатии подключает, при повторном - отключает
+#Обработчик для заблокированной кнопки Captcha
+@dp.callback_query(F.data.startswith("mechanics:captcha_blocked:"))
+async def cb_mechanics_captcha_blocked(cq: CallbackQuery):
+    # Просто показываем pop-up о необходимости премиум-подписки
+    await cq.answer(
+        "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+        show_alert=True
+    )
+
+# Обработчик кнопки Captcha для премиум-пользователей
 @dp.callback_query(F.data.startswith("mechanics:captcha:"))
 async def cb_mechanics_captcha(cq: CallbackQuery):
+    
+    # ПРОВЕРКА ПРЕМИУМ СТАТУСА
+    user_id = cq.from_user.id
+    user_status = await get_user_status(user_id)
+    
+    if user_status == 'standard':
+        # Стандартный пользователь - показываем pop-up о необходимости подписки
+        await cq.answer(
+            "💎 Оформите подписку ПРЕМИУМ для доступа к функционалу",
+            show_alert=True
+        )
+        return
 
     gid = int(cq.data.split(":")[2])
 
