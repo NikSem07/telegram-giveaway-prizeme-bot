@@ -1355,6 +1355,17 @@ async def save_giveaway_mechanic(
                 mechanics_logger.debug(f"📝 Механика сохранена: giveaway_id={giveaway_id}, type={mechanic_type}, "
                             f"active={is_active}, config={config_json[:50]}...")
                 
+                # Очищаем кэш SQLAlchemy для этого запроса
+                await s.commit()  # Сначала коммитим изменения
+                
+                # Очищаем application-level кэш
+                await clear_mechanics_cache(giveaway_id)
+                
+                # Принудительно помечаем таблицу giveaway_mechanics как обновленную
+                s.expire_all()
+                
+                mechanics_logger.debug(f"🧹 Очищен кэш для механики {mechanic_type}, giveaway {giveaway_id}")
+                
                 return True
                 
         except Exception as e:
@@ -1509,6 +1520,9 @@ async def is_mechanic_active(giveaway_id: int, mechanic_type: str, use_cache: bo
     
     try:
         async with session_scope() as s:
+            # ОЧИСТКА КЭША SQLAlchemy ПЕРЕД ЗАПРОСОМ
+            s.expire_all()
+            
             # УЛУЧШЕННЫЙ ЗАПРОС С БОЛЬШЕЙ ИНФОРМАЦИЕЙ
             result = await s.execute(
                 text("""
@@ -5696,11 +5710,24 @@ async def cb_mechanics_captcha(cq: CallbackQuery):
     mechanics_logger.info(f"🔍 CAPTCHA BUTTON CLICKED: giveaway_id={gid}")
     await debug_mechanics(gid)  # Вызываем отладку
     
-    # Проверяем текущее состояние Captcha
-    is_active = await is_mechanic_active(gid, "captcha")
+    # Получаем ТЕКУЩЕЕ состояние из БД напрямую, минуя кэш
+    async with session_scope() as s:
+        # Очищаем кэш SQLAlchemy перед запросом
+        s.expire_all()
+        
+        result = await s.execute(
+            text("""
+                SELECT is_active 
+                FROM giveaway_mechanics 
+                WHERE giveaway_id = :gid AND mechanic_type = 'captcha'
+            """),
+            {"gid": gid}
+        )
+        row = result.first()
+        current_active = bool(row and row[0]) if row else False
     
     # Меняем состояние на противоположное
-    new_state = not is_active
+    new_state = not current_active
     
     # Сохраняем в БД
     success = await save_giveaway_mechanic(gid, "captcha", new_state)
@@ -5711,8 +5738,8 @@ async def cb_mechanics_captcha(cq: CallbackQuery):
         else:
             await cq.answer("❌ Captcha отключена", show_alert=True)
         
-        # Используем правильный user_id для обновления сообщения
-        await update_mechanics_text_with_user(cq.message, gid, user_id)  # 🔥 user_id из cq.from_user.id
+        # Используем user_id напрямую для обновления
+        await update_mechanics_text_with_user(cq.message, gid, user_id)
     else:
         await cq.answer("❌ Ошибка сохранения настроек Captcha", show_alert=True)
 
