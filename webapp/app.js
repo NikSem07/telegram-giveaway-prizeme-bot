@@ -168,6 +168,13 @@ async function checkGiveawayCompletion(gid) {
 // Проверка, нужно ли сразу открывать результаты
 function checkImmediateResults() {
   try {
+    // КРИТИЧНО: на loading мы НЕ делаем "немедленные" редиректы,
+    // иначе будет вечный цикл, т.к. start_param в initData всегда results_xxx
+    if (window.location.pathname === '/miniapp/loading') {
+      console.log("[IMMEDIATE-RESULTS] On /miniapp/loading, skipping immediate redirect");
+      return false;
+    }
+
     // Уже на одном из экранов результатов — ничего не делаем
     if (
       window.location.pathname === '/miniapp/results_win' ||
@@ -182,18 +189,16 @@ function checkImmediateResults() {
 
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING (results mode), gid:", gid);
-      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
+      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING from URL (results mode), gid:", gid);
+      window.location.replace(`/miniapp/loading?gid=results_${gid}`);
       return true;
     }
 
-    // Проверяем initData на случай запуска через startapp
     const initParam = tg.initDataUnsafe?.start_param;
-
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
       console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING from initData (results mode), gid:", gid);
-      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
+      window.location.replace(`/miniapp/loading?gid=results_${gid}`);
       return true;
     }
   } catch (e) {
@@ -202,6 +207,7 @@ function checkImmediateResults() {
 
   return false;
 }
+
 
 // =========================
 // RESULTS: определяем, победитель ли текущий юзер
@@ -1357,6 +1363,7 @@ function initializeCurrentPage() {
   if (
     path !== '/miniapp/results_win' &&
     path !== '/miniapp/results_lose' &&
+    path !== '/miniapp/loading' &&   // ✅ чтобы не было циклов
     checkImmediateResults()
   ) {
     return;
