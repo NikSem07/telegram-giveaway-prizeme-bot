@@ -168,29 +168,39 @@ async function checkGiveawayCompletion(gid) {
 // Проверка, нужно ли сразу открывать результаты
 function checkImmediateResults() {
   try {
-    // КРИТИЧНО: на loading мы НЕ делаем "немедленные" редиректы,
-    // иначе будет вечный цикл, т.к. start_param в initData всегда results_xxx
-    if (window.location.pathname === '/miniapp/loading') {
-      console.log("[IMMEDIATE-RESULTS] On /miniapp/loading, skipping immediate redirect");
+    const path = window.location.pathname;
+
+    // ✅ Никогда не вмешиваемся, если уже в "служебных" экранах
+    // иначе получим петлю loading <-> already/success и т.п.
+    const blocked = new Set([
+      '/miniapp/loading',
+      '/miniapp/need_subscription',
+      '/miniapp/success',
+      '/miniapp/already',
+      '/miniapp/results_win',
+      '/miniapp/results_lose',
+      '/miniapp/captcha',
+      '/miniapp/success.html',
+      '/miniapp/already_participating.html',
+      '/miniapp/captcha.html',
+    ]);
+
+    if (blocked.has(path)) {
       return false;
     }
 
-    // Уже на одном из экранов результатов — ничего не делаем
-    if (
-      window.location.pathname === '/miniapp/results_win' ||
-      window.location.pathname === '/miniapp/results_lose'
-    ) {
-      console.log("[IMMEDIATE-RESULTS] Already on results page, skipping redirect");
-      return false;
-    }
-
+    // ✅ results-mode детектим по tgWebAppStartParam или initData.start_param
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
 
     if (urlParam && urlParam.startsWith('results_')) {
       const gid = urlParam.replace('results_', '');
-      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING from URL (results mode), gid:", gid);
-      window.location.replace(`/miniapp/loading?gid=results_${gid}`);
+      console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING (results mode), gid:", gid);
+
+      sessionStorage.setItem('prizeme_results_mode', '1');
+      sessionStorage.setItem('prizeme_results_gid', gid);
+
+      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
       return true;
     }
 
@@ -198,7 +208,11 @@ function checkImmediateResults() {
     if (initParam && initParam.startsWith('results_')) {
       const gid = initParam.replace('results_', '');
       console.log("[IMMEDIATE-RESULTS] ✅ Redirecting to LOADING from initData (results mode), gid:", gid);
-      window.location.replace(`/miniapp/loading?gid=results_${gid}`);
+
+      sessionStorage.setItem('prizeme_results_mode', '1');
+      sessionStorage.setItem('prizeme_results_gid', gid);
+
+      window.location.replace(`/miniapp/loading?gid=results_${encodeURIComponent(gid)}`);
       return true;
     }
   } catch (e) {
@@ -496,6 +510,54 @@ async function checkFlow() {
   }
 }
 
+async function resultsFlow(gid) {
+  try {
+    console.log("[RESULTS-FLOW] Starting results flow, gid:", gid);
+
+    // init_data (как в остальных потоках)
+    const tg = window.Telegram?.WebApp;
+    let init_data = tg?.initData || '';
+
+    if (!init_data) {
+      const storedInit = sessionStorage.getItem('prizeme_init_data');
+      if (storedInit) init_data = storedInit;
+    }
+
+    if (!init_data) {
+      throw new Error("Telegram initData missing (results flow)");
+    }
+
+    // Дёргаем результаты
+    const results = await api("/api/results", { gid, init_data });
+    console.log("[RESULTS-FLOW] /api/results:", results);
+
+    if (!results.ok) {
+      throw new Error(results.reason || "Не удалось загрузить результаты");
+    }
+
+    // Сохраняем, чтобы results_* страницы не делали повторных запросов
+    try {
+      sessionStorage.setItem("prizeme_results", JSON.stringify(results));
+    } catch (e) {}
+
+    // ✅ РЕДИРЕКТ СРАЗУ НА ПРАВИЛЬНЫЙ ЭКРАН
+    if (results.user && results.user.is_winner) {
+      console.log("[RESULTS-FLOW] Winner -> results_win");
+      window.location.replace(`/miniapp/results_win?gid=${encodeURIComponent(gid)}`);
+      return;
+    }
+
+    console.log("[RESULTS-FLOW] Not winner -> results_lose");
+    window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(gid)}`);
+  } catch (err) {
+    console.error("[RESULTS-FLOW] Error:", err);
+    // В results режиме лучше показать lose с ошибкой, чем уходить в participation
+    sessionStorage.setItem('prizeme_error', err.message || 'Ошибка загрузки результатов');
+    window.location.replace('/miniapp/results_lose?gid=' + encodeURIComponent(gid || ''));
+  }
+}
+
+
 // Инициализация для главной страницы
 function initializeMainPage() {
   console.log("[MULTI-PAGE] Initializing main page");
@@ -527,73 +589,60 @@ function initializeMainPage() {
 // Инициализация для экрана загрузки
 function initializeLoadingPage() {
   console.log('🎯 [LOADING] Initializing loading page');
-  
+
+  // ✅ 1) Сначала проверяем results-mode по URL (?gid=results_220)
+  let resultsMode = false;
+  let resultsGid = null;
+
+  try {
+    const url = new URL(location.href);
+    const gidParam = url.searchParams.get("gid");
+    if (gidParam && String(gidParam).startsWith("results_")) {
+      resultsMode = true;
+      resultsGid = String(gidParam).replace("results_", "");
+      console.log("🎯 [LOADING] Results mode detected from URL gid:", resultsGid);
+
+      sessionStorage.setItem('prizeme_results_mode', '1');
+      sessionStorage.setItem('prizeme_results_gid', resultsGid);
+    }
+  } catch (e) {}
+
+  // ✅ 2) Если URL не дал — пробуем sessionStorage (на случай входа с initData)
+  if (!resultsMode) {
+    const sm = sessionStorage.getItem('prizeme_results_mode');
+    const sg = sessionStorage.getItem('prizeme_results_gid');
+    if (sm === '1' && sg) {
+      resultsMode = true;
+      resultsGid = sg;
+      console.log("🎯 [LOADING] Results mode detected from sessionStorage:", resultsGid);
+    }
+  }
+
+  // ✅ 3) Если resultsMode — НЕ запускаем checkFlow(), а идем в resultsFlow()
+  if (resultsMode && resultsGid) {
+    setTimeout(() => {
+      resultsFlow(resultsGid);
+    }, 300);
+    return;
+  }
+
+  // ---- обычный flow участия ----
   const gid = getStartParam();
   console.log('🎯 [LOADING] Extracted gid:', gid);
-  
+
   if (!gid) {
     console.log('❌ [LOADING] No gid found, showing error');
     sessionStorage.setItem('prizeme_error', 'Empty start_param (gid). Please try again.');
     window.location.href = '/miniapp/need_subscription';
     return;
   }
-  
-  // Сохраняем gid в sessionStorage для резервной копии
+
   sessionStorage.setItem('prizeme_gid', gid);
   console.log('🎯 [LOADING] Saved gid to sessionStorage:', gid);
-  
-  // RESULTS MODE (results_XXX)
-  if (gid && String(gid).startsWith("results_")) {
-    const realGid = String(gid).replace("results_", "");
-    console.log("[LOADING][RESULTS] Results mode detected, gid:", realGid);
 
-    // Берем init_data как обычно
-    const tgApp = window.Telegram?.WebApp;
-    let init_data = tgApp?.initData || '';
-
-    if (!init_data) {
-      try {
-        const storedInit = sessionStorage.getItem('prizeme_init_data');
-        if (storedInit) init_data = storedInit;
-      } catch (e) {}
-    }
-
-    if (!init_data) {
-      console.log("[LOADING][RESULTS] No init_data, redirecting to index");
-      window.location.href = '/miniapp/index';
-      return;
-    }
-
-    (async () => {
-      try {
-        const results = await api("/api/results", { gid: parseInt(realGid, 10), init_data });
-        console.log("[LOADING][RESULTS] /api/results response:", results);
-
-        // Сохраняем, чтобы win/lose быстро отрисовались
-        try { sessionStorage.setItem("prizeme_results", JSON.stringify(results)); } catch (e) {}
-
-        const winner = isCurrentUserWinner(results, tgApp);
-        console.log("[LOADING][RESULTS] winner =", winner);
-
-        if (winner) {
-          window.location.replace(`/miniapp/results_win?gid=${encodeURIComponent(realGid)}`);
-        } else {
-          window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(realGid)}`);
-        }
-      } catch (e) {
-        console.error("[LOADING][RESULTS] Failed to load results:", e);
-        // Фоллбек — если API не ответил, ведем на lose
-        window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(realGid)}`);
-      }
-    })();
-
-    return; // важно: не запускать checkFlow()
-  }
-
-  // Запускаем проверку через 1 секунду (дает время для инициализации)
   setTimeout(() => {
     checkFlow();
-  }, 1000);
+  }, 300);
 }
 
 // Инициализация для экрана "Нужно подписаться"
