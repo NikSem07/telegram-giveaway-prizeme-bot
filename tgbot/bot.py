@@ -2300,7 +2300,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="start", description="перезапустить бота"),
         BotCommand(command="create", description="создать розыгрыш"),
         BotCommand(command="giveaways", description="мои розыгрыши"),  
-        BotCommand(command="subscriptions", description="мои подписки"),
+        BotCommand(command="premium", description="подписка"),
     ]
     await bot.set_my_commands(commands)
 
@@ -2571,15 +2571,14 @@ def kb_confirm_description() -> InlineKeyboardMarkup:
 async def cmd_start(m: Message, state: FSMContext):
     await ensure_user(m.from_user.id, m.from_user.username)
     text = (
-        "Добро пожаловать в Бот с розыгрышами <b>PrizeMe!</b>\n\n"
-        "Бот способен запускать розыгрыши среди участников одного "
-        "или нескольких Telegram-каналов и самостоятельно выбирать "
-        "победителей в назначенное время.\n\n"
+        "Добро пожаловать в сервис для проведения розыгрышей PrizeMe!\n\n"
+        "Бот способен запускать розыгрыши среди участников одного или нескольких "
+        "Telegram-каналов и самостоятельно выбирать победителей в назначенное время.\n\n"
         "Команды бота:\n"
         "<b>/start</b> – перезапустить бота\n"
         "<b>/create</b> – создать розыгрыш\n"
         "<b>/events</b> – мои розыгрыши\n"
-        "<b>/subscriptions</b> – подписки"
+        "<b>/premium</b> – подписка"
     )
     await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
 
@@ -4729,7 +4728,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
             pass
 
     # Fallback: оригинальный код (нативная отправка медиа)
-    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем новую клавиатуру для черновиков
+    # Используем новую клавиатуру для черновиков
     if gw.status == GiveawayStatus.DRAFT:
         reply_markup = kb_draft_actions(giveaway_id)
     else:
@@ -4744,12 +4743,6 @@ async def show_event_card(chat_id:int, giveaway_id:int):
         await bot.send_video(chat_id, fid, caption=cap, reply_markup=reply_markup)
     else:
         await bot.send_message(chat_id, cap, reply_markup=reply_markup)
-
-@dp.message(Command("subscriptions"))
-async def cmd_subs(m:Message):
-    await m.answer("Чтобы подключить канал, добавьте бота в канал (в приватном — админом), "
-                   "затем перешлите сюда любой пост канала или отправьте @username канала.")
-
 
 # --- ОБРАБОТЧИКИ ДЛЯ ЧЕРНОВИКОВ ---
 
