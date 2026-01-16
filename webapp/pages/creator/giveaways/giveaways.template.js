@@ -1,17 +1,16 @@
 // webapp/pages/creator/giveaways/giveaways.template.js
-export default function creatorGiveawaysTemplate(context = {}) {
-    return `
-        <div class="card">
-            <div class="app-header">
-                <h1>🎯 Розыгрыши</h1>
-                <p class="welcome-text">Управление вашими розыгрышами</p>
-            </div>
-            
-            <div style="text-align: center; padding: 40px 20px;">
-                <div style="font-size: 64px; margin-bottom: 20px;">🚧</div>
-                <h2>Скоро будет доступно</h2>
-                <p>Раздел находится в разработке</p>
-            </div>
-        </div>
-    `;
+export default function creatorGiveawaysTemplate() {
+  return `
+    <section class="creator-giveaways">
+      <div class="creator-giveaways__tabs" role="tablist" aria-label="Фильтр розыгрышей">
+        <button class="creator-giveaways__tab is-active" type="button" data-tab="active" role="tab">Запущенные</button>
+        <button class="creator-giveaways__tab" type="button" data-tab="draft" role="tab">Незапущенные</button>
+        <button class="creator-giveaways__tab" type="button" data-tab="completed" role="tab">Завершенные</button>
+      </div>
+
+      <div class="creator-giveaways__total" id="creator-giveaways-total">Всего: 0</div>
+
+      <div class="creator-giveaways__list" id="creator-giveaways-list"></div>
+    </section>
+  `;
 }

@@ -1343,6 +1343,89 @@ app.post('/api/creator_total_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/creator_giveaways ---
+// Отдает список розыгрышей создателя по статусу (active/draft/completed)
+app.post('/api/creator_giveaways', async (req, res) => {
+  try {
+    const { init_data, status } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+    }
+
+    // status bucket
+    let whereStatusSql = '';
+    if (status === 'active') {
+      whereStatusSql = `AND g.status = 'active'`;
+    } else if (status === 'completed') {
+      whereStatusSql = `AND g.status IN ('completed','finished')`;
+    } else {
+      // "draft" bucket = все, что не active и не completed/finished
+      whereStatusSql = `AND g.status NOT IN ('active','completed','finished')`;
+    }
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.internal_title,
+        g.end_at_utc,
+        g.status,
+
+        array_remove(
+          array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
+          NULL
+        ) AS channels,
+
+        (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
+
+      FROM giveaways g
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+
+      WHERE g.owner_user_id = $1
+      ${whereStatusSql}
+
+      GROUP BY g.id
+      ORDER BY g.id DESC
+    `, [userId]);
+
+    const rows = result.rows || [];
+
+    const items = rows.map(row => {
+      const firstChatId = row.first_channel_chat_id || null;
+      return {
+        id: row.id,
+        title: row.internal_title,
+        end_at_utc: row.end_at_utc,
+        status: row.status,
+        channels: row.channels || [],
+        first_channel_avatar_url: firstChatId ? `/api/chat_avatar/${firstChatId}` : null,
+      };
+    });
+
+    return res.json({
+      ok: true,
+      total: items.length,
+      items
+    });
+
+  } catch (error) {
+    console.error('[API creator_giveaways] error:', error);
+    return res.status(500).json({
+      ok: false,
+      reason: 'server_error',
+      error: error.message
+    });
+  }
+});
+
+
 // --- POST /api/verify_captcha ---
 app.post('/api/verify_captcha', async (req, res) => {
   console.log('[SIMPLE-CAPTCHA] Verify request received');
