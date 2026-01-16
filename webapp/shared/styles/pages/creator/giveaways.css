@@ -1,7 +1,7 @@
 /* Стили ТОЛЬКО для creator -> giveaways */
 
 .creator-giveaways {
-  padding: 8px 12px 90px; /* низ под navbar */
+  padding: 6px 8px 90px; /* низ под navbar */
 }
 
 .creator-giveaways__tabs {
@@ -12,9 +12,9 @@
   padding: 0;
   border-radius: 20px;
   overflow: hidden;
-
-  /* как у mode-switcher */
   background: var(--color-bg-tertiary);
+
+  margin-bottom: 12px; /* БОЛЬШОЙ отступ до "Всего" */
 }
 
 .creator-giveaways__tab {
@@ -59,8 +59,10 @@
 }
 
 .creator-giveaways__total {
-  margin-top: 6px;
-  font: 400 10px/18px "Roboto", system-ui, -apple-system, sans-serif;
+  margin: 0;
+  margin-bottom: 6px;
+
+  font: 500 14px/18px "Roboto", system-ui, -apple-system, sans-serif; /* было слишком мелко */
   color: #fff;
   text-align: center;
 }
