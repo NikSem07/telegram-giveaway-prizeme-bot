@@ -101,19 +101,22 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 9px;
+  height: 9px;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none; /* кликается вся карточка */
+  pointer-events: none;
 }
 
 .creator-giveaways-card__arrow img {
-  width: 18px;
-  height: 18px;
-  opacity: 0.9;
+  width: 9px;
+  height: 9px;
+}
+
+.creator-giveaways-card__arrow img {
+  filter: invert(53%) sepia(6%) saturate(180%) hue-rotate(202deg) brightness(90%) contrast(88%);
 }
 
 .creator-giveaways-card::after {
@@ -121,20 +124,21 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 56px;   /* зона затухания */
+  width: 56px;
   height: 100%;
   z-index: 2;
 
-  /* плавное затухание */
   background: linear-gradient(
     to left,
     rgba(46, 46, 46, 1) 35%,
     rgba(46, 46, 46, 0) 100%
   );
 
-  /* мягкий blur под стрелкой */
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
 
   pointer-events: none;
 }
