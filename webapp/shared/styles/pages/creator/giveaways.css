@@ -89,6 +89,59 @@
   padding: 10px;
   border-radius: 10px;
   background: rgba(46, 46, 46, 1);
+  
+  position: relative;
+  padding-right: 42px; /* место под стрелку + blur */
+
+  cursor: pointer
+}
+
+.creator-giveaways-card__arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* кликается вся карточка */
+}
+
+.creator-giveaways-card__arrow img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+
+.creator-giveaways-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56px;   /* зона затухания */
+  height: 100%;
+  z-index: 2;
+
+  /* плавное затухание */
+  background: linear-gradient(
+    to left,
+    rgba(46, 46, 46, 1) 35%,
+    rgba(46, 46, 46, 0) 100%
+  );
+
+  /* мягкий blur под стрелкой */
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  pointer-events: none;
+}
+
+.creator-giveaways-card:active {
+  transform: translateY(0.5px);
+  filter: brightness(1.02);
 }
 
 .creator-giveaways-card__avatar {

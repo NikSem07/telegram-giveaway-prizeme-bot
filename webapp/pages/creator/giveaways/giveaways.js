@@ -35,16 +35,21 @@ function renderCards(listEl, items) {
     const endText = formatEndDate(item.end_at_utc);
 
     return `
-      <article class="creator-giveaways-card" data-giveaway-id="${item.id}">
+    <article class="creator-giveaways-card" data-giveaway-id="${item.id}" role="button" tabindex="0">
         <div class="creator-giveaways-card__avatar">
-          <img src="${avatarUrl}" alt="">
+        <img src="${avatarUrl}" alt="">
         </div>
+
         <div class="creator-giveaways-card__body">
-          <div class="creator-giveaways-card__channels">${channels || 'Каналы не указаны'}</div>
-          <div class="creator-giveaways-card__title">${title}</div>
-          <div class="creator-giveaways-card__end">${endText}</div>
+        <div class="creator-giveaways-card__channels">${channels || 'Каналы не указаны'}</div>
+        <div class="creator-giveaways-card__title">${title}</div>
+        <div class="creator-giveaways-card__end">${endText}</div>
         </div>
-      </article>
+
+        <div class="creator-giveaways-card__arrow" aria-hidden="true">
+        <img src="/miniapp-static/assets/icons/arrow-icon.svg" alt="">
+        </div>
+    </article>
     `;
   }).join('');
 }
