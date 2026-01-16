@@ -1,25 +1,28 @@
 /* Стили ТОЛЬКО для creator -> giveaways */
 
 .creator-giveaways {
-  padding: 6px 8px 90px; /* низ под navbar */
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px 90px;
 }
 
 .creator-giveaways__tabs {
   width: 100%;
+  box-sizing: border-box;
+
   display: flex;
   gap: 4px;
   height: 36px;
-  padding: 0;
+
   border-radius: 20px;
   overflow: hidden;
-  background: var(--color-bg-tertiary);
 
-  margin-bottom: 12px; /* БОЛЬШОЙ отступ до "Всего" */
+  background: var(--color-bg-tertiary);
+  margin-bottom: 12px;
 }
 
 .creator-giveaways__tab {
   flex: 1;
-  margin: 4px 0;
   height: 28px;
 
   display: flex;
@@ -40,13 +43,14 @@
   transition: all var(--transition-normal);
   white-space: nowrap;
   padding: 0;
+  margin: 4px 0; /* только вертикальный, НЕ горизонтальный */
 }
 
 .creator-giveaways__tab.is-active {
   background: #737375;
   color: #FAFAFA;
   font-weight: 700;
-  margin: 4px;
+  margin: 4px; /* симметрично, как в mode-switcher */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
@@ -75,14 +79,16 @@
 }
 
 .creator-giveaways-card {
-  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+
   display: flex;
-  align-items: center; /* ВАЖНО: центрируем аватар по вертикали */
+  align-items: center;
   gap: 12px;
+
   padding: 10px;
   border-radius: 10px;
   background: rgba(46, 46, 46, 1);
-  overflow: hidden;
 }
 
 .creator-giveaways-card__avatar {
