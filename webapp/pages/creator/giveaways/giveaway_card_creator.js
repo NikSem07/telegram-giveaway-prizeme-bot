@@ -46,17 +46,65 @@ function renderMedia(container, media) {
     return;
   }
 
-  if ((media.type || '').toLowerCase() === 'video') {
+  const type = (media.type || '').toLowerCase();
+
+  if (type === 'video') {
     container.innerHTML = `
-      <video class="creator-giveaway-card-media-el" controls playsinline>
-        <source src="${media.url}">
-      </video>
+      <div class="creator-giveaway-card-media-wrap">
+        <video class="creator-giveaway-card-media-el" playsinline preload="metadata"></video>
+        <button class="creator-giveaway-card-play" type="button" aria-label="Play"></button>
+      </div>
     `;
+
+    const video = container.querySelector('video');
+    const playBtn = container.querySelector('.creator-giveaway-card-play');
+
+    // source
+    video.src = media.url;
+
+    // fade-in на данные
+    video.addEventListener('loadeddata', () => {
+      video.classList.add('is-loaded');
+    }, { once: true });
+
+    const hideOverlay = () => playBtn.classList.add('is-hidden');
+    const showOverlay = () => playBtn.classList.remove('is-hidden');
+
+    playBtn.addEventListener('click', async () => {
+      try {
+        // чтобы после старта пользователь мог паузить/скроллить таймлайн
+        video.controls = true;
+        await video.play();
+        hideOverlay();
+      } catch (e) {
+        // если autoplay policy — оставим overlay
+        showOverlay();
+      }
+    });
+
+    video.addEventListener('play', hideOverlay);
+    video.addEventListener('pause', () => {
+      // если пользователь поставил на паузу — вернём overlay
+      if (!video.ended) showOverlay();
+    });
+    video.addEventListener('ended', showOverlay);
+
     return;
   }
 
+  // image
   container.innerHTML = `<img class="creator-giveaway-card-media-el" src="${media.url}" alt="">`;
+  const img = container.querySelector('img');
+
+  img.addEventListener('load', () => {
+    img.classList.add('is-loaded');
+  }, { once: true });
+
+  img.addEventListener('error', () => {
+    container.innerHTML = `<div class="creator-giveaway-card-media-empty">Не удалось загрузить медиа</div>`;
+  }, { once: true });
 }
+
 
 function renderChannels(container, channels) {
   container.innerHTML = (channels || []).map(ch => {
