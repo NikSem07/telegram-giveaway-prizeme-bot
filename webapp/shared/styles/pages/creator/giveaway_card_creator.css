@@ -1,0 +1,138 @@
+/* webapp/shared/styles/pages/creator/giveaway_card_creator.css */
+
+.creator-giveaway-card-detail {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 0px 90px; /* как в giveaways */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.creator-giveaway-card-block {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.creator-giveaway-card-label {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 10px;
+  line-height: 18px;
+  color: #737375;
+}
+
+.creator-giveaway-card-box {
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  background: #2e2e2e;
+  border-radius: 5px;
+  overflow: hidden;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.creator-giveaway-card-text {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.creator-giveaway-card-media-box {
+  width: 100%;
+  height: 160px;
+  border-radius: 10px;
+  background: #2e2e2e;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.creator-giveaway-card-media-el {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.creator-giveaway-card-media-empty {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 12px;
+  color: #a9a9a9;
+}
+
+.creator-giveaway-card-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.creator-giveaway-card-channel {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #2e2e2e;
+  border-radius: 5px;
+  overflow: hidden;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.creator-giveaway-card-channel-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 40px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #313133;
+}
+
+.creator-giveaway-card-channel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.creator-giveaway-card-channel-title {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #FAFAFA;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.creator-giveaway-card-edit {
+  margin: 8px auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 5px;
+  background: #1551E5;
+  color: #FAFAFA;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.creator-giveaway-card-edit-icon {
+  width: 21px;
+  height: 20px;
+  border-radius: 10px;
+  background: #0A38A9;
+}

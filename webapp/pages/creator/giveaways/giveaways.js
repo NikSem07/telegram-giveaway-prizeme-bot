@@ -1,5 +1,6 @@
 // webapp/pages/creator/giveaways/giveaways.js
 import creatorGiveawaysTemplate from './giveaways.template.js';
+import Router from '../../../shared/router.js';
 
 const TAB_TO_API_STATUS = {
   active: 'active',       // Запущенные
@@ -103,6 +104,33 @@ function initTabs(root) {
 
   // стартуем с "Запущенные"
   renderState('active');
+
+  // Делегирование клика по карточкам (готовим переход в детали)
+  listEl.addEventListener('click', (e) => {
+    const card = e.target.closest('.creator-giveaways-card');
+    if (!card) return;
+
+    const id = card.dataset.giveawayId;
+    if (!id) return;
+
+    sessionStorage.setItem('prizeme_creator_giveaway_id', String(id));
+    Router.navigate('giveaway_card_creator');
+  });
+
+  // Enter с клавиатуры
+  listEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+
+    const card = e.target.closest('.creator-giveaways-card');
+    if (!card) return;
+
+    const id = card.dataset.giveawayId;
+    if (!id) return;
+
+    sessionStorage.setItem('prizeme_creator_giveaway_id', String(id));
+    Router.navigate('giveaway_card_creator');
+  });
+
 }
 
 function renderGiveawaysPage() {
@@ -113,6 +141,9 @@ function renderGiveawaysPage() {
 
   const root = main.querySelector('.creator-giveaways');
   if (!root) return;
+
+  const tg = window.Telegram?.WebApp;
+  if (tg?.BackButton) tg.BackButton.hide();
 
   initTabs(root);
 }

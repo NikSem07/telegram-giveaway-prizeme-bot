@@ -12,6 +12,7 @@ import { renderProfilePage } from '../pages/participant/profile/profile.js';
 import { renderCreatorHomePage } from '../pages/creator/home/home.js';
 import { renderServicesPage } from '../pages/creator/services/services.js';
 import { renderGiveawaysPage as renderCreatorGiveaways } from '../pages/creator/giveaways/giveaways.js';
+import { renderGiveawayCardCreatorPage } from './pages/creator/giveaways/giveaway_card_creator.js';
 import { renderStatsPage } from '../pages/creator/stats/stats.js';
 
 const Router = {
@@ -23,11 +24,13 @@ const Router = {
             giveaways: renderParticipantGiveaways,
             profile: renderProfilePage
         },
+
         creator: {
-            home: renderCreatorHomePage,
-            services: renderServicesPage,
-            giveaways: renderCreatorGiveaways,
-            stats: renderStatsPage
+        home: renderCreatorHomePage,
+        services: renderServicesPage,
+        giveaways: renderCreatorGiveaways,
+        giveaway_card_creator: renderGiveawayCardCreatorPage,
+        stats: renderStatsPage
         }
     },
     

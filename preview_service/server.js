@@ -1298,6 +1298,57 @@ app.get('/api/chat_avatar/:chatId', async (req, res) => {
     }
 });
 
+// --- GET /api/giveaway_media/:giveawayId ---
+// Отдает ПРЯМУЮ ссылку на медиа розыгрыша (photo_file_id) через Telegram getFile
+app.get('/api/giveaway_media/:giveawayId', async (req, res) => {
+  try {
+    const giveawayId = parseInt(req.params.giveawayId, 10);
+    if (!giveawayId || !BOT_TOKEN) {
+      return res.status(404).end();
+    }
+
+    // Берем file_id из БД
+    const r = await pool.query(
+      `SELECT photo_file_id FROM giveaways WHERE id = $1 LIMIT 1`,
+      [giveawayId]
+    );
+
+    const photoFileIdRaw = r.rows?.[0]?.photo_file_id;
+    if (!photoFileIdRaw) {
+      return res.status(404).end();
+    }
+
+    // В БД хранится строка вида: "photo:<file_id>"
+    const parts = String(photoFileIdRaw).split(':');
+    const fileId = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+
+    if (!fileId) {
+      return res.status(404).end();
+    }
+
+    // Запрашиваем путь к файлу у Telegram
+    const fileResponse = await fetch(
+      `https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`,
+      { timeout: 8000 }
+    );
+
+    const fileData = await fileResponse.json();
+    if (!fileData.ok || !fileData.result?.file_path) {
+      return res.status(404).end();
+    }
+
+    const filePath = fileData.result.file_path;
+    const directUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+
+    // Редиректим на прямую ссылку
+    return res.redirect(directUrl);
+
+  } catch (error) {
+    console.error('[API giveaway_media] error:', error);
+    return res.status(500).end();
+  }
+});
+
 
 // --- POST /api/creator_total_giveaways ---
 // Возвращает общее кол-во розыгрышей, созданных текущим создателем
@@ -1417,6 +1468,94 @@ app.post('/api/creator_giveaways', async (req, res) => {
 
   } catch (error) {
     console.error('[API creator_giveaways] error:', error);
+    return res.status(500).json({
+      ok: false,
+      reason: 'server_error',
+      error: error.message
+    });
+  }
+});
+
+// --- POST /api/creator_giveaway_details ---
+// Детали розыгрыша для страницы "проваливания" (creator)
+app.post('/api/creator_giveaway_details', async (req, res) => {
+  try {
+    const { init_data, giveaway_id } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    const gid = Number(giveaway_id);
+
+    if (!Number.isFinite(userId) || !Number.isFinite(gid)) {
+      return res.status(400).json({ ok: false, reason: 'bad_params' });
+    }
+
+    // 1) розыгрыш (проверяем владельца)
+    const gRes = await pool.query(`
+      SELECT
+        id,
+        owner_user_id,
+        internal_title,
+        public_description,
+        photo_file_id,
+        end_at_utc,
+        status,
+        media_position
+      FROM giveaways
+      WHERE id = $1 AND owner_user_id = $2
+      LIMIT 1
+    `, [gid, userId]);
+
+    if (!gRes.rows?.length) {
+      return res.status(404).json({ ok: false, reason: 'not_found' });
+    }
+
+    const g = gRes.rows[0];
+
+    // 2) каналы/группы розыгрыша
+    // В твоей схеме giveaway_channels уже используется вместе с organizer_channels (как в /api/creator_giveaways)
+    const cRes = await pool.query(`
+      SELECT
+        gc.chat_id,
+        COALESCE(gc.title, oc.title, oc.username) AS title
+      FROM giveaway_channels gc
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE gc.giveaway_id = $1
+      ORDER BY gc.id ASC
+    `, [gid]);
+
+    const channels = (cRes.rows || []).map(r => ({
+      chat_id: r.chat_id,
+      title: r.title,
+      avatar_url: r.chat_id ? `/api/chat_avatar/${r.chat_id}` : null
+    }));
+
+    // 3) media: отдаем URL на наш прокси-роут
+    const hasPhoto = !!g.photo_file_id;
+
+    return res.json({
+      ok: true,
+      id: g.id,
+      title: g.internal_title,
+      description: g.public_description,
+      end_at_utc: g.end_at_utc,
+      status: g.status,
+      media_position: g.media_position,
+
+      media: {
+        url: hasPhoto ? `/api/giveaway_media/${g.id}` : null,
+        type: hasPhoto ? 'image' : null
+      },
+
+      channels
+    });
+
+  } catch (error) {
+    console.error('[API creator_giveaway_details] error:', error);
     return res.status(500).json({
       ok: false,
       reason: 'server_error',
