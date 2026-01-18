@@ -2572,22 +2572,19 @@ async def cmd_start(m: Message, state: FSMContext):
 
     # === START PARAM ROUTER: edit_creator_<status>_<gid> ===
     # Пример: /start edit_creator_active_123
-    args = (message.text or "").split(maxsplit=1)
+    args = (m.text or "").split(maxsplit=1)
     start_param = args[1].strip() if len(args) > 1 else ""
 
     if start_param.startswith("edit_creator_"):
         try:
-            # edit_creator_active_123  -> ["edit", "creator", "active", "123"]
+            # edit_creator_active_123 -> ["edit", "creator", "active", "123"]
             _, _, status, gid_str = start_param.split("_", 3)
             gid = int(gid_str)
         except Exception:
-            await message.answer("Не удалось открыть розыгрыш для редактирования.")
+            await m.answer("Не удалось открыть розыгрыш для редактирования.")
             return
 
-        # Опционально: проверка владельца, чтобы нельзя было открыть чужой gid
-        # (Если show_event_card сам проверяет owner_user_id, то можно не дублировать)
-
-        await show_event_card(message.chat.id, gid)
+        await show_event_card(m.chat.id, gid)
         return
 
     await ensure_user(m.from_user.id, m.from_user.username)
