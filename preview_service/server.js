@@ -455,6 +455,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'PrizeMe Node.js backend is running', timestamp: new Date().toISOString() });
 });
 
+let _cachedBotUsername = null;
+
+// --- GET /api/bot_username ---
+app.get('/api/bot_username', async (req, res) => {
+  try {
+    if (_cachedBotUsername) {
+      return res.json({ ok: true, username: _cachedBotUsername });
+    }
+    if (!BOT_TOKEN) return res.status(500).json({ ok: false, reason: 'no_bot_token' });
+
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`, { timeout: 8000 });
+    const data = await r.json();
+
+    if (!data.ok || !data.result?.username) {
+      return res.status(500).json({ ok: false, reason: 'getMe_failed' });
+    }
+
+    _cachedBotUsername = data.result.username;
+    return res.json({ ok: true, username: _cachedBotUsername });
+  } catch (e) {
+    console.error('[API bot_username] error:', e);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
+
 // Serve static files from webapp directory
 app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
 

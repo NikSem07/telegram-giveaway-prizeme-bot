@@ -8,6 +8,9 @@ const TAB_TO_API_STATUS = {
   completed: 'completed', // Завершенные
 };
 
+const STORAGE_TAB_KEY = 'prizeme_creator_giveaways_tab';
+const STORAGE_SCROLL_KEY = 'prizeme_creator_giveaways_scroll_y';
+
 function getInitData() {
   // 1) то, что мы сохраняем в sessionStorage при входе через /miniapp/ (у тебя так уже сделано)
   const fromSession = sessionStorage.getItem('prizeme_init_data');
@@ -76,6 +79,7 @@ async function loadCreatorGiveaways(status) {
 }
 
 function initTabs(root) {
+  let currentTabKey = 'active';
   const tabs = Array.from(root.querySelectorAll('.creator-giveaways__tab'));
   const totalEl = root.querySelector('#creator-giveaways-total');
   const listEl = root.querySelector('#creator-giveaways-list');
@@ -85,6 +89,8 @@ function initTabs(root) {
   };
 
   const renderState = async (tabKey) => {
+    currentTabKey = tabKey;
+    try { sessionStorage.setItem(STORAGE_TAB_KEY, tabKey); } catch (e) {}
     const apiStatus = TAB_TO_API_STATUS[tabKey] || 'active';
     setActiveTab(tabKey);
 
@@ -103,7 +109,8 @@ function initTabs(root) {
   });
 
   // стартуем с "Запущенные"
-  renderState('active');
+  const savedTab = sessionStorage.getItem(STORAGE_TAB_KEY);
+  renderState(savedTab || 'active');
 
   // Делегирование клика по карточкам (готовим переход в детали)
   listEl.addEventListener('click', (e) => {
@@ -115,6 +122,9 @@ function initTabs(root) {
 
     sessionStorage.setItem('prizeme_creator_giveaway_id', String(id));
     Router.navigate('giveaway_card_creator');
+
+    try { sessionStorage.setItem(STORAGE_TAB_KEY, currentTabKey); } catch (e) {}
+    try { sessionStorage.setItem(STORAGE_SCROLL_KEY, String(window.scrollY || 0)); } catch (e) {}
   });
 
   // Enter с клавиатуры
@@ -129,6 +139,9 @@ function initTabs(root) {
 
     sessionStorage.setItem('prizeme_creator_giveaway_id', String(id));
     Router.navigate('giveaway_card_creator');
+
+    try { sessionStorage.setItem(STORAGE_TAB_KEY, currentTabKey); } catch (e) {}
+    try { sessionStorage.setItem(STORAGE_SCROLL_KEY, String(window.scrollY || 0)); } catch (e) {}
   });
 
 }
@@ -146,6 +159,11 @@ function renderGiveawaysPage() {
   if (tg?.BackButton) tg.BackButton.hide();
 
   initTabs(root);
+
+  try {
+    const y = parseInt(sessionStorage.getItem(STORAGE_SCROLL_KEY) || '0', 10);
+    if (Number.isFinite(y) && y > 0) window.scrollTo(0, y);
+  } catch (e) {}
 }
 
 export { renderGiveawaysPage };

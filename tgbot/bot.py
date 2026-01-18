@@ -2569,6 +2569,27 @@ def kb_confirm_description() -> InlineKeyboardMarkup:
 
 @dp.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
+
+    # === START PARAM ROUTER: edit_creator_<status>_<gid> ===
+    # Пример: /start edit_creator_active_123
+    args = (message.text or "").split(maxsplit=1)
+    start_param = args[1].strip() if len(args) > 1 else ""
+
+    if start_param.startswith("edit_creator_"):
+        try:
+            # edit_creator_active_123  -> ["edit", "creator", "active", "123"]
+            _, _, status, gid_str = start_param.split("_", 3)
+            gid = int(gid_str)
+        except Exception:
+            await message.answer("Не удалось открыть розыгрыш для редактирования.")
+            return
+
+        # Опционально: проверка владельца, чтобы нельзя было открыть чужой gid
+        # (Если show_event_card сам проверяет owner_user_id, то можно не дублировать)
+
+        await show_event_card(message.chat.id, gid)
+        return
+
     await ensure_user(m.from_user.id, m.from_user.username)
     text = (
         "Добро пожаловать в сервис для проведения розыгрышей PrizeMe!\n\n"
@@ -4664,10 +4685,8 @@ async def cmd_events(m: Message):
     """Команда /giveaways - меню с разделением по ролям"""
     await show_my_giveaways_menu(m)
 
+# --- Показывает карточку розыгрыша с УСИЛЕННЫМ link-preview если есть медиа ---
 async def show_event_card(chat_id:int, giveaway_id:int):
-    """
-    Показывает карточку розыгрыша с УСИЛЕННЫМ link-preview если есть медиа
-    """
     async with session_scope() as s:
         gw = await s.get(Giveaway, giveaway_id)
 
@@ -4677,7 +4696,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 
     kind, fid = unpack_media(gw.photo_file_id)
 
-    # 🔄 УСИЛЕННЫЙ LINK-PREVIEW для карточки
+    # УСИЛЕННЫЙ LINK-PREVIEW для карточки
     if fid:
         try:
             # Пытаемся использовать link-preview для единообразия
@@ -4693,7 +4712,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
             key, s3_url = await file_id_to_public_url_via_s3(bot, fid, suggested)
             preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
 
-            # 🔄 УСИЛЕННЫЙ LINK-PREVIEW
+            # УСИЛЕННЫЙ LINK-PREVIEW
             hidden_link = f'<a href="{preview_url}"> </a>'
             full_text = f"{cap}\n\n{hidden_link}"
 
@@ -4702,11 +4721,11 @@ async def show_event_card(chat_id:int, giveaway_id:int):
                 prefer_large_media=True,
                 prefer_small_media=False,
                 show_above_text=False,
-                url=preview_url  # 🔄 ЯВНО указываем URL
+                url=preview_url  # ЯВНО указываем URL
             )
 
             # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
-            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем новую клавиатуру для черновиков
+            # Используем новую клавиатуру для черновиков
             if gw.status == GiveawayStatus.DRAFT:
                 reply_markup = kb_draft_actions(giveaway_id)
             else:

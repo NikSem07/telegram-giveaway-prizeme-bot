@@ -1,6 +1,15 @@
 // webapp/pages/creator/giveaways/giveaway_card_creator.js
 import giveawayCardCreatorTemplate from './giveaway_card_creator.template.js';
 
+import Router from '../../../shared/router.js';
+
+const STORAGE_TAB_KEY = 'prizeme_creator_giveaways_tab';
+
+function backToGiveaways() {
+  // Вкладка уже сохранена в sessionStorage на экране списка.
+  Router.navigate('giveaways');
+}
+
 function getInitData() {
   return sessionStorage.getItem('prizeme_init_data') || window.Telegram?.WebApp?.initData || '';
 }
@@ -69,15 +78,17 @@ function showTelegramBackButton() {
   const tg = window.Telegram?.WebApp;
   if (!tg?.BackButton) return;
 
+  // гарантируем единственный хендлер
+  try { tg.BackButton.offClick(backToGiveaways); } catch (e) {}
+  tg.BackButton.onClick(backToGiveaways);
   tg.BackButton.show();
-  tg.BackButton.onClick(() => {
-    window.location.hash = '#/creator/giveaways';
-  });
 }
 
 function hideTelegramBackButton() {
   const tg = window.Telegram?.WebApp;
   if (!tg?.BackButton) return;
+
+  try { tg.BackButton.offClick(backToGiveaways); } catch (e) {}
   tg.BackButton.hide();
 }
 
@@ -116,9 +127,77 @@ function renderGiveawayCardCreatorPage() {
       titleEl.textContent = 'Ошибка загрузки';
     });
 
-  // пока заглушка редактирования
   const editBtn = main.querySelector('#cgcc-edit');
-  editBtn.addEventListener('click', () => {});
+  editBtn.addEventListener('click', () => {
+    const giveawayId = sessionStorage.getItem('prizeme_creator_giveaway_id');
+    if (!giveawayId) return;
+    showEditPopup(giveawayId);
+  });
+}
+
+async function getBotUsername() {
+  const r = await fetch('/api/bot_username');
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.ok || !data.username) throw new Error('no_bot_username');
+  return data.username;
+}
+
+function getReturnTabKey() {
+  return sessionStorage.getItem(STORAGE_TAB_KEY) || 'active';
+}
+
+function buildEditStartParam(giveawayId) {
+  const tab = getReturnTabKey(); // active / draft / completed
+  const botTab = (tab === 'completed') ? 'finished' : tab; // маппинг в статусы бота/БД
+  return `edit_creator_${botTab}_${giveawayId}`;
+}
+
+async function goEditInBot(giveawayId) {
+  const tg = window.Telegram?.WebApp;
+  const username = await getBotUsername();
+  const startParam = buildEditStartParam(giveawayId);
+
+  const url = `https://t.me/${username}?start=${encodeURIComponent(startParam)}`;
+
+  // Открываем бота и закрываем миниапп
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.location.href = url;
+
+  if (tg?.close) tg.close();
+}
+
+function showEditPopup(giveawayId) {
+  const tg = window.Telegram?.WebApp;
+
+  const message = 'Для редактирования розыгрыша Вы будете перемещены в чат с ботом! Продолжить?';
+
+  if (tg?.showPopup) {
+    tg.showPopup(
+      {
+        title: 'Редактирование',
+        message,
+        buttons: [
+          { id: 'yes', type: 'default', text: 'Да' },
+          { id: 'cancel', type: 'cancel', text: 'Отмена' }
+        ],
+      },
+      async (buttonId) => {
+        if (buttonId !== 'yes') return;
+        try {
+          await goEditInBot(giveawayId);
+        } catch (e) {
+          // fallback: можно позже заменить на аккуратный alert/toast
+          if (tg?.showAlert) tg.showAlert('Не удалось открыть бота. Попробуйте позже.');
+        }
+      }
+    );
+    return;
+  }
+
+  // Fallback для браузера
+  if (window.confirm(message)) {
+    goEditInBot(giveawayId).catch(() => {});
+  }
 }
 
 export { renderGiveawayCardCreatorPage, hideTelegramBackButton };
