@@ -54,7 +54,7 @@
   min-height: 120px;         /* чтобы пустой блок не схлопывался */
   max-height: 520px;         /* защита от огромных */
   border-radius: 10px;
-  background: #2e2e2e;
+  background: transparent;
   overflow: hidden;
   display: flex;
   align-items: flex-start;   /* выравнивание по верху */
@@ -68,6 +68,8 @@
   max-height: 520px;
   object-fit: contain;       /* без обрезки */
   display: block;
+  border-radius: 10px;   /* такой же радиус, как был у блока */
+   overflow: hidden;
 }
 
 .creator-giveaway-card-media-empty {
