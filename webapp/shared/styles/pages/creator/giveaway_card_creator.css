@@ -238,3 +238,34 @@
   letter-spacing: 0.5px;
   color: #737375;
 }
+
+/* ===== Header title instead of mode-switcher (ONLY on giveaway card page) ===== */
+
+/* Скрываем заголовок внутри контента, чтобы не было дубля */
+.page-creator-giveaway-card .creator-giveaway-card-screen-title {
+  display: none !important;
+}
+
+/* На странице деталей НЕ показываем переключалку, но контейнер оставляем */
+.page-creator-giveaway-card .mode-switcher {
+  display: none !important;
+}
+
+/* В контейнере переключалки рисуем заголовок по центру — на том же уровне */
+.page-creator-giveaway-card .mode-switcher-container {
+  /* контейнер уже центрируется в header.css, но делаем его шире */
+  width: 100% !important;
+  left: 0 !important;
+  transform: translateY(-50%) !important;
+  justify-content: center !important;
+}
+
+/* Сам текст заголовка в шапке */
+.page-creator-giveaway-card .mode-switcher-container::after {
+  content: "Карточка розыгрыша";
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #737375;
+}
