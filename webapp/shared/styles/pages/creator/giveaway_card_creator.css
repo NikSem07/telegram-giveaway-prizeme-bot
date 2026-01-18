@@ -23,7 +23,7 @@
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-size: 12px;      /* было 10 */
   line-height: 16px;    /* компактнее и “заголовочнее” */
-  font-weight: 500;     /* чуть жирнее */
+  font-weight: 400;     /* чуть жирнее */
   color: #737375;
 }
 
@@ -233,8 +233,8 @@
   text-align: center;
   margin: 6px 0 10px;
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.5px;
-  color: #FAFAFA;
+  color: #737375;
 }
