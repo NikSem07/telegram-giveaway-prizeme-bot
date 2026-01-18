@@ -178,7 +178,7 @@ function showEditPopup(giveawayId) {
         message,
         buttons: [
           { id: 'yes', type: 'default', text: 'Да' },
-          { id: 'cancel', type: 'cancel', text: 'Отмена' }
+          { id: 'no', type: 'destructive', text: 'Отмена' }
         ],
       },
       async (buttonId) => {
