@@ -18,10 +18,12 @@
   gap: 4px;
 }
 
+/* Заголовки блоков */
 .creator-giveaway-card-label {
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 10px;
-  line-height: 18px;
+  font-size: 12px;      /* было 10 */
+  line-height: 16px;    /* компактнее и “заголовочнее” */
+  font-weight: 500;     /* чуть жирнее */
   color: #737375;
 }
 
@@ -30,7 +32,7 @@
   height: 32px;
   display: flex;
   align-items: center;
-  background: #2e2e2e;
+  background: #2E2E2E;
   border-radius: 5px;
   overflow: hidden;
   padding: 0 10px;
@@ -90,7 +92,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #2e2e2e;
+  background: #2E2E2E;
   border-radius: 5px;
   overflow: hidden;
   padding: 0 10px;
@@ -214,4 +216,25 @@
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
   border-left: 16px solid rgba(255,255,255,0.95);
+}
+
+/* Hide mode-switcher only on giveaway card page */
+.page-creator-giveaway-card .mode-switcher-container {
+  display: none !important;
+}
+
+/* В некоторых сборках переключалка может жить не в контейнере */
+.page-creator-giveaway-card .mode-switcher {
+  display: none !important;
+}
+
+.creator-giveaway-card-screen-title {
+  width: 100%;
+  text-align: center;
+  margin: 6px 0 10px;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #FAFAFA;
 }

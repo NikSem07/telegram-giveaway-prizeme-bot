@@ -146,6 +146,8 @@ function renderGiveawayCardCreatorPage() {
 
   main.innerHTML = giveawayCardCreatorTemplate();
 
+  document.body.classList.add('page-creator-giveaway-card');
+
   const giveawayId = sessionStorage.getItem('prizeme_creator_giveaway_id');
   if (!giveawayId) return;
 

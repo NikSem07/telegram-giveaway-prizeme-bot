@@ -2,6 +2,7 @@
 export default function giveawayCardCreatorTemplate() {
   return `
     <section class="creator-giveaway-card-detail">
+      <div class="creator-giveaway-card-screen-title">Карточка розыгрыша</div>
       <div class="creator-giveaway-card-block">
         <div class="creator-giveaway-card-label">Название розыгрыша</div>
         <div class="creator-giveaway-card-box">

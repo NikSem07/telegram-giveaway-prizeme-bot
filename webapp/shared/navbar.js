@@ -74,7 +74,9 @@ const Navbar = {
     
     // Создание элемента навигации
     createNavItem(item, currentPage) {
-        const isActive = item.id === currentPage;
+        const isGiveawaysActive =
+            (currentPage === 'giveaways' || currentPage === 'giveaway_card_creator') && item.id === 'giveaways';
+        const isActive = (item.id === currentPage) || isGiveawaysActive;
         const isProfile = item.id === 'profile';
         
         const div = document.createElement('div');

@@ -147,6 +147,9 @@ function initTabs(root) {
 }
 
 function renderGiveawaysPage() {
+
+  document.body.classList.remove('page-creator-giveaway-card');
+  
   const main = document.getElementById('main-content');
   if (!main) return;
 
