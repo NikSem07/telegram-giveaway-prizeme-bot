@@ -218,11 +218,6 @@
   border-left: 16px solid rgba(255,255,255,0.95);
 }
 
-/* Hide mode-switcher only on giveaway card page */
-.page-creator-giveaway-card .mode-switcher-container {
-  display: none !important;
-}
-
 /* В некоторых сборках переключалка может жить не в контейнере */
 .page-creator-giveaway-card .mode-switcher {
   display: none !important;
@@ -253,11 +248,17 @@
 
 /* В контейнере переключалки рисуем заголовок по центру — на том же уровне */
 .page-creator-giveaway-card .mode-switcher-container {
-  /* контейнер уже центрируется в header.css, но делаем его шире */
+  position: absolute;          /* на всякий случай, как в header.css */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) !important;
+
   width: 100% !important;
-  left: 0 !important;
-  transform: translateY(-50%) !important;
+  display: flex !important;
   justify-content: center !important;
+  align-items: center !important;
+
+  pointer-events: none; /* чтобы не мешать кликам по header */
 }
 
 /* Сам текст заголовка в шапке */
