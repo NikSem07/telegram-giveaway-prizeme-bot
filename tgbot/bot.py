@@ -282,7 +282,16 @@ def build_connect_channels_text(
 ) -> str:
     """
     Собирает "серый" текстовый блок БЕЗ кликабельных ссылок на каналы
+    и БЕЗ лишних пустых строк.
     """
+    # Очищаем список от пустых значений
+    clean_attached = []
+    if attached:
+        for item in attached:
+            title, username, chat_id = item
+            if title and title.strip():  # Проверяем, что title не пустой
+                clean_attached.append((title.strip(), username, chat_id))
+    
     title = (
         f"🔗 Подключение канала к розыгрышу \"{event_title}\""
         if event_title else
@@ -298,8 +307,8 @@ def build_connect_channels_text(
         "Подключённые каналы:",
     ]
 
-    if attached:
-        for i, (t, uname, _cid) in enumerate(attached, start=1):
+    if clean_attached:
+        for i, (t, uname, _cid) in enumerate(clean_attached, start=1):
             # ИЗМЕНЕНИЕ: показываем только название канала, без ссылки
             lines.append(f"{i}. {t}")
     else:
@@ -2086,7 +2095,6 @@ async def save_shared_chat(
     chat_type: str,
     bot_role: str
 ) -> bool:
-
     is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
     
     try:
@@ -2094,56 +2102,47 @@ async def save_shared_chat(
         added_at_aware = datetime.now(timezone.utc)
         
         async with session_scope() as s:
-            # Сначала проверяем существование
-            existing = await s.execute(
-                text("SELECT id FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
-                {"user_id": owner_user_id, "chat_id": chat_id}
-            )
-            existing_row = existing.first()
-            
-            if existing_row:
-                # Обновляем существующую запись
-                await s.execute(
-                    text("""
-                    UPDATE organizer_channels 
-                    SET title = :title, is_private = :is_private, bot_role = :role, status = 'ok'
-                    WHERE owner_user_id = :user_id AND chat_id = :chat_id
-                    """),
-                    {
-                        "title": title,
-                        "is_private": is_private,
-                        "role": bot_role,
-                        "user_id": owner_user_id,
-                        "chat_id": chat_id
-                    }
-                )
-                logging.info(f"✅ Канал обновлен: {title} (chat_id={chat_id}) для user_id={owner_user_id}")
-                return False  # Не новая запись
-            else:
-                # ✅ ПРАВИЛЬНО: Вставляем с aware datetime
-                await s.execute(
-                    text("""
-                    INSERT INTO organizer_channels
+            # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем UPSERT
+            result = await s.execute(
+                text("""
+                    INSERT INTO organizer_channels 
                         (owner_user_id, chat_id, title, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :is_private, :role, 'ok', :added_at)
-                    """),
-                    {
-                        "user_id": owner_user_id,
-                        "chat_id": chat_id,
-                        "title": title,
-                        "is_private": is_private,
-                        "role": bot_role,
-                        "added_at": added_at_aware
-                    }
-                )
-                logging.info(f"✅ Новый канал добавлен: {title} (chat_id={chat_id}) для user_id={owner_user_id}")
-                return True  # Новая запись
+                    ON CONFLICT (owner_user_id, chat_id) 
+                    DO UPDATE SET 
+                        title = EXCLUDED.title,
+                        is_private = EXCLUDED.is_private,
+                        bot_role = EXCLUDED.role,
+                        status = 'ok',
+                        added_at = EXCLUDED.added_at
+                    RETURNING id, (xmax = 0) as is_new
+                """),
+                {
+                    "user_id": owner_user_id,
+                    "chat_id": chat_id,
+                    "title": title,
+                    "is_private": is_private,
+                    "role": bot_role,
+                    "added_at": added_at_aware
+                }
+            )
+            
+            row = result.first()
+            if row:
+                is_new = bool(row[1])
+                action = "добавлен" if is_new else "обновлён"
+                logging.info(f"✅ Канал {action}: {title} (chat_id={chat_id}) для user_id={owner_user_id}")
+                return is_new
+            else:
+                logging.error(f"❌ Не удалось сохранить канал {title} для user_id={owner_user_id}")
+                return False
                 
     except Exception as e:
         logging.error(f"❌ Error in save_shared_chat: {e}")
         import traceback
         logging.error(f"Traceback: {traceback.format_exc()}")
         return False
+
 
 async def save_channel_for_user(
     *,
@@ -2156,7 +2155,7 @@ async def save_channel_for_user(
 ) -> bool:
     """
     УНИВЕРСАЛЬНАЯ функция сохранения канала для пользователя.
-    Используется ВЕЗДЕ: on_my_chat_member, on_chat_shared, save_shared_chat.
+    Использует UPSERT для избежания UniqueViolationError.
     """
     is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
     
@@ -2164,54 +2163,45 @@ async def save_channel_for_user(
         added_at_aware = datetime.now(timezone.utc)
         
         async with session_scope() as s:
-            # Сначала проверяем существование
-            existing = await s.execute(
-                text("SELECT id FROM organizer_channels WHERE owner_user_id = :user_id AND chat_id = :chat_id"),
-                {"user_id": user_id, "chat_id": chat_id}
-            )
-            existing_row = existing.first()
-            
-            if existing_row:
-                # Обновляем существующую запись
-                await s.execute(
-                    text("""
-                    UPDATE organizer_channels 
-                    SET title = :title, username = :username, is_private = :is_private, 
-                        bot_role = :role, status = 'ok', added_at = :added_at
-                    WHERE owner_user_id = :user_id AND chat_id = :chat_id
-                    """),
-                    {
-                        "title": title,
-                        "username": username,
-                        "is_private": is_private,
-                        "role": bot_role,
-                        "added_at": added_at_aware,
-                        "user_id": user_id,
-                        "chat_id": chat_id
-                    }
-                )
-                logging.info(f"✅ Канал обновлен: {title} (chat_id={chat_id}) для user_id={user_id}")
-                return False  # Не новая запись
-            else:
-                # Создаем новую запись
-                await s.execute(
-                    text("""
-                    INSERT INTO organizer_channels
+            # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+            # Правильный SQL для PostgreSQL
+            result = await s.execute(
+                text("""
+                    INSERT INTO organizer_channels 
                         (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at)
-                    """),
-                    {
-                        "user_id": user_id,
-                        "chat_id": chat_id,
-                        "title": title,
-                        "username": username,
-                        "is_private": is_private,
-                        "role": bot_role,
-                        "added_at": added_at_aware
-                    }
-                )
-                logging.info(f"✅ Новый канал добавлен: {title} (chat_id={chat_id}) для user_id={user_id}")
-                return True  # Новая запись
+                    ON CONFLICT (owner_user_id, chat_id) 
+                    DO UPDATE SET 
+                        title = EXCLUDED.title,
+                        username = EXCLUDED.username,
+                        is_private = EXCLUDED.is_private,
+                        bot_role = EXCLUDED.bot_role,
+                        status = EXCLUDED.status,
+                        added_at = EXCLUDED.added_at
+                    RETURNING id, (xmax = 0) as is_new
+                """),
+                {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "title": title,
+                    "username": username,
+                    "is_private": is_private,
+                    "role": bot_role,
+                    "added_at": added_at_aware
+                }
+            )
+            
+            row = result.first()
+            if row:
+                is_new = bool(row[1])  # xmax = 0 означает новая запись
+                if is_new:
+                    logging.info(f"✅ Новый канал добавлен: {title} (chat_id={chat_id}) для user_id={user_id}")
+                else:
+                    logging.info(f"✅ Канал обновлен: {title} (chat_id={chat_id}) для user_id={user_id}")
+                return is_new
+            else:
+                logging.error(f"❌ Не удалось сохранить канал {title} для user_id={user_id}")
+                return False
                 
     except Exception as e:
         logging.error(f"❌ Error in save_channel_for_user: {e}")
@@ -5248,7 +5238,27 @@ async def cb_connect_channels(cq: CallbackQuery):
         )
         attached_list = [(r[0], r[1], r[2]) for r in res.fetchall()]
 
-    text_block = build_connect_channels_text(gw.internal_title, attached_list)
+    # Убедимся, что attached_list не содержит пустых значений
+    clean_attached_list = []
+    if attached_list:
+        for item in attached_list:
+            # item = (title, username, chat_id)
+            if item[0] and item[0].strip():  # Проверяем, что title не пустой
+                clean_attached_list.append(item)
+    
+    if not clean_attached_list:
+        # Создаем текст без списка подключенных каналов
+        text_block = (
+            f"🔗 Подключение канала к розыгрышу \"{gw.internal_title}\"\n\n"
+            "Подключить канал к розыгрышу сможет только администратор, "
+            "который обладает достаточным уровнем прав в прикреплённом канале.\n\n"
+            "Подключённые каналы:\n"
+            "— пока нет"
+        )
+    else:
+        text_block = build_connect_channels_text(gw.internal_title, clean_attached_list)
+    
+    # Используем clean_attached_list для клавиатуры тоже
     kb = build_channels_menu_kb(event_id, channels, attached_ids)
     
     try:

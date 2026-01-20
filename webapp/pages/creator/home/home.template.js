@@ -22,7 +22,7 @@ export default function creatorHomeTemplate(context = {}) {
 
           <!-- Donate -->
           <button class="creator-home-v2-card creator-home-v2-card--donate" data-creator-action="donate" type="button">
-            <div class="creator-home-v2-card-title">Донат проекту</div>
+            <div class="creator-home-v2-card-title">Донат</div>
             <img class="creator-home-v2-arrow" src="/miniapp-static/assets/icons/arrow-icon.svg" alt="arrow" />
           </button>
 
