@@ -2108,7 +2108,7 @@ async def save_shared_chat(
                     INSERT INTO organizer_channels 
                         (owner_user_id, chat_id, title, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :is_private, :role, 'ok', :added_at)
-                    ON CONFLICT (owner_user_id, chat_id) 
+                    ON CONFLICT ON CONSTRAINT ux_org_channels_owner_chat 
                     DO UPDATE SET 
                         title = EXCLUDED.title,
                         is_private = EXCLUDED.is_private,
@@ -2170,7 +2170,7 @@ async def save_channel_for_user(
                     INSERT INTO organizer_channels 
                         (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at)
-                    ON CONFLICT (owner_user_id, chat_id) 
+                    ON CONFLICT ON CONSTRAINT ux_org_channels_owner_chat 
                     DO UPDATE SET 
                         title = EXCLUDED.title,
                         username = EXCLUDED.username,
