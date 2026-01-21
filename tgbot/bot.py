@@ -203,22 +203,6 @@ def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     # Простое обрезание
     return html_text[:max_length] + "..."
 
-ents = m.entities or []
-logging.info("[DESC] raw_text=%r", m.text)
-logging.info(
-    "[DESC] entities=%s",
-    [
-        {
-            "type": getattr(e, "type", None),
-            "offset": getattr(e, "offset", None),
-            "length": getattr(e, "length", None),
-            "url": getattr(e, "url", None),
-            "custom_emoji_id": getattr(e, "custom_emoji_id", None),
-        }
-        for e in ents
-    ],
-)
-
 def message_text_to_html_with_entities(text: str, entities: list) -> str:
     """
     Конвертирует Telegram entities (включая custom_emoji) в HTML.
@@ -337,11 +321,6 @@ def _utf16_to_py_index(s: str, utf16_pos: int) -> int:
         if cur16 == utf16_pos:
             return i + 1
     return len(s)
-
-logging.info("[DESC] html has tg-emoji=%s", "<tg-emoji" in html_text)
-if "<tg-emoji" in html_text:
-    # чтобы не засорять логи — только первые 300 символов вокруг
-    logging.info("[DESC] html snippet=%r", html_text[:300])
 
 # --- Для ссылок формата https://t.me/c/<internal>/<msg_id> ---
 def _tg_internal_chat_id(chat_id: int) -> int | None:
