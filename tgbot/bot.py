@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from io import BytesIO
 from html import escape
+from html import escape as _escape
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from urllib.parse import urlencode
@@ -201,6 +202,96 @@ def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     
     # Простое обрезание
     return html_text[:max_length] + "..."
+
+def message_text_to_html_with_entities(text: str, entities: list) -> str:
+    """
+    Конвертирует Telegram entities (включая custom_emoji) в HTML.
+    Поддерживает: bold/italic/underline/strikethrough/spoiler/code/pre/text_link/url/custom_emoji.
+    """
+    if not text:
+        return ""
+
+    # Собираем events открытия/закрытия тегов по позициям
+    opens: dict[int, list[tuple[int, str]]] = {}
+    closes: dict[int, list[tuple[int, str]]] = {}
+
+    def add_event(offset: int, end: int, prio: int, open_tag: str, close_tag: str):
+        opens.setdefault(offset, []).append((prio, open_tag))
+        closes.setdefault(end, []).append((prio, close_tag))
+
+    for ent in (entities or []):
+        t = getattr(ent, "type", None)
+        off = int(getattr(ent, "offset", 0))
+        ln = int(getattr(ent, "length", 0))
+        end = off + ln
+        if ln <= 0:
+            continue
+
+        if t == "bold":
+            add_event(off, end, 10, "<b>", "</b>")
+        elif t == "italic":
+            add_event(off, end, 20, "<i>", "</i>")
+        elif t == "underline":
+            add_event(off, end, 30, "<u>", "</u>")
+        elif t == "strikethrough":
+            add_event(off, end, 40, "<s>", "</s>")
+        elif t == "spoiler":
+            add_event(off, end, 50, "<span class=\"tg-spoiler\">", "</span>")
+        elif t == "code":
+            add_event(off, end, 60, "<code>", "</code>")
+        elif t == "pre":
+            # язык (optional)
+            lang = getattr(ent, "language", None)
+            if lang:
+                add_event(off, end, 70, f"<pre><code class=\"language-{_escape(str(lang))}\">", "</code></pre>")
+            else:
+                add_event(off, end, 70, "<pre>", "</pre>")
+        elif t == "text_link":
+            url = getattr(ent, "url", None)
+            if url:
+                add_event(off, end, 80, f"<a href=\"{_escape(str(url))}\">", "</a>")
+        elif t == "url":
+            # auto-url: просто обернём текст в ссылку на него же
+            # (внутри HTML Telegram нормально принимает)
+            # Важно: сам URL берём из среза текста
+            # Теги поставим позднее в проходе по символам — тут зададим "заглушку"
+            # Реализуем как text_link на self:
+            url_text = text[off:end]
+            add_event(off, end, 80, f"<a href=\"{_escape(url_text)}\">", "</a>")
+        elif t == "custom_emoji":
+            emoji_id = getattr(ent, "custom_emoji_id", None)
+            if emoji_id:
+                add_event(off, end, 90, f"<tg-emoji emoji-id=\"{_escape(str(emoji_id))}\">", "</tg-emoji>")
+        else:
+            # Остальные типы можно добавлять по мере необходимости
+            pass
+
+    # Важно: закрытия должны идти в обратном порядке вложенности
+    for k in closes:
+        closes[k].sort(key=lambda x: -x[0])
+    for k in opens:
+        opens[k].sort(key=lambda x: x[0])
+
+    out: list[str] = []
+    n = len(text)
+    for i in range(n + 1):
+        if i in closes:
+            for _, tag in closes[i]:
+                out.append(tag)
+        if i == n:
+            break
+        if i in opens:
+            for _, tag in opens[i]:
+                out.append(tag)
+
+        ch = text[i]
+        # переносы
+        if ch == "\n":
+            out.append("\n")
+        else:
+            out.append(_escape(ch))
+
+    return "".join(out)
 
 # --- Для ссылок формата https://t.me/c/<internal>/<msg_id> ---
 def _tg_internal_chat_id(chat_id: int) -> int | None:
@@ -3521,21 +3612,25 @@ async def handle_winners_count(m: Message, state: FSMContext):
 # --- Пользователь прислал описание ---
 @dp.message(CreateFlow.DESC, F.text)
 async def step_desc(m: Message, state: FSMContext):
-    # УПРОЩЕННАЯ ВЕРСИЯ: используем только html_text как раньше
-    html_text = m.html_text
-    
+    raw_text = m.text or ""
+    entities = m.entities or []
+
+    # Конвертим в HTML с поддержкой premium-emoji (custom_emoji)
+    html_text = message_text_to_html_with_entities(raw_text, entities)
+
     if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    # Сохраняем описание как HTML
+    # (опционально) если хочешь — прогон через твой safe_html_text
+    # html_text = safe_html_text(html_text, 2500)
+
     await state.update_data(desc=html_text)
 
-    # Показываем предпросмотр с отключенным превью ссылок
     preview = f"<b>Предпросмотр описания:</b>\n\n{html_text}"
     await m.answer(
-        preview, 
-        parse_mode="HTML", 
+        preview,
+        parse_mode="HTML",
         reply_markup=kb_confirm_description(),
         disable_web_page_preview=True
     )
