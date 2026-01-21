@@ -221,9 +221,15 @@ def message_text_to_html_with_entities(text: str, entities: list) -> str:
 
     for ent in (entities or []):
         t = getattr(ent, "type", None)
-        off = int(getattr(ent, "offset", 0))
-        ln = int(getattr(ent, "length", 0))
-        end = off + ln
+        off16 = int(getattr(ent, "offset", 0))
+        ln16  = int(getattr(ent, "length", 0))
+        end16 = off16 + ln16
+
+        off = _utf16_to_py_index(text, off16)
+        end = _utf16_to_py_index(text, end16)
+
+        if end <= off:
+            continue
         if ln <= 0:
             continue
 
@@ -292,6 +298,29 @@ def message_text_to_html_with_entities(text: str, entities: list) -> str:
             out.append(_escape(ch))
 
     return "".join(out)
+
+def _utf16_len(ch: str) -> int:
+    # символы вне BMP (например многие emoji) занимают 2 code units в UTF-16
+    return 2 if ord(ch) > 0xFFFF else 1
+
+
+def _utf16_to_py_index(s: str, utf16_pos: int) -> int:
+    """
+    Перевод позиции из UTF-16 code units (как в Telegram entities)
+    в индекс Python-строки (codepoints).
+    """
+    if utf16_pos <= 0:
+        return 0
+
+    cur16 = 0
+    for i, ch in enumerate(s):
+        nxt = cur16 + _utf16_len(ch)
+        if nxt > utf16_pos:
+            return i
+        cur16 = nxt
+        if cur16 == utf16_pos:
+            return i + 1
+    return len(s)
 
 # --- Для ссылок формата https://t.me/c/<internal>/<msg_id> ---
 def _tg_internal_chat_id(chat_id: int) -> int | None:
