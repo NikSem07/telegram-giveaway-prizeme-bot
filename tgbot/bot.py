@@ -2098,23 +2098,22 @@ async def save_shared_chat(
     is_private = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
     
     try:
-        # ✅ ПРАВИЛЬНО: aware datetime с timezone (UTC)
+        # aware datetime с timezone (UTC)
         added_at_aware = datetime.now(timezone.utc)
         
         async with session_scope() as s:
-            # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем UPSERT
             result = await s.execute(
                 text("""
-                    INSERT INTO organizer_channels 
+                    INSERT INTO organizer_channels
                         (owner_user_id, chat_id, title, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :is_private, :role, 'ok', :added_at)
-                    ON CONFLICT ON CONSTRAINT ux_org_channels_owner_chat 
-                    DO UPDATE SET 
-                        title = EXCLUDED.title,
+                    ON CONFLICT (owner_user_id, chat_id)
+                    DO UPDATE SET
+                        title      = EXCLUDED.title,
                         is_private = EXCLUDED.is_private,
-                        bot_role = EXCLUDED.role,
-                        status = 'ok',
-                        added_at = EXCLUDED.added_at
+                        bot_role   = EXCLUDED.bot_role,
+                        status     = 'ok',
+                        added_at   = EXCLUDED.added_at
                     RETURNING id, (xmax = 0) as is_new
                 """),
                 {
@@ -2167,17 +2166,17 @@ async def save_channel_for_user(
             # Правильный SQL для PostgreSQL
             result = await s.execute(
                 text("""
-                    INSERT INTO organizer_channels 
+                    INSERT INTO organizer_channels
                         (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at)
                     VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at)
-                    ON CONFLICT ON CONSTRAINT ux_org_channels_owner_chat 
-                    DO UPDATE SET 
-                        title = EXCLUDED.title,
-                        username = EXCLUDED.username,
+                    ON CONFLICT (owner_user_id, chat_id)
+                    DO UPDATE SET
+                        title      = EXCLUDED.title,
+                        username   = EXCLUDED.username,
                         is_private = EXCLUDED.is_private,
-                        bot_role = EXCLUDED.bot_role,
-                        status = EXCLUDED.status,
-                        added_at = EXCLUDED.added_at
+                        bot_role   = EXCLUDED.bot_role,
+                        status     = EXCLUDED.status,
+                        added_at   = EXCLUDED.added_at
                     RETURNING id, (xmax = 0) as is_new
                 """),
                 {
@@ -2190,7 +2189,7 @@ async def save_channel_for_user(
                     "added_at": added_at_aware
                 }
             )
-            
+
             row = result.first()
             if row:
                 is_new = bool(row[1])  # xmax = 0 означает новая запись
@@ -5361,8 +5360,7 @@ async def cb_add_channel(cq: CallbackQuery, state: FSMContext):
     await state.update_data(chooser_event_id=int(sid))
 
     await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
-    INVISIBLE = "\u2060"
-    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+    await cq.message.answer("👇 Выберите канал или группу ниже", reply_markup=chooser_reply_kb())
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:add_group:"))
@@ -5371,8 +5369,7 @@ async def cb_add_group(cq: CallbackQuery, state: FSMContext):
     await state.update_data(chooser_event_id=int(sid))
 
     await cq.message.answer(ADD_CHAT_HELP_HTML, parse_mode="HTML", reply_markup=kb_add_cancel())
-    INVISIBLE = "\u2060"
-    await cq.message.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+    await cq.message.answer("👇 Выберите канал или группу ниже", reply_markup=chooser_reply_kb())
     await cq.answer()
 
 @dp.callback_query(F.data.startswith("raffle:start:"))
