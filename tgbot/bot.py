@@ -202,6 +202,64 @@ def safe_html_text(html_text: str, max_length: int = 2500) -> str:
     # Простое обрезание
     return html_text[:max_length] + "..."
 
+# --- Для ссылок формата https://t.me/c/<internal>/<msg_id> ---
+def _tg_internal_chat_id(chat_id: int) -> int | None:
+    try:
+        cid = abs(int(chat_id))
+    except Exception:
+        return None
+
+    if cid < 1_000_000_000_000:
+        return None
+
+    internal = cid - 1_000_000_000_000
+    return internal if internal > 0 else None
+
+# --- Возвращает ссылку на пост с розыгрышем в ПЕРВОМ подключенном канале/группе ---
+async def get_first_giveaway_post_url(gid: int) -> str | None:
+    try:
+        async with session_scope() as s:
+            row = (await s.execute(
+                text("""
+                    SELECT oc.chat_id, oc.username, gc.message_id
+                    FROM giveaway_channels gc
+                    JOIN organizer_channels oc ON oc.id = gc.channel_id
+                    WHERE gc.giveaway_id = :gid
+                    ORDER BY gc.id ASC
+                    LIMIT 1
+                """),
+                {"gid": gid},
+            )).first()
+
+        if not row:
+            return None
+
+        chat_id, username, message_id = row
+        if not message_id:
+            return None
+
+        if username:
+            uname = str(username).lstrip("@")
+            return f"https://t.me/{uname}/{int(message_id)}"
+
+        internal = _tg_internal_chat_id(int(chat_id))
+        if not internal:
+            return None
+        return f"https://t.me/c/{internal}/{int(message_id)}"
+
+    except Exception as e:
+        logging.warning("Failed to build giveaway post url for gid=%s: %s", gid, e)
+        return None
+
+# --- HTML-строка: либо <a href="...">title</a>, либо просто экранированный title ---
+async def format_giveaway_title_link(gid: int, title: str) -> str:
+    url = await get_first_giveaway_post_url(gid)
+    title_html = escape(title or "")
+    if url:
+        return f'<a href="{url}">{title_html}</a>'
+    return title_html
+
+
 # --- Функция очистки текста от пользовательских ссылок ---
 class TextPreviewCleaner:
     """
@@ -6557,6 +6615,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
         
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
+            gw_title_link = await format_giveaway_title_link(gid, gw.internal_title)
             if not gw:
                 print(f"❌ Розыгрыш {gid} не найден для уведомления участников")
                 return
@@ -6595,7 +6654,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                     if user_id in winner_ids:
                         # Победитель
                         message_text = (
-                            f"🎉 Поздравляем! Вы стали победителем в розыгрыше \"{gw.internal_title}\".\n\n"
+                            f"🎉 Поздравляем! Вы стали победителем в розыгрыше \"{gw_title_link}\".\n\n"
                             f"Ваш билет <b>{ticket_code}</b> оказался выбранным случайным образом.\n\n"
                             f"Организатор свяжется с вами для вручения приза."
                         )
@@ -6619,7 +6678,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                     else:
                         # Участник (не победитель)
                         message_text = (
-                            f"🏁 Завершился розыгрыш \"{gw.internal_title}\".\n\n"
+                            f"🏁 Завершился розыгрыш \"{gw_title_link}\".\n\n"
                             f"Ваш билет: <b>{ticket_code}</b>\n\n"
                             f"Мы случайным образом определили победителей и, к сожалению, "
                             f"Ваш билет не был выбран.\n\n"
