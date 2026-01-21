@@ -6524,7 +6524,7 @@ async def notify_organizer(gid: int, winners: list, eligible_count: int, bot_ins
                 gw.owner_user_id, 
                 message_text,
                 reply_markup=kb.as_markup(),
-                disable_notification=False
+                disable_notification=False,
             )
             print(f"✅ Организатор уведомлен")
             
@@ -6539,6 +6539,8 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
         
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
+            gw_title_link = await format_giveaway_title_link(gid, gw.internal_title)
+            
             if not gw:
                 print(f"❌ Розыгрыш {gid} не найден")
                 return
@@ -6559,7 +6561,7 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
                 winners_text = "\n".join([f"{i+1}. {name}" for i, name in enumerate(winner_usernames)])
                 message_text = (
                     f"🔄 <b>Перерозыгрыш завершён!</b>\n\n"
-                    f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                    f'Розыгрыш: "{gw_title_link}"\n\n'
                     f"📊 Участников: {eligible_count}\n"
                     f"🏆 Новых победителей: {len(winners)}\n\n"
                     f"<b>НОВЫЙ список победителей:</b>\n{winners_text}\n\n"
@@ -6568,7 +6570,7 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
             else:
                 message_text = (
                     f"🔄 <b>Перерозыгрыш завершён!</b>\n\n"
-                    f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                    f'Розыгрыш: "{gw_title_link}"\n\n'
                     f"📊 Участников: {eligible_count}\n"
                     f"🏆 Победителей: {len(winners)}\n\n"
                     "К сожалению, не удалось определить новых победителей."
@@ -6596,7 +6598,8 @@ async def notify_redraw_organizer(gid: int, winners: list, eligible_count: int, 
                 message_text,
                 reply_markup=kb.as_markup(),
                 disable_notification=False,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                disable_web_page_preview=True
             )
             
     except Exception as e:
@@ -6672,7 +6675,8 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             message_text, 
                             parse_mode="HTML",
                             reply_markup=kb.as_markup(),
-                            disable_notification=False
+                            disable_notification=False,
+                            disable_web_page_preview=True
                         )
                         
                     else:
@@ -6702,7 +6706,8 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             message_text, 
                             parse_mode="HTML",
                             reply_markup=kb.as_markup(),
-                            disable_notification=False
+                            disable_notification=False,
+                            disable_web_page_preview=True
                         )
 
                     notified_count += 1
@@ -6732,6 +6737,7 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
         
         async with session_scope() as s:
             gw = await s.get(Giveaway, gid)
+            gw_title_link = await format_giveaway_title_link(gid, gw.internal_title)
             if not gw:
                 return
             
@@ -6768,7 +6774,7 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                         # НОВЫЙ победитель
                         message_text = (
                             f"🔄 <b>Проведён перерозыгрыш!</b>\n\n"
-                            f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                            f'Розыгрыш: "{gw_title_link}"\n\n'
                             f"🎉 <b>ПОЗДРАВЛЯЕМ!</b> Вы стали победителем в перерозыгрыше!\n\n"
                             f"Ваш билет <b>{ticket_code}</b> оказался выбранным случайным образом.\n\n"
                             f"Организатор свяжется с вами для вручения приза."
@@ -6777,7 +6783,7 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                         # Участник (не победитель в перерозыгрыше)
                         message_text = (
                             f"🔄 <b>Проведён перерозыгрыш!</b>\n\n"
-                            f"Розыгрыш: \"{gw.internal_title}\"\n\n"
+                            f'Розыгрыш: "{gw_title_link}"\n\n'
                             f"Ваш билет: <b>{ticket_code}</b>\n\n"
                             f"Мы случайным образом определили НОВЫХ победителей и, к сожалению, "
                             f"Ваш билет не был выбран.\n\n"
@@ -6796,7 +6802,8 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                         message_text, 
                         parse_mode="HTML",
                         reply_markup=kb.as_markup(),
-                        disable_notification=False
+                        disable_notification=False,
+                        disable_web_page_preview=True
                     )
                     
                     notified_count += 1
