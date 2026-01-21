@@ -230,7 +230,7 @@ def message_text_to_html_with_entities(text: str, entities: list) -> str:
 
         if end <= off:
             continue
-        if ln <= 0:
+        if ln16 <= 0:
             continue
 
         if t == "bold":
