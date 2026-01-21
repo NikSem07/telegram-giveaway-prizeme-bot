@@ -3644,15 +3644,32 @@ async def step_desc(m: Message, state: FSMContext):
     raw_text = m.text or ""
     entities = m.entities or []
 
+    # DEBUG (временно)
+    logging.info("[DESC] raw_text=%r", raw_text)
+    logging.info(
+        "[DESC] entities=%s",
+        [
+            {
+                "type": getattr(e, "type", None),
+                "offset": getattr(e, "offset", None),
+                "length": getattr(e, "length", None),
+                "url": getattr(e, "url", None),
+                "custom_emoji_id": getattr(e, "custom_emoji_id", None),
+            }
+            for e in entities
+        ],
+    )
+
     # Конвертим в HTML с поддержкой premium-emoji (custom_emoji)
     html_text = message_text_to_html_with_entities(raw_text, entities)
+
+    logging.info("[DESC] html has tg-emoji=%s", "<tg-emoji" in html_text)
+    if "<tg-emoji" in html_text:
+        logging.info("[DESC] html snippet=%r", html_text[:300])
 
     if len(html_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
-
-    # (опционально) если хочешь — прогон через твой safe_html_text
-    # html_text = safe_html_text(html_text, 2500)
 
     await state.update_data(desc=html_text)
 
