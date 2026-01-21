@@ -33,6 +33,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
 
+from sqlalchemy import Text
 from sqlalchemy import text as _sqltext
 from sqlalchemy import text as stext
 from sqlalchemy import (text, String, Integer, BigInteger,
@@ -321,6 +322,22 @@ def _utf16_to_py_index(s: str, utf16_pos: int) -> int:
         if cur16 == utf16_pos:
             return i + 1
     return len(s)
+
+def _utf16_strlen(s: str) -> int:
+    return sum(_utf16_len(ch) for ch in s)
+
+def shift_entities_dump(entities_dump: list[dict], shift_utf16: int) -> list[dict]:
+    out: list[dict] = []
+    for d in entities_dump or []:
+        d2 = dict(d)
+        d2["offset"] = int(d2.get("offset", 0)) + shift_utf16
+        out.append(d2)
+    return out
+
+from aiogram.types import MessageEntity
+
+def entities_from_dump(dumps: list[dict]) -> list[MessageEntity]:
+    return [MessageEntity(**d) for d in (dumps or [])]
 
 # --- Для ссылок формата https://t.me/c/<internal>/<msg_id> ---
 def _tg_internal_chat_id(chat_id: int) -> int | None:
@@ -1147,6 +1164,8 @@ class Giveaway(Base):
     owner_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     internal_title: Mapped[str] = mapped_column(String(100))
     public_description: Mapped[str] = mapped_column(String(3000))
+    public_description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_description_entities: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     photo_file_id: Mapped[str|None] = mapped_column(String(512), nullable=True)
     media_position: Mapped[str] = mapped_column(String(10), default='bottom')
     end_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -3644,44 +3663,36 @@ async def step_desc(m: Message, state: FSMContext):
     raw_text = m.text or ""
     entities = m.entities or []
 
-    # DEBUG (временно)
-    logging.info("[DESC] raw_text=%r", raw_text)
-    logging.info(
-        "[DESC] entities=%s",
-        [
-            {
-                "type": getattr(e, "type", None),
-                "offset": getattr(e, "offset", None),
-                "length": getattr(e, "length", None),
-                "url": getattr(e, "url", None),
-                "custom_emoji_id": getattr(e, "custom_emoji_id", None),
-            }
-            for e in entities
-        ],
-    )
-
-    # Конвертим в HTML с поддержкой premium-emoji (custom_emoji)
+    # 1) HTML оставляем для совместимости (MiniApp/старые места)
     html_text = message_text_to_html_with_entities(raw_text, entities)
 
-    logging.info("[DESC] html has tg-emoji=%s", "<tg-emoji" in html_text)
-    if "<tg-emoji" in html_text:
-        logging.info("[DESC] html snippet=%r", html_text[:300])
-
-    if len(html_text) > 2500:
+    if len(raw_text) > 2500:
         await m.answer("⚠️ Слишком длинно. Укороти до 2500 символов и пришли ещё раз.")
         return
 
-    await state.update_data(desc=html_text)
+    # 2) Сохраняем в FSM и HTML, и сырой text+entities
+    await state.update_data(
+        desc=html_text,  # как раньше
+        desc_text=raw_text,
+        desc_entities=[e.model_dump() for e in entities],
+    )
 
-    preview = f"<b>Предпросмотр описания:</b>\n\n{html_text}"
+    # 3) Предпросмотр делаем БЕЗ parse_mode, через entities (иначе premium не рендерится)
     await m.answer(
-        preview,
+        "<b>Предпросмотр описания:</b>",
         parse_mode="HTML",
         reply_markup=kb_confirm_description(),
         disable_web_page_preview=True
     )
 
+    await m.answer(
+        raw_text,
+        entities=entities,
+        disable_web_page_preview=True
+    )
+
     await state.set_state(CreateFlow.CONFIRM_DESC)
+
 
 # если прислали не текст
 @dp.message(CreateFlow.DESC)
@@ -5332,7 +5343,7 @@ async def preview_add_media(cq: CallbackQuery, state: FSMContext):
 
     await cq.answer()
 
-#--- Обработчик С мелиа ---
+#--- Обработчик С медиа ---
 @dp.callback_query(CreateFlow.MEDIA_PREVIEW, F.data == "preview:continue")
 async def preview_continue(cq: CallbackQuery, state: FSMContext):
     """
@@ -5350,8 +5361,9 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
 
     owner_id = data.get("owner")
     title    = (data.get("title") or "").strip()
-    desc     = (data.get("desc")  or "").strip()
-    desc_entities = data.get("desc_entities", [])
+    desc = (data.get("desc") or "").strip()
+    desc_text = data.get("desc_text") or ""
+    desc_entities = data.get("desc_entities") or []
     winners  = int(data.get("winners_count") or 1)
     end_at   = data.get("end_at_utc")
     photo_id = data.get("photo")  # pack_media(..) | None
@@ -5372,6 +5384,8 @@ async def preview_continue(cq: CallbackQuery, state: FSMContext):
             owner_user_id=owner_id,
             internal_title=title,
             public_description=desc,
+            public_description_text=desc_text,
+            public_description_entities={"entities": desc_entities},
             photo_file_id=photo_id,
             media_position=media_position,
             end_at_utc=end_at,
@@ -5782,30 +5796,65 @@ async def _launch_and_publish(gid: int, message: types.Message):
             logging.warning("Link-preview не вышел в чате %s (%s), пробую fallback-медиа...", chat_id, e)
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
+                # Fallback caption через entities (для premium emoji)
+                desc_text = (gw.public_description_text or "").strip()
+                desc_entities_dump = (gw.public_description_entities or {}).get("entities", []) or []
+
+                # В caption НЕ используем HTML. Делаем простой префикс + описание.
+                prefix = f"{(gw.internal_title or '').strip()}\n\n" if (gw.internal_title or "").strip() else ""
+                caption = prefix + desc_text
+
+                shift = _utf16_strlen(prefix)  # сдвиг в UTF-16, как в Telegram entities
+                caption_entities = entities_from_dump(shift_entities_dump(desc_entities_dump, shift))
+
                 if kind == "photo" and file_id:
                     # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
-                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_photo(
+                        chat_id,
+                        file_id,
+                        caption=caption,
+                        caption_entities=caption_entities,
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
-                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_animation(
+                        chat_id,
+                        file_id,
+                        caption=caption,
+                        caption_entities=caption_entities,
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "video" and file_id:
-                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_video(
+                        chat_id,
+                        file_id,
+                        caption=caption,
+                        caption_entities=caption_entities,
+                        reply_markup=kb_public_participate(gid, for_channel=True)
+                    )
                     message_ids[chat_id] = sent_msg.message_id
                 else:
-                    # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
-                    has_media = bool(file_id)
-                    cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media)
-                    send_kwargs = {
-                        "chat_id": chat_id,
-                        "text": cleaned_text,
-                        "parse_mode": "HTML",
-                        "reply_markup": kb_public_participate(gid, for_channel=True),
-                    }
-                    if disable_preview:
-                        send_kwargs["disable_web_page_preview"] = True
+                    # НЕТ МЕДИА — отправляем через entities, чтобы рендерились premium emoji
+                    desc_text = (gw.public_description_text or "").strip()
+                    desc_entities_dump = (gw.public_description_entities or {}).get("entities", []) or []
+
+                    # Префикс поста (можно оставить как есть, но БЕЗ HTML!)
+                    prefix = f"{gw.internal_title}\n\n" if (gw.internal_title or "").strip() else ""
+                    full_text = prefix + desc_text
+
+                    shift = _utf16_strlen(prefix)
+                    full_entities = entities_from_dump(shift_entities_dump(desc_entities_dump, shift))
+
+                    sent_msg = await bot.send_message(
+                        chat_id=chat_id,
+                        text=full_text,
+                        entities=full_entities,
+                        reply_markup=kb_public_participate(gid, for_channel=True),
+                        disable_web_page_preview=True
+                    )
                     
-                    sent_msg = await bot.send_message(**send_kwargs)
                     message_ids[chat_id] = sent_msg.message_id
                     
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id} (fallback)")
