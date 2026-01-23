@@ -3,6 +3,7 @@
 :root {
   --background-dark: #1C1C1C;
   --tg-overscroll-bg: #024B42;
+  --color-bg: #024B42; /* важно для app.js */
   --main-text-dark: #FAFAFA;
   --back-text-dark: #A9A9A9;
   --shapes-dark: #2E2E2E;
