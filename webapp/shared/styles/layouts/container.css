@@ -68,6 +68,7 @@ body.home-page .wrap {
 
 /* Отступы для основного контента */
 .main-content {
+  background: var(--color-bg);
   padding-bottom: 90px;
   min-height: calc(100vh - 90px);
 }

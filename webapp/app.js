@@ -51,14 +51,36 @@ function initializeTelegramWebApp() {
 
   // Спец. значение "bg_color" делает шапку такого же цвета, как фон Telegram
   tg.setHeaderColor('bg_color');
-  tg.setBackgroundColor(bgColor);
 
-  // На всякий случай синхронизируем фон body
+  // ВАЖНО: фон WebView должен совпадать с фоном приложения (var(--color-bg)),
+  // иначе при overscroll будет "чёрный разрыв".
+  let appBg = '';
   try {
-    document.body.style.backgroundColor = bgColor;
-  } catch (e) {
-    console.log('Cannot set body background from theme:', e);
+    appBg = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-bg')
+      .trim();
+  } catch (e) {}
+
+  if (!appBg) {
+    // fallback, если переменная не прочиталась
+    appBg = bgColor || '#0f1115';
   }
+
+  try {
+    tg.setBackgroundColor(appBg);
+    tg.setBottomBarColor?.(appBg);
+  } catch (e) {
+    console.log('Cannot set Telegram background:', e);
+  }
+
+  // На всякий случай синхронизируем фон html/body тем же цветом
+  try {
+    document.documentElement.style.backgroundColor = appBg;
+    document.body.style.backgroundColor = appBg;
+  } catch (e) {
+    console.log('Cannot set body/html background from appBg:', e);
+  }
+
 
   tg.ready();
   return true;
