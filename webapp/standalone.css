@@ -1,0 +1,43 @@
+/* webapp/standalone.css */
+/* Общий стиль ДЛЯ STAND-ALONE экранов (loading/success/results/already/need_subscription/captcha) */
+
+/* 1) Единый верхний отступ в Fullscreen */
+:root {
+  --tg-safe-top: env(safe-area-inset-top, 0px);
+  --tg-top-ui: 44px; /* базовый отступ под системные кнопки Telegram */
+  --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
+}
+
+/* 2) Глобально для stand-alone: добавляем top padding */
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding-top: var(--tg-top-pad);
+  box-sizing: border-box;
+}
+
+/* 3) На stand-alone у тебя часто есть wrap и screen-* секции */
+.wrap {
+  padding-top: var(--tg-top-pad) !important;
+  box-sizing: border-box;
+}
+
+section[id^="screen-"] {
+  padding-top: var(--tg-top-pad) !important;
+  box-sizing: border-box;
+}
+
+/* 4) Если какой-то экран центрируется через flex — сохраняем центрирование, но с учетом top-pad */
+.standalone-center {
+  min-height: calc(100vh - var(--tg-top-pad));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body.standalone-captcha {
+  padding-top: calc(var(--tg-top-pad) + 12px);
+}
