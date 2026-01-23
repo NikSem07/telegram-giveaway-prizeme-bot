@@ -13,7 +13,7 @@ html {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background-color: #570C07; /* нижний цвет */
+  background-color: #570C07;
 }
 
 body {
@@ -34,7 +34,6 @@ body {
 }
 
 .wrap {
-  background: transparent !important;
   margin: 0;
   padding: 0;
   max-width: none;
@@ -44,7 +43,6 @@ body {
 #screen-results-lose {
   padding: 0;
   margin: 0;
-  background: transparent !important;
   color: var(--main-text-dark);
   min-height: 100vh;
   width: 100%;
