@@ -9,9 +9,18 @@
 }
 
 /* Градиент фона целого экрана (красный) */
-html, body {
+html {
   margin: 0;
   padding: 0;
+  min-height: 100%;
+  background-color: #570C07; /* нижний цвет */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+
   background: linear-gradient(
     180deg,
     #C80815 0%,
@@ -19,12 +28,8 @@ html, body {
     #570C07 95%,
     #570C07 100%
   ) !important;
-  min-height: 100vh;
-}
 
-body {
-  background: transparent !important;
-  background-color: #570C07;
+  background-attachment: fixed;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
