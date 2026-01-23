@@ -1,4 +1,3 @@
-// webapp/standalone.js
 (function () {
   function getCssVar(name) {
     try {
@@ -12,14 +11,20 @@
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
 
-    // Цвет, который будет "под" страницей при overscroll (нижняя часть градиента)
     const bg = getCssVar("--tg-overscroll-bg") || "#1C1C1C";
 
     try { tg.setBackgroundColor?.(bg); } catch (e) {}
     try { tg.setBottomBarColor?.(bg); } catch (e) {}
   }
 
-  document.addEventListener("DOMContentLoaded", applyTelegramBg);
-  // На всякий случай — ещё раз после ready
-  window.addEventListener("load", applyTelegramBg);
+  function applyTelegramBgHard() {
+    // 1) сразу
+    applyTelegramBg();
+    // 2) и ещё раз чуть позже — чтобы перебить любые поздние setBackgroundColor
+    setTimeout(applyTelegramBg, 150);
+    setTimeout(applyTelegramBg, 400);
+  }
+
+  document.addEventListener("DOMContentLoaded", applyTelegramBgHard);
+  window.addEventListener("load", applyTelegramBgHard);
 })();
