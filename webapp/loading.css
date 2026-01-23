@@ -1,5 +1,9 @@
 /* LOADING SCREEN ONLY */
 
+:root { 
+  --tg-overscroll-bg: #0f1115; 
+}
+
 /* Фон и базовая типографика для экрана загрузки */
 body.loading-page {
   margin: 0;

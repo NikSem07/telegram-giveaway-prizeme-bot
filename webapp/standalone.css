@@ -6,11 +6,13 @@
   --tg-safe-top: env(safe-area-inset-top, 0px);
   --tg-top-ui: 44px; /* базовый отступ под системные кнопки Telegram */
   --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
+  --tg-overscroll-bg: #1C1C1C; /* цвет, который будет виден при "резинке" снизу — по умолчанию тёмный */
 }
 
 /* 2) Глобально для stand-alone: добавляем top padding */
 html, body {
   height: 100%;
+  overscroll-behavior: none;
 }
 
 body {
