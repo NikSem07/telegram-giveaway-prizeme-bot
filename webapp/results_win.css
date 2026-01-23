@@ -2,10 +2,10 @@
 
 :root {
   --background-dark: #1C1C1C;
+  --tg-overscroll-bg: #024B42;
   --main-text-dark: #FAFAFA;
   --back-text-dark: #A9A9A9;
   --shapes-dark: #2E2E2E;
-  --tg-overscroll-bg: #024B42;
 }
 
 /* Градиент фона целого экрана */
@@ -24,6 +24,7 @@ html, body {
 
 body {
   background: transparent !important;
+  background-color: #024B42;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
