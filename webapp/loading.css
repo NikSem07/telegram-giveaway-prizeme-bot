@@ -13,6 +13,8 @@ body.loading-page {
 #screen-loading {
   min-height: 100vh;
   background: #0f1115;
+  padding-top: var(--tg-top-pad);
+  box-sizing: border-box;
 }
 
 .loading-wrap {

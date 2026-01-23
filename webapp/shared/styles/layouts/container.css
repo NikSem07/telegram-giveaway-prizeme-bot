@@ -70,7 +70,6 @@ body.home-page .wrap {
 .main-content {
   padding-bottom: 90px;
   min-height: calc(100vh - 90px);
-  margin-top: -8px;
 }
 
 /* Фон контейнеров должен следовать теме */

@@ -61,6 +61,15 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
+
+  /* ===== Telegram Fullscreen top padding ===== */
+  --tg-safe-top: env(safe-area-inset-top, 0px);
+
+  /* Базовый “воздух” под системные кнопки Telegram (Close / …) */
+  --tg-top-ui: 44px;
+
+  /* Итоговый верхний отступ для контента */
+  --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
 }
 
 /* ====== СВЕТЛАЯ ТЕМА ====== */

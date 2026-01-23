@@ -31,7 +31,7 @@ body {
   margin: 0;
   padding: 0;
   max-width: none;
-  padding-top: 0 !important;
+  padding-top: var(--tg-top-pad) !important;
 }
 
 #screen-results-lose {
@@ -43,6 +43,8 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  padding-top: var(--tg-top-pad);
+  box-sizing: border-box;
 }
 
 /* Картинка */

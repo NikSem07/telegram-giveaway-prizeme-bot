@@ -11,7 +11,7 @@ body {
     background: var(--app-bg-color, #0f1115);
     color: #ffffff;
     min-height: 100vh;
-    padding: 20px;
+    padding: calc(var(--tg-top-pad) + 20px) 20px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;

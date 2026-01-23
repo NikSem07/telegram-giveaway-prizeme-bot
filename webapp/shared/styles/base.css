@@ -25,6 +25,7 @@ body {
   line-height: 1.4;
   overflow-x: hidden;
   min-height: 100vh;
+  padding-top: var(--tg-top-pad);
 }
 
 /* Основной контейнер приложения */
