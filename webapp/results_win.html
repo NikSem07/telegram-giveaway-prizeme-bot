@@ -98,14 +98,11 @@
     // Настраиваем зелёную шапку Telegram под градиент
     document.addEventListener('DOMContentLoaded', function () {
     if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.expand();
+      Telegram.WebApp.expand();
 
-        if (Telegram.WebApp.setHeaderColor) {
+      if (Telegram.WebApp.setHeaderColor) {
         Telegram.WebApp.setHeaderColor('#2E8656');
-        }
-        if (Telegram.WebApp.setBackgroundColor) {
-        Telegram.WebApp.setBackgroundColor('#024B42');
-        }
+      }
     }
 
     const headerSelectors = [
