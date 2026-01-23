@@ -66,7 +66,7 @@
   --tg-safe-top: env(safe-area-inset-top, 0px);
 
   /* Базовый “воздух” под системные кнопки Telegram (Close / …) */
-  --tg-top-ui: 44px;
+  --tg-top-ui: 88px;
 
   /* Итоговый верхний отступ для контента */
   --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
