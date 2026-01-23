@@ -313,3 +313,11 @@ body {
     padding: 16px 16px 20px;
   }
 }
+
+html {
+  background-color: #024B42;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
