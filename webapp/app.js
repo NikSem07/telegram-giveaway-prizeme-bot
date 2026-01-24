@@ -747,8 +747,21 @@ async function loadNeedSubscriptionChannels(gid, init_data) {
   }
 }
 
+// Проверяет доступность аватарки перед рендером
+async function checkAvatarAvailability(chatId) {
+    try {
+        const response = await fetch(`/api/chat_avatar/${chatId}?fallback=none`, {
+            method: 'HEAD',
+            cache: 'no-cache'
+        });
+        return response.status === 200;
+    } catch (error) {
+        return false;
+    }
+}
+
 // Отрисовка каналов: "Подписаться" / "Подписан"
-function renderNeedChannels(channels, needChannels) {
+async function renderNeedChannels(channels, needChannels) {
   const channelsList = document.getElementById('channels-list');
   if (!channelsList) return;
 
@@ -761,7 +774,7 @@ function renderNeedChannels(channels, needChannels) {
       .filter(Boolean)
   );
 
-  channels.forEach(channel => {
+  for (const channel of channels) {
     const key = channelKey(channel);
     const isNeed = key ? needKeys.has(key) : false;
 
@@ -782,11 +795,23 @@ function renderNeedChannels(channels, needChannels) {
     const card = document.createElement('div');
     card.className = 'channel-card';
 
-    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
+    // ✅ ПРЕДВАРИТЕЛЬНО ПРОВЕРЯЕМ НАЛИЧИЕ АВАТАРКИ
+    let hasAvatar = false;
+    if (channel.chat_id) {
+        try {
+            const avatarCheck = await checkAvatarAvailability(channel.chat_id);
+            hasAvatar = avatarCheck;
+        } catch (e) {
+            console.log(`[AVATAR] Check failed for ${channel.chat_id}:`, e);
+        }
+    }
+
+    const avatarClass = hasAvatar ? 'has-photo' : 'no-photo';
+    const avatarUrl = hasAvatar ? `/api/chat_avatar/${channel.chat_id}` : null;
 
     card.innerHTML = `
-      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
-        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
+      <div class="channel-avatar ${avatarClass}">
+        ${hasAvatar ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
         <span class="channel-avatar-letter">${firstLetter}</span>
       </div>
 
@@ -799,8 +824,9 @@ function renderNeedChannels(channels, needChannels) {
     `;
 
     channelsList.appendChild(card);
-  });
+  }
 }
+
 
 // Глобальная функция открытия канала / группы Telegram
 function openChannel(url) {
@@ -1040,13 +1066,13 @@ async function loadChannelsInfo(gid) {
 }
 
 // Функция для отображения каналов
-function displayChannels(channels) {
+async function displayChannels(channels) {
   const channelsList = document.getElementById('channels-list');
   if (!channelsList) return;
 
   channelsList.innerHTML = '';
 
-  channels.forEach(channel => {
+  for (const channel of channels) {
     const channelCard = document.createElement('div');
     channelCard.className = 'channel-card';
 
@@ -1054,26 +1080,42 @@ function displayChannels(channels) {
     const username = channel.username
       ? String(channel.username).replace(/^@/, '')
       : null;
-
-    // URL: либо пришёл с бэка, либо собираем из username, иначе заглушка "#"
     const url = channel.url || (username ? `https://t.me/${username}` : '#');
-
-    // Аватарка — первая буква названия
     const firstLetter = title.charAt(0).toUpperCase();
 
+    // ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА АВАТАРКИ
+    let hasAvatar = false;
+    if (channel.chat_id) {
+        try {
+            const avatarCheck = await checkAvatarAvailability(channel.chat_id);
+            hasAvatar = avatarCheck;
+        } catch (e) {
+            console.log(`[AVATAR] Check failed for ${channel.chat_id}:`, e);
+        }
+    }
+
+    const avatarClass = hasAvatar ? 'has-photo' : 'no-photo';
+    const avatarUrl = hasAvatar ? `/api/chat_avatar/${channel.chat_id}` : null;
+
+    // ESCAPE URL для HTML
+    const safeUrl = url.replace(/'/g, "\\'");
+
     channelCard.innerHTML = `
-      <div class="channel-avatar">${firstLetter}</div>
+      <div class="channel-avatar ${avatarClass}">
+        ${hasAvatar ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
+        <span class="channel-avatar-letter">${firstLetter}</span>
+      </div>
       <div class="channel-info">
         <div class="channel-name">${title}</div>
         ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
-      <button class="channel-button" onclick="openChannel('${url}')">
+      <button class="channel-button" onclick="openChannel('${safeUrl}')">
         Перейти
       </button>
     `;
 
     channelsList.appendChild(channelCard);
-  });
+  }
 }
 
 // Функция конвертации UTC в MSK (добавьте если нет)
@@ -1405,17 +1447,13 @@ function renderResultsWin(data) {
     const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
-      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
-        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
-        <span class="channel-avatar-letter">${firstLetter}</span>
+      <div class="winner-avatar">
+        ${avatarContent}
       </div>
-
-      <div class="channel-info">
-        <div class="channel-name">${title}</div>
-        ${username ? `<div class="channel-username">@${username}</div>` : ''}
+      <div class="winner-info">
+        <div class="winner-name">${nickname}</div>
+        ${ticketCode ? `<div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>` : ''}
       </div>
-
-      ${buttonHtml}
     `;
 
     winnersList.appendChild(card);
@@ -1712,17 +1750,13 @@ function renderResultsLose(data) {
     const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
-      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
-        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
-        <span class="channel-avatar-letter">${firstLetter}</span>
+      <div class="winner-avatar">
+        ${avatarContent}
       </div>
-
-      <div class="channel-info">
-        <div class="channel-name">${title}</div>
-        ${username ? `<div class="channel-username">@${username}</div>` : ''}
+      <div class="winner-info">
+        <div class="winner-name">${nickname}</div>
+        ${ticketCode ? `<div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>` : ''}
       </div>
-
-      ${buttonHtml}
     `;
 
     winnersList.appendChild(card);
