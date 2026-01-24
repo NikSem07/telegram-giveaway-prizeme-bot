@@ -1297,19 +1297,26 @@ ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 def gen_ticket_code(): return "".join(random.choices(ALPHABET, k=6))
 def utcnow(): return datetime.now(timezone.utc)
 
-async def ensure_user(user_id:int, username:str|None):
+async def ensure_user(user_id: int, username: str | None):
+    username = (username or "").strip() or None
+
     async with session_scope() as s:
         u = await s.get(User, user_id)
         if not u:
             u = User(user_id=user_id, username=username)
             s.add(u)
-    
-    # Регистрируем пользователя и в bot_users
+        else:
+            # важное: обновляем username, если он появился
+            if username and u.username != username:
+                u.username = username
+
+    # Регистрируем пользователя и в bot_users (как у тебя было)
     try:
         await ensure_bot_user(user_id, username)
         logging.info(f"✅ Пользователь {user_id} зарегистрирован в bot_users")
     except Exception as e:
         logging.error(f"❌ Ошибка регистрации в bot_users: {e}")
+        
 
 # Функция для регистрации/обновления пользователя бота
 async def ensure_bot_user(user_id: int, username: str | None = None, first_name: str | None = None) -> BotUser:

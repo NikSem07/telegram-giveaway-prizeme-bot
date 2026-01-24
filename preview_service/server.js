@@ -50,6 +50,33 @@ const pool = new Pool({
   ssl: false
 });
 
+async function upsertMiniAppUser(user) {
+  try {
+    if (!user || !user.id) return;
+
+    const userId = Number(user.id);
+    if (!Number.isFinite(userId)) return;
+
+    // Telegram username может быть undefined/null/""
+    const usernameRaw = (user.username || "").trim();
+    const username = usernameRaw.length ? usernameRaw : null;
+
+    // Важно: не затираем username на NULL, если он уже был
+    await pool.query(
+      `
+      INSERT INTO users (user_id, username)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        username = COALESCE(EXCLUDED.username, users.username)
+      `,
+      [userId, username]
+    );
+  } catch (e) {
+    console.log("[USER_UPSERT] failed:", e?.message || e);
+  }
+}
+
 // Диагностика подключения к БД
 app.post('/api/debug/db_check', async (req, res) => {
   try {
@@ -862,6 +889,8 @@ app.post('/api/check_membership_only', async (req, res) => {
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
 
+    await upsertMiniAppUser(parsedInitData.user_parsed);
+
     const userId = parseInt(parsedInitData.user_parsed.id);
     console.log(`[CHECK_MEMBERSHIP_ONLY] user_id=${userId}, gid=${giveawayId}`);
 
@@ -909,6 +938,8 @@ app.post('/api/check', async (req, res) => {
     if (!parsedInitData || !parsedInitData.user_parsed) {
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
+
+    await upsertMiniAppUser(parsedInitData.user_parsed);
 
     const userId = parseInt(parsedInitData.user_parsed.id);
     console.log(`[CHECK] user_id=${userId}, gid=${giveawayId}`);
@@ -959,6 +990,8 @@ app.post('/api/claim', async (req, res) => {
     if (!parsedInitData || !parsedInitData.user_parsed) {
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
+
+    await upsertMiniAppUser(parsedInitData.user_parsed);
 
     const userId = parseInt(parsedInitData.user_parsed.id);
     console.log(`[CLAIM] user_id=${userId}, gid=${giveawayId}`);
@@ -1118,6 +1151,8 @@ app.post('/api/results', async (req, res) => {
     if (!parsedInitData || !parsedInitData.user_parsed) {
       return res.status(400).json({ ok: false, reason: 'bad_initdata' });
     }
+
+    await upsertMiniAppUser(parsedInitData.user_parsed);
 
     const userId = parseInt(parsedInitData.user_parsed.id);
     const giveawayId = parseInt(gid);
