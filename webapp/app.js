@@ -782,7 +782,7 @@ function renderNeedChannels(channels, needChannels) {
     const card = document.createElement('div');
     card.className = 'channel-card';
 
-    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
       <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
@@ -1402,7 +1402,7 @@ function renderResultsWin(data) {
     const card = document.createElement("div");
     card.className = "winner-card" + (isCurrentUser ? " current-user" : "");
 
-    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
       <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
@@ -1709,7 +1709,7 @@ function renderResultsLose(data) {
     // Для экрана проигрыша — БЕЗ current-user, чтобы не было белой рамки
     card.className = "winner-card";
 
-    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
       <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">

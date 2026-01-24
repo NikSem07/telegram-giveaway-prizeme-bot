@@ -1359,9 +1359,10 @@ app.get('/api/chat_avatar/:chatId', async (req, res) => {
         res.redirect(directAvatarUrl);
 
     } catch (error) {
-        console.error(`[API chat_avatar] Error for ${req.params.chatId}:`, error);
-        // В случае ошибки тоже показываем заглушку
-        res.redirect('/uploads/avatars/default_channel.png');
+      console.error(`[API chat_avatar] Error for ${req.params.chatId}:`, error);
+      // ✅ Важно: если просили fallback=none — возвращаем 404, чтобы фронт показал букву
+      if (noFallback) return res.status(404).end();
+      return res.redirect('/uploads/avatars/default_channel.png');
     }
 });
 
