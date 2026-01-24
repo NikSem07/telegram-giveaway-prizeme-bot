@@ -1444,8 +1444,6 @@ function renderResultsWin(data) {
     const card = document.createElement("div");
     card.className = "winner-card" + (isCurrentUser ? " current-user" : "");
 
-    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
-
     card.innerHTML = `
       <div class="winner-avatar">
         ${avatarContent}
@@ -1746,8 +1744,6 @@ function renderResultsLose(data) {
     const card = document.createElement("div");
     // Для экрана проигрыша — БЕЗ current-user, чтобы не было белой рамки
     card.className = "winner-card";
-
-    const avatarUrl = channel.chat_id ? `/api/chat_avatar/${channel.chat_id}?fallback=none` : null;
 
     card.innerHTML = `
       <div class="winner-avatar">
