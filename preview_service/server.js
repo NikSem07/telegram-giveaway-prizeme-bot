@@ -1311,11 +1311,15 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
 app.get('/api/chat_avatar/:chatId', async (req, res) => {
     try {
         const { chatId } = req.params;
+        const fallbackMode = String(req.query.fallback || 'default'); // 'default' | 'none'
+        const noFallback = fallbackMode === 'none';
+
         console.log(`[API chat_avatar] Request for chat_id: ${chatId}`);
 
         const telegramChatId = parseInt(chatId);
         if (!telegramChatId || !BOT_TOKEN) {
             // Если что-то не так, возвращаем заглушку через наш прокси
+            if (noFallback) return res.status(404).end();
             return res.redirect('/uploads/avatars/default_channel.png');
         }
 
@@ -1328,6 +1332,7 @@ app.get('/api/chat_avatar/:chatId', async (req, res) => {
         const data = await tgResponse.json();
         if (!data.ok || !data.result.photo) {
             // Если аватар не найден, редиректим на заглушку
+            if (noFallback) return res.status(404).end();
             return res.redirect('/uploads/avatars/default_channel.png');
         }
 
@@ -1341,6 +1346,7 @@ app.get('/api/chat_avatar/:chatId', async (req, res) => {
 
         const fileData = await fileResponse.json();
         if (!fileData.ok) {
+            if (noFallback) return res.status(404).end();
             return res.redirect('/uploads/avatars/default_channel.png');
         }
 

@@ -782,12 +782,19 @@ function renderNeedChannels(channels, needChannels) {
     const card = document.createElement('div');
     card.className = 'channel-card';
 
+    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+
     card.innerHTML = `
-      <div class="channel-avatar">${firstLetter}</div>
+      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
+        <span class="channel-avatar-letter">${firstLetter}</span>
+      </div>
+
       <div class="channel-info">
         <div class="channel-name">${title}</div>
         ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
+
       ${buttonHtml}
     `;
 
@@ -1395,14 +1402,20 @@ function renderResultsWin(data) {
     const card = document.createElement("div");
     card.className = "winner-card" + (isCurrentUser ? " current-user" : "");
 
+    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+
     card.innerHTML = `
-      <div class="winner-avatar">
-        ${avatarContent}
+      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
+        <span class="channel-avatar-letter">${firstLetter}</span>
       </div>
-      <div class="winner-info">
-        <div class="winner-name">${nickname}</div>
-        <div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>
+
+      <div class="channel-info">
+        <div class="channel-name">${title}</div>
+        ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
+
+      ${buttonHtml}
     `;
 
     winnersList.appendChild(card);
@@ -1696,14 +1709,20 @@ function renderResultsLose(data) {
     // Для экрана проигрыша — БЕЗ current-user, чтобы не было белой рамки
     card.className = "winner-card";
 
+    const avatarUrl = ch.chat_id ? `/api/chat_avatar/${ch.chat_id}?fallback=none` : null;
+
     card.innerHTML = `
-      <div class="winner-avatar">
-        ${avatarContent}
+      <div class="channel-avatar ${avatarUrl ? 'has-photo' : 'no-photo'}">
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="" onerror="this.closest('.channel-avatar').classList.remove('has-photo'); this.closest('.channel-avatar').classList.add('no-photo');">` : ''}
+        <span class="channel-avatar-letter">${firstLetter}</span>
       </div>
-      <div class="winner-info">
-        <div class="winner-name">${nickname}</div>
-        <div class="winner-ticket">${ticketLabel}: ${ticketCode}</div>
+
+      <div class="channel-info">
+        <div class="channel-name">${title}</div>
+        ${username ? `<div class="channel-username">@${username}</div>` : ''}
       </div>
+
+      ${buttonHtml}
     `;
 
     winnersList.appendChild(card);

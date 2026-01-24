@@ -287,6 +287,8 @@ body {
   font-size: 18px;
   font-weight: bold;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .channel-avatar img {
@@ -294,6 +296,24 @@ body {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.channel-avatar-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* Если фото есть — букву прячем */
+.channel-avatar.has-photo .channel-avatar-letter {
+  display: none;
+}
+
+/* Если фото нет — img прячем */
+.channel-avatar.no-photo img {
+  display: none;
 }
 
 .channel-info {
