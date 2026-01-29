@@ -5878,11 +5878,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
         return None
 
     # 5) собираем ТОЛЬКО текст (без кнопок)
-    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: используем время КАК ЕГО ВВЕЛ ПОЛЬЗОВАТЕЛЬ
+    # Используем время КАК ЕГО ВВЕЛ ПОЛЬЗОВАТЕЛЬ
     end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
     end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
     
-    # 🔄 ИСПРАВЛЕНИЕ: правильно вычисляем дни
+    # Правильно вычисляем дни
     now_msk = datetime.now(MSK_TZ).date()
     end_at_date = end_at_msk_dt.date()
     days_left = max(0, (end_at_date - now_msk).days)
@@ -5959,12 +5959,11 @@ async def _launch_and_publish(gid: int, message: types.Message):
 
                 # Сохраняем результат отправки
                 # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
-                full_publish_text, full_publish_entities = html_to_text_and_entities(full_text)
-
+                # Отправляем HTML напрямую, чтобы Telegram корректно отрисовал <tg-emoji>
                 sent_msg = await bot.send_message(
-                    chat_id,
-                    full_publish_text,
-                    entities=full_publish_entities,
+                    chat_id=chat_id,
+                    text=full_text,
+                    parse_mode="HTML",
                     link_preview_options=lp,
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
@@ -5981,21 +5980,14 @@ async def _launch_and_publish(gid: int, message: types.Message):
             else:
                 # медиа нет — обычный текст + кнопка
 
-                # 1) Очищаем только логику превью пользовательских ссылок (текст остаётся HTML)
                 cleaned_html, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media=False)
-
-                # 2) Конвертируем HTML (включая <tg-emoji> и <a>) -> text + entities (UTF-16 offsets)
-                publish_plain, publish_entities = html_to_text_and_entities(cleaned_html)
 
                 send_kwargs = {
                     "chat_id": chat_id,
-                    "text": publish_plain,
+                    "text": cleaned_html,
+                    "parse_mode": "HTML",
                     "reply_markup": kb_public_participate(gid, for_channel=True),
                 }
-
-                # entities добавляем только если они есть
-                if publish_entities:
-                    send_kwargs["entities"] = publish_entities
 
                 if disable_preview:
                     send_kwargs["disable_web_page_preview"] = True
@@ -6015,36 +6007,38 @@ async def _launch_and_publish(gid: int, message: types.Message):
             # --- Fallback: нативное медиа с той же подписью + кнопка ---
             try:
                 
-                fallback_caption, fallback_caption_entities = html_to_text_and_entities(preview_text)
-                
+                fallback_caption_html = preview_text  # HTML с <tg-emoji>
+
                 if kind == "photo" and file_id:
-                    # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
                     sent_msg = await bot.send_photo(
                         chat_id,
                         file_id,
-                        caption=fallback_caption,
-                        caption_entities=fallback_caption_entities,
+                        caption=fallback_caption_html,
+                        parse_mode="HTML",
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
+
                 elif kind == "animation" and file_id:
                     sent_msg = await bot.send_animation(
                         chat_id,
                         file_id,
-                        caption=fallback_caption,
-                        caption_entities=fallback_caption_entities,
+                        caption=fallback_caption_html,
+                        parse_mode="HTML",
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
+
                 elif kind == "video" and file_id:
                     sent_msg = await bot.send_video(
                         chat_id,
                         file_id,
-                        caption=fallback_caption,
-                        caption_entities=fallback_caption_entities,
+                        caption=fallback_caption_html,
+                        parse_mode="HTML",
                         reply_markup=kb_public_participate(gid, for_channel=True),
                     )
                     message_ids[chat_id] = sent_msg.message_id
+
                 else:
                     # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
                     has_media = bool(file_id)
@@ -7385,13 +7379,11 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 url=preview_url,
                             )
 
-                            full_plain, full_entities = html_to_text_and_entities(full_html_with_preview)
-
                             await bot_instance.edit_message_text(
                                 chat_id=chat_id,
                                 message_id=message_id,
-                                text=full_plain,
-                                entities=full_entities,
+                                text=full_html_with_preview,
+                                parse_mode="HTML",
                                 link_preview_options=lp,
                                 reply_markup=reply_markup,
                             )
@@ -7443,14 +7435,11 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     elif has_media and not preview_url:
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, но нет preview_url, пробуем edit_message_caption")
                         try:
-                            # Для постов с медиа редактируем только подпись с reply_markup
-                            caption_plain, caption_entities = html_to_text_and_entities(cleaned_text)
-
                             send_kwargs = {
                                 "chat_id": chat_id,
                                 "message_id": message_id,
-                                "caption": caption_plain,
-                                "caption_entities": caption_entities,
+                                "caption": cleaned_text,
+                                "parse_mode": "HTML",
                                 "reply_markup": reply_markup,
                             }
                             await bot_instance.edit_message_caption(**send_kwargs)
@@ -7462,17 +7451,13 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     
                     else:
                         print(f"🔍 Розыгрыш БЕЗ медиа, используем edit_message_text")
-                        # Для постов без медиа редактируем весь текст с reply_markup
-                        text_plain, text_entities = html_to_text_and_entities(cleaned_text)
-
                         send_kwargs = {
                             "chat_id": chat_id,
                             "message_id": message_id,
-                            "text": text_plain,
+                            "text": cleaned_text,
+                            "parse_mode": "HTML",
                             "reply_markup": reply_markup,
                         }
-                        if text_entities:
-                            send_kwargs["entities"] = text_entities
 
                         if disable_preview:
                             send_kwargs["disable_web_page_preview"] = True
