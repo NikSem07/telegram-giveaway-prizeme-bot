@@ -883,9 +883,9 @@ async def render_link_preview_message(
     hidden_link = f'<a href="{media}"> </a>'
 
     if media_top:
-        full = f"{hidden_link}\n{txt}"
+        full = hidden_link + "\n" + txt
     else:
-        full = f"{txt}\n\n{hidden_link}"
+        full = txt + "\n\n" + hidden_link
 
     lp = LinkPreviewOptions(
         is_disabled=False,
@@ -4906,7 +4906,7 @@ async def show_event_card(chat_id:int, giveaway_id:int):
 
             # УСИЛЕННЫЙ LINK-PREVIEW
             hidden_link = f'<a href="{preview_url}"> </a>'
-            full_text = f"{cap}\n\n{hidden_link}"
+            full_text = cap + "\n\n" + hidden_link
 
             lp = LinkPreviewOptions(
                 is_disabled=False,
@@ -7129,9 +7129,9 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
                             
                             if media_position == "top":
-                                full_text_with_preview = f"{hidden_link}\n{cleaned_text}"
+                                full_text_with_preview = hidden_link + "\n" + cleaned_text
                             else:
-                                full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
+                                full_text_with_preview = cleaned_text + "\n\n" + hidden_link
                             
                             # Настройки link-preview (как при публикации)
                             lp = LinkPreviewOptions(
@@ -7170,7 +7170,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 
                                 # Формируем текст с hidden link для link-preview
                                 hidden_link = f'<a href="{preview_url}">&#8203;</a>'
-                                full_text_with_preview = f"{cleaned_text}\n\n{hidden_link}"
+                                full_text_with_preview = cleaned_text + "\n\n" + hidden_link
                                 
                                 # Настройки link-preview
                                 lp = LinkPreviewOptions(
@@ -7548,9 +7548,9 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
             
             if media_position == "top":
-                full_text = f"{hidden_link}\n{post_text}"
+                full_text = hidden_link + "\n" + post_text
             else:
-                full_text = f"{post_text}\n\n{hidden_link}"
+                full_text = post_text + "\n\n" + hidden_link
 
             lp = LinkPreviewOptions(
                 is_disabled=False,
