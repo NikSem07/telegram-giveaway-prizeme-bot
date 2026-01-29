@@ -5791,13 +5791,13 @@ async def _launch_and_publish(gid: int, message: types.Message):
             try:
                 if kind == "photo" and file_id:
                     # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
-                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_photo(chat_id, file_id, caption=preview_text, parse_mode="HTML", reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "animation" and file_id:
-                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_animation(chat_id, file_id, caption=preview_text, parse_mode="HTML", reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 elif kind == "video" and file_id:
-                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, reply_markup=kb_public_participate(gid, for_channel=True))
+                    sent_msg = await bot.send_video(chat_id, file_id, caption=preview_text, parse_mode="HTML", reply_markup=kb_public_participate(gid, for_channel=True))
                     message_ids[chat_id] = sent_msg.message_id
                 else:
                     # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
@@ -7076,7 +7076,7 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
             has_media = media_file_id is not None
             print(f"🔍 Тип медиа в розыгрыше: {media_type}, file_id: {media_file_id is not None}, has_media: {has_media}")
             
-            # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Подготавливаем link-preview URL для медиа
+            # Подготавливаем link-preview URL для медиа
             preview_url = None
             if has_media and media_file_id:
                 try:
