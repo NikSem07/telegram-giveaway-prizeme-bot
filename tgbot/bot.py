@@ -299,10 +299,57 @@ def message_text_to_html_with_entities(text: str, entities: list) -> str:
 
     return "".join(out)
 
+def html_with_emojis_to_text_and_entities(html_text: str):
+    """
+    Преобразует HTML с <tg-emoji> обратно в текст и Telegram entities
+    Возвращает: (text, entities)
+    """
+    if not html_text or '<tg-emoji' not in html_text:
+        return html_text, []
+    
+    import re
+    
+    # Регулярное выражение для поиска тегов <tg-emoji>
+    emoji_pattern = r'<tg-emoji\s+emoji-id="([^"]+)">([^<]+)</tg-emoji>'
+    
+    text_parts = []
+    entities = []
+    current_position = 0
+    
+    # Заменяем все теги эмодзи на символ эмодзи
+    def replace_emoji(match):
+        nonlocal current_position, entities
+        
+        emoji_id = match.group(1)
+        emoji_char = match.group(2)
+        start_pos = current_position
+        
+        # Добавляем entity для кастомного эмодзи
+        entities.append({
+            'type': 'custom_emoji',
+            'offset': start_pos,
+            'length': len(emoji_char),
+            'custom_emoji_id': emoji_id
+        })
+        
+        current_position += len(emoji_char)
+        return emoji_char
+    
+    # Удаляем все теги <tg-emoji> и заменяем на символы эмодзи
+    text = re.sub(emoji_pattern, replace_emoji, html_text)
+    
+    # Убираем остальные HTML теги (сохраняем только текст)
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Убираем HTML entities
+    import html
+    text = html.unescape(text)
+    
+    return text, entities
+
 def _utf16_len(ch: str) -> int:
     # символы вне BMP (например многие emoji) занимают 2 code units в UTF-16
     return 2 if ord(ch) > 0xFFFF else 1
-
 
 def _utf16_to_py_index(s: str, utf16_pos: int) -> int:
     """
@@ -5771,20 +5818,41 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 
             else:
                 # медиа нет — обычный текст + кнопка
-                # 🔄 ИЗМЕНЕНО: сохраняем результат отправки
-                # НЕТ МЕДИА - ПРОВЕРЯЕМ ПОЛЬЗОВАТЕЛЬСКИЕ ССЫЛКИ
+                # Преобразуем HTML с премиум-эмодзи
+                clean_text_for_api, emoji_entities = html_with_emojis_to_text_and_entities(preview_text)
+                
                 has_media = bool(file_id)
-                cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media)
+                cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(clean_text_for_api, has_media)
+                
+                # Отправляем с entities для кастомных эмодзи
                 send_kwargs = {
                     "chat_id": chat_id,
                     "text": cleaned_text,
-                    "parse_mode": "HTML",
                     "reply_markup": kb_public_participate(gid, for_channel=True),
                 }
+                
+                # Добавляем entities если есть кастомные эмодзи
+                if emoji_entities:
+                    # Преобразуем словари entities в объекты MessageEntity
+                    entities_objects = []
+                    for entity_dict in emoji_entities:
+                        entity = types.MessageEntity(
+                            type=entity_dict['type'],
+                            offset=entity_dict['offset'],
+                            length=entity_dict['length'],
+                            custom_emoji_id=entity_dict.get('custom_emoji_id')
+                        )
+                        entities_objects.append(entity)
+                    
+                    send_kwargs["entities"] = entities_objects
+                else:
+                    # Если нет кастомных эмодзи, используем обычный HTML
+                    send_kwargs["parse_mode"] = "HTML"
+                
                 if disable_preview:
                     send_kwargs["disable_web_page_preview"] = True
                 
-                sent_msg = await bot.send_message(**send_kwargs)
+                sent_msg = await bot_instance.send_message(**send_kwargs)
                 message_ids[chat_id] = sent_msg.message_id
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
 
@@ -7117,24 +7185,27 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                     reply_markup = kb_finished_giveaway(giveaway_id, for_channel=is_channel)
                     print(f"🔍 Клавиатура: {reply_markup}")
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
+                    # ОЧИСТКА ТЕКСТА ОТ ПОЛЬЗОВАТЕЛЬСКИХ ПРЕВЬЮ
                     has_media = bool(media_file_id)
                     cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(new_text, has_media)
                     
-                    # 🔄 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: РАЗДЕЛЕНИЕ ЛОГИКИ с link-preview
+                    # РАЗДЕЛЕНИЕ ЛОГИКИ с link-preview
                     if has_media and preview_url:
                         print(f"🔍 Розыгрыш ИМЕЕТ медиа, используем link-preview с рамкой")
                         try:
-                            # 🔄 ИСПРАВЛЕНИЕ: Определяем hidden_link ПЕРЕД использованием
-                            hidden_link = f'<a href="{preview_url}"> </a>'
+                            # Преобразуем HTML с премиум-эмодзи в текст и entities
+                            clean_text_for_api, emoji_entities = html_with_emojis_to_text_and_entities(cleaned_text)
+                            
+                            # Определяем hidden_link ПЕРЕД использованием
+                            hidden_link = f'<a href="{preview_url}">&#8203;</a>'  # Невидимый символ вместо пробела
                             
                             # Используем сохраненную позицию медиа
                             media_position = gw.media_position if hasattr(gw, 'media_position') else 'bottom'
                             
                             if media_position == "top":
-                                full_text_with_preview = hidden_link + "\n" + cleaned_text
+                                full_text_with_preview = hidden_link + "\n" + clean_text_for_api
                             else:
-                                full_text_with_preview = cleaned_text + "\n\n" + hidden_link
+                                full_text_with_preview = clean_text_for_api + "\n\n" + hidden_link
                             
                             # Настройки link-preview (как при публикации)
                             lp = LinkPreviewOptions(
@@ -7145,16 +7216,58 @@ async def edit_giveaway_post(giveaway_id: int, bot_instance: Bot):
                                 url=preview_url
                             )
                             
-                            # Пробуем отредактировать через edit_message_text с link-preview
-                            # ЕСЛИ ЕСТЬ МЕДИА - НИКОГДА НЕ ОТКЛЮЧАЕМ ПРЕВЬЮ!
-                            await bot_instance.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=message_id,
-                                text=full_text_with_preview,
-                                parse_mode="HTML",
-                                link_preview_options=lp,
-                                reply_markup=reply_markup
-                            )
+                            # Создаем entities для hidden link
+                            # Hidden link должен быть как обычная ссылка в entities
+                            if hidden_link:
+                                # Находим позицию hidden link в тексте
+                                if media_position == "top":
+                                    link_start = 0
+                                    link_length = len(hidden_link.replace('&#8203;', '')) - 2  # Без HTML тегов
+                                else:
+                                    link_start = len(clean_text_for_api) + 2  # +2 для \n\n
+                                    link_length = len(hidden_link.replace('&#8203;', '')) - 2
+                                
+                                # Добавляем entity для ссылки
+                                link_entity = types.MessageEntity(
+                                    type="text_link",
+                                    offset=link_start,
+                                    length=link_length,
+                                    url=preview_url
+                                )
+                                
+                                # Объединяем entities эмодзи и ссылки
+                                all_entities = []
+                                
+                                # Преобразуем словари entities в объекты MessageEntity
+                                for entity_dict in emoji_entities:
+                                    entity = types.MessageEntity(
+                                        type=entity_dict['type'],
+                                        offset=entity_dict['offset'],
+                                        length=entity_dict['length'],
+                                        custom_emoji_id=entity_dict.get('custom_emoji_id')
+                                    )
+                                    all_entities.append(entity)
+                                
+                                # Добавляем entity для ссылки (только если она в тексте)
+                                if link_start < len(full_text_with_preview):
+                                    all_entities.append(link_entity)
+                                
+                                # Отправляем с entities
+                                await bot_instance.send_message(
+                                    chat_id=chat_id,
+                                    text=full_text_with_preview,
+                                    entities=all_entities,
+                                    link_preview_options=lp,
+                                    reply_markup=reply_markup
+                                )
+                            else:
+                                # Fallback: отправляем без entities
+                                await bot_instance.send_message(
+                                    chat_id=chat_id,
+                                    text=full_text_with_preview,
+                                    link_preview_options=lp,
+                                    reply_markup=reply_markup
+                                )
                             print(f"✅ Пост С LINK-PREVIEW отредактирован в чате {chat_id}")
                             success_count += 1
                             
