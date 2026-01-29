@@ -1316,7 +1316,7 @@ async def ensure_user(user_id: int, username: str | None):
         logging.info(f"✅ Пользователь {user_id} зарегистрирован в bot_users")
     except Exception as e:
         logging.error(f"❌ Ошибка регистрации в bot_users: {e}")
-        
+
 
 # Функция для регистрации/обновления пользователя бота
 async def ensure_bot_user(user_id: int, username: str | None = None, first_name: str | None = None) -> BotUser:
@@ -6984,15 +6984,17 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
 def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count: int) -> str:
 
     lines = []
-    
+
     # Добавляем описание розыгрыша если оно есть
+    # ВАЖНО: public_description уже содержит HTML с премиум-эмодзи
+    # НЕ используем f-string чтобы не экранировать HTML
     if gw.public_description and gw.public_description.strip():
-        lines.append(f"{gw.public_description}")
+        lines.append(gw.public_description)
         lines.append("")
-    
+
     # Заголовок победителей (жирный текст)
     lines.append("<b>🎲 Розыгрыш завершен, билеты победителей определены:</b>")
-    
+
     # ТОЛЬКО билеты победителей с нумерацией
     if winners:
         for winner in winners:
@@ -7001,7 +7003,7 @@ def _compose_finished_post_text(gw: Giveaway, winners: list, participants_count:
             lines.append(f"{rank}. {ticket_code}")
     else:
         lines.append("Победители не определены, так как никто не принял участие.")
-    
+
     return "\n".join(lines)
 
 
