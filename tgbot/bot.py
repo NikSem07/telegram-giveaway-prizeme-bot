@@ -5910,6 +5910,18 @@ async def _launch_and_publish(gid: int, message: types.Message):
 
     for chat_id in chat_ids:
         try:
+            # DIAG: проверяем, есть ли у чата разрешённый набор custom emoji для ботов
+            try:
+                chat = await bot.get_chat(chat_id)
+                logging.info(
+                    "CHAT DEBUG chat_id=%s type=%s custom_emoji_sticker_set_name=%s",
+                    chat_id,
+                    getattr(chat, "type", None),
+                    getattr(chat, "custom_emoji_sticker_set_name", None),
+                )
+            except Exception as chat_dbg_err:
+                logging.warning("CHAT DEBUG failed for chat_id=%s: %s", chat_id, chat_dbg_err)
+
             # --- Пытаемся отправить «фиолетовую рамку» как в предпросмотре ---
             if file_id:
                 # подбираем «имя» (важно для корректного Content-Type)
@@ -5957,6 +5969,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
                     reply_markup=kb_public_participate(gid, for_channel=True),
                 )
                 message_ids[chat_id] = sent_msg.message_id
+                logging.info(
+                    "✅ SENT MESSAGE DEBUG chat_id=%s msg_id=%s entities_in_response=%s",
+                    chat_id,
+                    sent_msg.message_id,
+                    getattr(sent_msg, "entities", None),
+                )
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
 
                 
@@ -5984,6 +6002,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
 
                 sent_msg = await bot_instance.send_message(**send_kwargs)
                 message_ids[chat_id] = sent_msg.message_id
+                logging.info(
+                    "✅ SENT MESSAGE DEBUG chat_id=%s msg_id=%s entities_in_response=%s",
+                    chat_id,
+                    sent_msg.message_id,
+                    getattr(sent_msg, "entities", None),
+                )
                 logging.info(f"💾 Сохранен message_id {sent_msg.message_id} для чата {chat_id}")
 
         except Exception as e:
