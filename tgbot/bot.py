@@ -5741,9 +5741,9 @@ async def _launch_and_publish(gid: int, message: types.Message):
                 media_position = getattr(gw, 'media_position', 'bottom')
                 
                 if media_position == "top":
-                    full_text = f"{hidden_link}\n{preview_text}"
+                    full_text = hidden_link + "\n" + preview_text
                 else:
-                    full_text = f"{preview_text}\n\n{hidden_link}"
+                    full_text = preview_text + "\n\n" + hidden_link
 
                 lp = LinkPreviewOptions(
                     is_disabled=False,
