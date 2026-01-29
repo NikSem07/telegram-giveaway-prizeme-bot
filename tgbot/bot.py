@@ -425,6 +425,10 @@ class TextPreviewCleaner:
     @staticmethod
     def clean_text_preview(html_text: str, has_media: bool = False) -> tuple[str, bool]:
         
+        # 🔍 ДИАГНОСТИКА ПРЕМИУМ-ЭМОДЗИ
+        logging.info(f"🔍 [CLEAN_TEXT_DEBUG] Входной html_text содержит <tg-emoji>: {'<tg-emoji' in html_text}")
+        logging.info(f"🔍 [CLEAN_TEXT_DEBUG] Входной html_text первые 100 символов: {html_text[:100]}")
+
         if has_media:
             # ЕСТЬ МЕДИА - НИКОГДА не отключаем превью, чтобы работала фиолетовая рамка
             return html_text, False
@@ -5704,10 +5708,15 @@ async def _launch_and_publish(gid: int, message: types.Message):
         days_left=days_left,
     )
 
+    # 🔍 ДИАГНОСТИКА ПРЕМИУМ-ЭМОДЗИ
+    logging.info(f"🔍 [PREMIUM-EMOJI-DEBUG] preview_text содержит <tg-emoji>: {'<tg-emoji' in preview_text}")
+    logging.info(f"🔍 [PREMIUM-EMOJI-DEBUG] preview_text первые 200 символов: {preview_text[:200]}")
+    logging.info(f"🔍 [PREMIUM-EMOJI-DEBUG] public_description из БД содержит <tg-emoji>: {'<tg-emoji' in (gw.public_description or '')}")
+
     # 6) публикуем в каждом чате — С клавиатурой «Участвовать» и попыткой link-preview
     kind, file_id = unpack_media(gw.photo_file_id)
     
-    # 🔄 ДОБАВЛЕНО: сохраняем message_id для каждого чата
+    # Сохраняем message_id для каждого чата
     message_ids = {}  # {chat_id: message_id}
     
     for chat_id in chat_ids:
