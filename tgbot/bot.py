@@ -7828,10 +7828,9 @@ async def show_participant_giveaway_post(message: Message, giveaway_id: int, giv
         await message.answer(**send_kwargs)
 
 
-# --- ФУНКЦИИ СТАТИСТИКИ ДЛЯ СОЗДАТЕЛЯ ---
+# --- ФУНКЦИИ СТАТИСТИКИ ДЛЯ СОЗДАТЕЛЯ (Показывает статистику завершенного розыгрыша КАК НОВОЕ СООБЩЕНИЕ) ---
 
 async def show_finished_stats(message: Message, giveaway_id: int, user_id: int | None = None):
-    """Показывает статистику завершенного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
     # Явно передаем user_id или используем из message
     if user_id is None:
         user_id = message.from_user.id
@@ -7926,8 +7925,8 @@ async def show_finished_stats(message: Message, giveaway_id: int, user_id: int |
     # Отправляем как новое сообщение
     await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
+# --- Показывает статистику активного розыгрыша КАК НОВОЕ СООБЩЕНИЕ ---
 async def show_active_stats(message: Message, giveaway_id: int, user_id: int | None = None):
-    """Показывает статистику активного розыгрыша КАК НОВОЕ СООБЩЕНИЕ"""
     # Явно передаем user_id или используем из message
     if user_id is None:
         user_id = message.from_user.id
@@ -8025,20 +8024,17 @@ async def show_active_stats(message: Message, giveaway_id: int, user_id: int | N
 
 
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КНОПКИ "НАЗАД" в "Мои розыгрыши" ---
-
 def add_back_button(existing_markup: InlineKeyboardMarkup, back_callback: str) -> InlineKeyboardMarkup:
-
     # Создаем новый билдер
     kb = InlineKeyboardBuilder()
-    
     # Копируем существующие кнопки
     for row in existing_markup.inline_keyboard:
         kb.row(*row)
-    
     # Добавляем кнопку "Назад" (всегда close_message)
     kb.button(text="⬅️ Назад", callback_data="close_message")
     
     return kb.as_markup()
+
 
 # --- ОБРАБОТЧИКИ КНОПОК "НАЗАД" в "Мои розыгрыши" ---
 
@@ -8072,11 +8068,9 @@ async def handle_premium_required(cq: CallbackQuery):
     )
 
 
-# --- Мониторинг состояния механик ---
+# --- Мониторинг состояния механик (Возвращает статистику по механикам для мониторинга) ---
 async def get_mechanics_stats() -> dict:
-    """
-    Возвращает статистику по механикам для мониторинга
-    """
+
     stats = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'cache_size': 0,
@@ -8134,11 +8128,9 @@ async def get_mechanics_stats() -> dict:
         stats['error'] = str(e)
         return stats
 
+# --- Логирует операцию с механиками для аудита ---
 async def log_mechanics_operation(operation: str, giveaway_id: int, mechanic_type: str = None, 
                                  success: bool = True, details: dict = None):
-    """
-    Логирует операцию с механиками для аудита
-    """
     audit_log = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'operation': operation,
