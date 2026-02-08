@@ -71,7 +71,7 @@ function renderCards(listEl, items) {
 
         <div class="participant-giveaways-card__right">
           <div class="participant-giveaways-card__arrow">
-            <img src="/assets/icons/arrow-icon.svg" alt="" />
+            <img src="/miniapp-static/assets/icons/arrow-icon.svg" alt="" />
           </div>
         </div>
       </article>
