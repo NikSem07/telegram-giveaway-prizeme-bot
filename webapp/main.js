@@ -40,6 +40,7 @@ function switchMode(targetMode) {
   // ВАЖНО:
   // 1) Сначала меняем mode
   AppState.setMode(targetMode);
+  syncModeSwitcherUI(targetMode);
 
   // 2) Потом явно ставим page, чтобы НЕ было сброса на home
   AppState.setPage(mappedPage);
@@ -47,6 +48,20 @@ function switchMode(targetMode) {
 
 
 window.switchMode = switchMode;
+
+function syncModeSwitcherUI(mode) {
+  const buttons = document.querySelectorAll('.mode-switcher .mode-btn');
+  if (!buttons || !buttons.length) return;
+
+  buttons.forEach(btn => {
+    const isActive = btn.dataset.mode === mode;
+    btn.classList.toggle('active', isActive);
+
+    // если вдруг в CSS используются aria-атрибуты/доступность
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', () => {
@@ -116,9 +131,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 2. Инициализируем роутер
     Router.init();
+
+    // 2.1 Синхронизируем UI переключалки режимов сразу после старта
+    syncModeSwitcherUI(AppState.getMode());
+
+    // 2.2 Держим UI переключалки всегда в соответствии со state
+    AppState.subscribe((state) => {
+        if (state.changed === 'mode') {
+            syncModeSwitcherUI(state.mode);
+        }
+    });
     
     // 3. Навешиваем обработчики для переключателя режима
-    const modeButtons = document.querySelectorAll('.mode-button');
+    const modeButtons = document.querySelectorAll('.mode-switcher .mode-btn');
     modeButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             switchMode(btn.dataset.mode);
