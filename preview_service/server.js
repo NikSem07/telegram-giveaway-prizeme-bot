@@ -1544,6 +1544,88 @@ app.post('/api/creator_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/participant_giveaways ---
+// Отдает список розыгрышей участника по вкладке (active/finished/cancelled)
+app.post('/api/participant_giveaways', async (req, res) => {
+  try {
+    const { init_data, status } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+    }
+
+    // status bucket (строго под UI-вкладки)
+    let whereStatusSql = '';
+    if (status === 'active') {
+      whereStatusSql = `AND g.status = 'active'`;
+    } else if (status === 'finished') {
+      whereStatusSql = `AND g.status IN ('finished','completed')`;
+    } else if (status === 'cancelled') {
+      whereStatusSql = `AND g.status = 'cancelled'`;
+    } else {
+      return res.status(400).json({ ok: false, reason: 'bad_status' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.internal_title,
+        g.end_at_utc,
+        g.status,
+
+        array_remove(
+          array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
+          NULL
+        ) AS channels,
+
+        (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
+
+      FROM entries e
+      JOIN giveaways g ON g.id = e.giveaway_id
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+
+      WHERE e.user_id = $1
+        AND e.prelim_ok = true
+      ${whereStatusSql}
+
+      GROUP BY g.id
+      ORDER BY g.id DESC
+    `, [userId]);
+
+    const rows = result.rows || [];
+
+    const items = rows.map(row => {
+      const firstChatId = row.first_channel_chat_id || null;
+      return {
+        id: row.id,
+        title: row.internal_title,
+        end_at_utc: row.end_at_utc,
+        status: row.status,
+        channels: row.channels || [],
+        first_channel_avatar_url: firstChatId ? `/api/chat_avatar/${firstChatId}` : null,
+      };
+    });
+
+    return res.json({ ok: true, total: items.length, items });
+
+  } catch (error) {
+    console.error('[API participant_giveaways] error:', error);
+    return res.status(500).json({
+      ok: false,
+      reason: 'server_error',
+      error: error.message
+    });
+  }
+});
+
+
 // --- POST /api/creator_giveaway_details ---
 // Детали розыгрыша для страницы "проваливания" (creator)
 app.post('/api/creator_giveaway_details', async (req, res) => {
