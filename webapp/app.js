@@ -9,6 +9,30 @@ const $ = (q) => document.querySelector(q);
 const show = (sel) => $(sel)?.classList.remove("hide");
 const hide = (sel) => $(sel)?.classList.add("hide");
 
+// --- Anti "swipe-to-close" guard (Telegram pull-down) ---
+function setupTelegramSwipeToCloseGuard() {
+  // Важно: применяем только в "основном" mini-app (где есть скролл страницы).
+  // Статические экраны (success/results/etc) это не ломает, но можно ограничить при желании.
+  let startY = 0;
+
+  window.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+
+    const currentY = e.touches[0].clientY;
+    const dy = currentY - startY;
+
+    // Если тянем вниз и мы уже в самом верху страницы — блокируем "pull-down" (который сворачивает WebView)
+    if (dy > 0 && (window.scrollY <= 0)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+}
+
 // Инициализация Telegram WebApp
 function initializeTelegramWebApp() {
   const tg = window.Telegram?.WebApp;
@@ -81,6 +105,7 @@ function initializeTelegramWebApp() {
     console.log('Cannot set body/html background from appBg:', e);
   }
 
+  setupTelegramSwipeToCloseGuard();
 
   tg.ready();
   return true;

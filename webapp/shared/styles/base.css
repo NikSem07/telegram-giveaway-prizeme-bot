@@ -27,6 +27,8 @@ body {
   overflow-x: hidden;
   min-height: 100vh;
   padding-top: var(--tg-top-pad);
+  overscroll-behavior-y: none;       /* не даём странице уходить в "pull-to-close" */
+  -webkit-overflow-scrolling: touch; /* нормальный скролл на iOS */
 }
 
 /* Основной контейнер приложения */
