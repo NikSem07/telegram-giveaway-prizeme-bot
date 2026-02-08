@@ -15,6 +15,23 @@ import { renderGiveawaysPage as renderCreatorGiveaways } from '../pages/creator/
 import { renderGiveawayCardCreatorPage } from '../pages/creator/giveaways/giveaway_card_creator.js';
 import { renderStatsPage } from '../pages/creator/stats/stats.js';
 
+// --- Mode page mapping (keep section when switching modes) ---
+const MODE_PAGE_MAP = {
+  participant: { // switching TO participant (from creator)
+    home: 'home',
+    services: 'tasks',
+    giveaways: 'giveaways',
+    stats: 'profile',
+    giveaway_card_creator: 'giveaways'
+  },
+  creator: { // switching TO creator (from participant)
+    home: 'home',
+    tasks: 'services',
+    giveaways: 'giveaways',
+    profile: 'stats'
+  }
+};
+
 const Router = {
     // Карта маршрутов: mode -> page -> renderFunction
     routes: {
@@ -36,6 +53,13 @@ const Router = {
     
     // Текущий рендер-контейнер
     container: null,
+
+    // Для корректного переключения режимов без сброса раздела
+    lastMode: null,
+    lastPageByMode: {
+        participant: 'home',
+        creator: 'home'
+    },
     
     // Инициализация
     init() {
@@ -46,11 +70,35 @@ const Router = {
         }
         
         console.log('[ROUTER] Initialized');
+
+        this.lastMode = AppState.getMode();
+        this.lastPageByMode[this.lastMode] = AppState.getPage() || 'home';
         
         // Подписываемся на изменения состояния
         AppState.subscribe((state) => {
-            if (state.changed === 'mode' || state.changed === 'page') {
+            // 1) Смена страницы в текущем режиме — просто навигируем
+            if (state.changed === 'page') {
                 this.navigate(state.page || 'home');
+                return;
+            }
+
+            // 2) Смена режима — маппим раздел и навигируем в "эквивалент"
+            if (state.changed === 'mode') {
+                const newMode = AppState.getMode();
+                const prevMode = this.lastMode || (newMode === 'creator' ? 'participant' : 'creator');
+
+                // Берём последнюю страницу, на которой был пользователь в предыдущем режиме
+                const fromPage = this.lastPageByMode[prevMode] || AppState.getPage() || 'home';
+
+                // Маппим в страницу нового режима
+                const targetPage = (MODE_PAGE_MAP[newMode] && MODE_PAGE_MAP[newMode][fromPage]) ? MODE_PAGE_MAP[newMode][fromPage] : 'home';
+
+                // Обновляем lastMode
+                this.lastMode = newMode;
+                this.lastPageByMode[newMode] = targetPage;
+
+                this.navigate(targetPage);
+                return;
             }
         });
         
@@ -76,8 +124,13 @@ const Router = {
             }
         }
         
-        // Обновляем состояние - ЭТО ВЫЗЫВАЕТ УВЕДОМЛЕНИЕ ДЛЯ NAVBAR!
-        AppState.setPage(page);
+        // Обновляем lastPageByMode (важно для корректного mode-switch)
+        this.lastPageByMode[mode] = page;
+
+        // Не триггерим лишние события, если page не изменилась
+        if (AppState.getPage() !== page) {
+            AppState.setPage(page);
+        }
         
         // Вызываем render-функцию
         this.render(page);
