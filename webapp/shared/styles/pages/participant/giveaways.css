@@ -26,28 +26,65 @@
 }
 
 .participant-giveaways__tabs {
-  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+
   display: flex;
-  gap: 8px;
-  padding: 0 6px;
+  gap: 4px;
+  height: 36px;
+
+  border-radius: 20px;
+  overflow: hidden;
+
+  background: var(--color-bg-tertiary);
+  margin-bottom: 12px;
+
+  /* чтобы совпасть с creator — убираем боковые паддинги/маржины */
+  padding: 0;
+  margin-top: 0;
 }
 
 .participant-giveaways__tab {
-  flex: 1 1 0;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.06);
-  color: var(--color-text);
-  border-radius: 14px;
-  padding: 10px 10px;
-  font-size: 13px;
-  line-height: 16px;
+  flex: 1;
+  height: 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 20px;
+  border: none;
+  background: transparent;
+
+  color: var(--color-text-secondary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1;
+
   cursor: pointer;
-  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+
+  padding: 0;
+  margin: 4px 0; /* только вертикальный, НЕ горизонтальный */
 }
 
 .participant-giveaways__tab.is-active {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.18);
+  background: #737375;
+  color: #FAFAFA;
+  font-weight: 700;
+
+  margin: 4px; /* симметрично */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Hover (десктоп) */
+@media (hover: hover) {
+  .participant-giveaways__tab:not(.is-active):hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+  }
 }
 
 .participant-giveaways__content {
@@ -73,22 +110,27 @@
 
 /* Card (визуально как в creator → giveaways, но namespaced под participant) */
 .participant-giveaways-card {
+  width: 100%;
+  box-sizing: border-box;
+
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 12px;
 
-  padding: 12px 12px;
-  border-radius: 18px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(46, 46, 46, 1);
 
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
+  position: relative;
+  padding-right: 42px; /* место под стрелку + blur */
 
   cursor: pointer;
   user-select: none;
 }
 
 .participant-giveaways-card:active {
-  transform: scale(0.99);
+  transform: translateY(0.5px);
+  filter: brightness(1.02);
 }
 
 .participant-giveaways-card__left {
@@ -98,12 +140,12 @@
 }
 
 .participant-giveaways-card__avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 50px;
+  height: 50px;
+  border-radius: 40px;
+  flex-shrink: 0;
+  background: rgba(49, 49, 51, 1);
   overflow: hidden;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
 }
 
 .participant-giveaways-card__avatar img {
@@ -113,35 +155,34 @@
 }
 
 .participant-giveaways-card__body {
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .participant-giveaways-card__channels {
-  font-size: 12px;
-  line-height: 14px;
-  opacity: 0.75;
+  font: 500 12px/18px "Roboto", system-ui, -apple-system, sans-serif;
+  color: rgba(250, 250, 250, 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .participant-giveaways-card__title {
-  font-size: 15px;
-  line-height: 18px;
-  font-weight: 600;
+  margin-top: 4px;
+  font: 400 12px/18px "Roboto", system-ui, -apple-system, sans-serif;
+  color: rgba(169, 169, 169, 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .participant-giveaways-card__meta {
-  font-size: 12px;
-  line-height: 14px;
-  opacity: 0.75;
+  margin-top: 4px;
+  font: 400 12px/18px "Roboto", system-ui, -apple-system, sans-serif;
+  color: rgba(115, 115, 117, 1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .participant-giveaways-card__right {
@@ -151,19 +192,48 @@
 }
 
 .participant-giveaways-card__arrow {
-  width: 28px;
-  height: 28px;
-  border-radius: 12px;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  z-index: 3;
+
   display: flex;
   align-items: center;
   justify-content: center;
 
-  background: rgba(0,0,0,0.20);
-  backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .participant-giveaways-card__arrow img {
-  width: 14px;
-  height: 14px;
-  opacity: 0.75;
+  width: 9px;
+  height: 9px;
+  filter: invert(53%) sepia(6%) saturate(180%) hue-rotate(202deg) brightness(90%) contrast(88%);
 }
+
+.participant-giveaways-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56px;
+  height: 100%;
+  z-index: 2;
+
+  background: linear-gradient(
+    to left,
+    rgba(46, 46, 46, 1) 35%,
+    rgba(46, 46, 46, 0) 100%
+  );
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+
+  pointer-events: none;
+}
+
