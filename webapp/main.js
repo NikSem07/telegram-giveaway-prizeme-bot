@@ -8,25 +8,43 @@ import { loadGiveawaysLists } from './pages/participant/home/home.js';
 console.log('[HOME] Script loaded');
 
 // Переключение режима Участник / Создатель
-function switchMode(mode) {
-    console.log('[HOME] switchMode:', mode);
-    
-    if (mode !== 'participant' && mode !== 'creator') {
-        console.error('[HOME] Invalid mode:', mode);
-        return;
-    }
-    
-    // Обновляем визуальные кнопки переключателя
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
-    
-    // Обновляем состояние приложения
-    AppState.setMode(mode);
-    
-    // Навигация на главную страницу выбранного режима
-    Router.navigate('home');
+function switchMode(targetMode) {
+  console.log('[HOME] switchMode:', targetMode);
+
+  // текущие значения ДО переключения
+  const currentMode = AppState.getMode();
+  const currentPage = AppState.getPage() || 'home';
+
+  if (targetMode === currentMode) return;
+
+  const mapToCreator = {
+    home: 'home',
+    tasks: 'services',
+    giveaways: 'giveaways',
+    profile: 'stats'
+  };
+
+  const mapToParticipant = {
+    home: 'home',
+    services: 'tasks',
+    giveaways: 'giveaways',
+    stats: 'profile',
+    giveaway_card_creator: 'giveaways'
+  };
+
+  const mappedPage =
+    targetMode === 'creator'
+      ? (mapToCreator[currentPage] || 'home')
+      : (mapToParticipant[currentPage] || 'home');
+
+  // ВАЖНО:
+  // 1) Сначала меняем mode
+  AppState.setMode(targetMode);
+
+  // 2) Потом явно ставим page, чтобы НЕ было сброса на home
+  AppState.setPage(mappedPage);
 }
+
 
 window.switchMode = switchMode;
 

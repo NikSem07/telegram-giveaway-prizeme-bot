@@ -47,7 +47,10 @@ const AppState = {
     // Установка страницы
     setPage(page) {
         if (!page || this.currentPage === page) return;
-        
+
+        console.log('[STATE] setPage called with:', page);
+        console.trace('[STATE] setPage trace');
+
         console.log('[STATE] Page changed:', this.currentPage, '→', page);
         this.currentPage = page;
         this.notify('page');
