@@ -127,29 +127,7 @@
 
 .creator-giveaway-card-edit {
   margin: 8px auto 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 5px;
-  background: #1551E5;
-  color: #FAFAFA;
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.creator-giveaway-card-edit-icon {
-  width: 21px;
-  height: 20px;
-  border-radius: 10px;
-  background: #0A38A9;
-
-  background-image: url("/miniapp-static/assets/icons/arrow-icon.svg");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 8px 12px; /* маленькая стрелка */
+  display: flex;          /* чтобы max-width/центр работали стабильно */
 }
 
 /* Media fade-in */

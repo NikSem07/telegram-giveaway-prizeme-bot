@@ -34,9 +34,8 @@ export default function giveawayCardCreatorTemplate() {
         <div class="creator-giveaway-card-channels" id="cgcc-channels"></div>
       </div>
 
-      <button class="creator-giveaway-card-edit" type="button" id="cgcc-edit">
-        <span>Редактировать</span>
-        <span class="creator-giveaway-card-edit-icon"></span>
+      <button class="creator-giveaway-card-edit big_bottom" type="button" id="cgcc-edit">
+        Редактировать
       </button>
     </section>
   `;
