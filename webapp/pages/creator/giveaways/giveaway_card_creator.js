@@ -6,6 +6,9 @@ import Router from '../../../shared/router.js';
 const STORAGE_TAB_KEY = 'prizeme_creator_giveaways_tab';
 
 function backToGiveaways() {
+  // гарантируем, что navbar вернётся сразу (даже если роутер не чистит body-классы)
+  document.body.classList.remove('page-creator-giveaway-card');
+
   // Вкладка уже сохранена в sessionStorage на экране списка.
   Router.navigate('giveaways');
 }

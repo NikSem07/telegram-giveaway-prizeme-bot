@@ -124,3 +124,10 @@
 .nav-item.active.nav-profile .nav-icon {
   filter: none !important;
 }
+
+/* Hide bottom navbar (Creator giveaway card) */
+.page-creator-giveaway-card .bottom-nav {
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
