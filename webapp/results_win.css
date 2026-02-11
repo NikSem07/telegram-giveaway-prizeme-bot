@@ -252,42 +252,6 @@ body {
   background: #E0E0E0;
 }
 
-.button-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  padding: 1px;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.button-icon-inner {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Светлая иконка */
-.button-icon-light {
-  background: #FFFFFF;
-}
-
-.button-icon-inner-light {
-  background: #FFFFFF;
-}
-
-.button-icon-inner-light img {
-  width: 12px;
-  height: 12px;
-  display: block;
-  filter: brightness(0) saturate(100%) invert(20%) sepia(4%) saturate(998%) hue-rotate(210deg) brightness(97%) contrast(90%);
-}
-
 /* Белая рамка вокруг карточки текущего пользователя */
 .winner-card.current-user {
   border: 2px solid #FFFFFF;

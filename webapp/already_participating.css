@@ -391,40 +391,6 @@ body {
   background: var(--back-shape, #0a38a9);
 }
 
-.button-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  padding: 1px;
-  background: linear-gradient(135deg, #0A38A9, #758FCF, #FFFFFF);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.button-icon img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.button-icon-inner {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: #0A38A9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.button-icon-inner img {
-  width: 12px;
-  height: 12px;
-  display: block;
-}
-
 /* Адаптивность */
 @media (max-width: 480px) {
   .success-image {
