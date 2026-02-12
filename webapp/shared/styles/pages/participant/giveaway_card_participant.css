@@ -39,7 +39,7 @@ body.page-participant-giveaway-card {
 /* Top block */
 .pgc-top {
   margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
-  padding-top: 6px;       /* маленький ровный отступ */
+  padding-top: 109px;       /* маленький ровный отступ */
   width: 100%;
 }
 
