@@ -31,10 +31,16 @@ body.page-participant-giveaway-card {
   width: 100%;
 }
 
-.pgc-top,
+/* ВАЖНО: .pgc-top НЕ паддим, иначе получается двойной отступ (wrap + pgc-top) */
 .pgc-tickets {
   padding-left: 16px;
   padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.pgc-top {
+  padding-left: 0;
+  padding-right: 0;
   box-sizing: border-box;
 }
 
@@ -77,40 +83,35 @@ body.page-participant-giveaway-card {
   text-align: left;
 }
 
-/* badges row */
-.pgc-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.pgc-badges {
+  display: flex;
   flex-wrap: wrap;
-  margin-top: 12px;
-
-  padding: 8px 10px;     /* “дышит” как в макете */
-  min-height: 32px;      /* одинаковая высота чипов */
-  border-radius: 999px;  /* максимальное скругление */
-
-  box-sizing: border-box;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: visible;
+  gap: 8px;
+  row-gap: 8px;     /* важно: чтобы нижний бейдж не налезал */
+  align-items: flex-start;
 }
 
 .pgc-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 8px;                 /* главное */
+
+  padding: 8px 10px;
+  min-height: 32px;
   background-color: var(--pgc-blue-chip);
-  border-radius: 20px;
-  height: auto;                     /* важно: иначе 8px не поместится */
+
+  border-radius: 999px;   /* максимальное скругление */
   box-sizing: border-box;
+
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pgc-badge-text {
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-weight: 400;
   color: #ffffff;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 18px;
   white-space: nowrap;
 }
@@ -151,7 +152,8 @@ body.page-participant-giveaway-card {
   height: auto;              /* важно */
   padding: 8px 8px;          /* главное */
   background-color: var(--pgc-blue-chip);
-  border-radius: 100px;
+  border-radius: 999px;
+  min-height: 32px;
   box-sizing: border-box;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
@@ -383,10 +385,6 @@ body.page-participant-giveaway-card {
   line-height: 18px !important;
 }
 
-.pgc-badge {
-  height: 18px;
-}
-
 .pgc-badge--winners {
   flex: 0 0 100%;
   background: transparent;
@@ -402,5 +400,6 @@ body.page-participant-giveaway-card {
   min-height: 32px;
   border-radius: 999px;
 
+  background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
   white-space: nowrap;
 }
