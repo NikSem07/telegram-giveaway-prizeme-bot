@@ -1,6 +1,6 @@
 // webapp/pages/participant/giveaways/giveaway_card_participant.js
 import giveawayCardParticipantTemplate from './giveaway_card_participant.template.js';
-import Router from './././shared/router.js';
+import Router from '../../../shared/router.js';
 
 const STORAGE_TAB_KEY = 'prizeme_participant_giveaways_tab';
 
