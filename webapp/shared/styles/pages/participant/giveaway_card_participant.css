@@ -38,6 +38,29 @@ body.page-participant-giveaway-card {
   box-sizing: border-box;
 }
 
+/* FIX: убираем второй слой отступов внутри синего блока */
+.pgc-top > * {
+  margin-left: 0 !important;
+}
+
+.pgc-top .pgc-container,
+.pgc-top .pgc-inner,
+.pgc-top .container,
+.pgc-top .content {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.pgc-title,
+.pgc-badges,
+.pgc-tickets-title,
+.pgc-tickets {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
 .pgc-top-title-wrap {
   display: flex;
   align-items: center;
@@ -55,14 +78,21 @@ body.page-participant-giveaway-card {
 }
 
 /* badges row */
-.pgc-badges {
-  display: flex;
+.pgc-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 18px;
-  border-radius: 20px;
-  overflow: hidden;
+  gap: 6px;
+  flex-wrap: wrap;
   margin-top: 12px;
+
+  padding: 8px 10px;     /* “дышит” как в макете */
+  min-height: 32px;      /* одинаковая высота чипов */
+  border-radius: 999px;  /* максимальное скругление */
+
+  box-sizing: border-box;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .pgc-badge {
@@ -121,7 +151,7 @@ body.page-participant-giveaway-card {
   height: auto;              /* важно */
   padding: 8px 8px;          /* главное */
   background-color: var(--pgc-blue-chip);
-  border-radius: 20px;
+  border-radius: 100px;
   box-sizing: border-box;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
@@ -353,30 +383,24 @@ body.page-participant-giveaway-card {
   line-height: 18px !important;
 }
 
-/* badges: 2 rows (row1: status+left, row2: winners) */
-.pgc-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  height: auto;          /* вместо фиксированных 18px */
-  margin-top: 12px;
-  overflow: visible;
-}
-
 .pgc-badge {
   height: 18px;
 }
 
 .pgc-badge--winners {
-  flex: 0 0 100%;          /* остаётся на второй строке */
-  background: transparent; /* убираем широкий фон у самого бейджа */
-  padding: 0;              /* убираем широкий padding */
+  flex: 0 0 100%;
+  background: transparent;
+  padding: 0;
+  margin-top: 0;          /* важно: убрать любые отрицательные/лишние отступы */
 }
+
 .pgc-badge--winners .pgc-badge-text {
   display: inline-flex;
   align-items: center;
-  background: var(--pgc-blue-chip);
-  border-radius: 20px;
-  padding: 8px 8px;        /* как в Figma */
+
+  padding: 8px 10px;
+  min-height: 32px;
+  border-radius: 999px;
+
   white-space: nowrap;
 }
