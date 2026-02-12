@@ -19,7 +19,8 @@ body.page-participant-giveaway-card {
 /* Screen wrapper */
 .pgc-screen {
   width: 100%;
-  padding: 12px 16px 90px;
+  min-height: 100vh;
+  padding: 8px 16px 90px; /* подняли вверх */
   box-sizing: border-box;
 }
 
@@ -37,9 +38,8 @@ body.page-participant-giveaway-card {
 
 /* Top block */
 .pgc-top {
-  margin-top: 6px;            /* было 109px — из-за этого всё ниже */
+  margin-top: 6px;
   width: 100%;
-  max-width: 418px;
 }
 
 .pgc-top-title-wrap {
@@ -90,11 +90,8 @@ body.page-participant-giveaway-card {
 
 /* Tickets block */
 .pgc-tickets {
-  position: relative;
-  z-index: 1;
-  margin-top: 30px; /* top=157px в figma + контент */
+  margin-top: 14px;
   width: 100%;
-  max-width: 418px;
 }
 
 .pgc-text-10 {
@@ -139,15 +136,15 @@ body.page-participant-giveaway-card {
 
 /* Bottom frame (418px column) */
 .pgc-frame {
-  width: 100%;
-  max-width: 418px;
-
   margin-top: 18px;
-  padding: 18px 16px 24px;
 
-  background: rgba(28, 28, 28, 1);      /* серая зона */
-  border-radius: 20px;                  /* как в Figma */
+  width: 100%;
+  max-width: none;              /* убрали 418 */
   box-sizing: border-box;
+
+  background: rgba(28, 28, 28, 1);
+  border-radius: 20px 20px 0 0; /* серый блок с радиусами как в макете */
+  padding: 18px 16px 24px;
 
   display: flex;
   flex-direction: column;
@@ -305,4 +302,27 @@ body.page-participant-giveaway-card {
 .page-participant-giveaway-card .mode-switcher,
 .page-participant-giveaway-card .mode-switcher-container {
   display: none !important;
+}
+
+/* ===== FORCE FULL BLUE BACKGROUND (Participant giveaway card) ===== */
+body.page-participant-giveaway-card,
+html.page-participant-giveaway-card {
+  background: #1551e5 !important;
+  background-color: #1551e5 !important;
+  min-height: 100vh;
+}
+
+/* убираем чёрные подложки контейнеров webapp */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  background: transparent !important;
+}
+
+/* Внутренний контент в колонке, фон серый — на всю ширину */
+.page-participant-giveaway-card .pgc-frame > * {
+  width: 100%;
+  max-width: 418px;
+  margin-left: auto;
+  margin-right: auto;
 }
