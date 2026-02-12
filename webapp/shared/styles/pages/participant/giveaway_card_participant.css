@@ -20,7 +20,7 @@ body.page-participant-giveaway-card {
 .pgc-screen {
   width: 100%;
   min-height: 100vh;
-  padding: 0 16px 90px;
+  padding: 0 0 90px;        /* убираем горизонтальный padding, чтобы синий не “уезжал” */
   box-sizing: border-box;
 }
 
@@ -29,6 +29,13 @@ body.page-participant-giveaway-card {
   margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
   padding-top: 48px;       /* маленький ровный отступ */
   width: 100%;
+}
+
+.pgc-top,
+.pgc-tickets {
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .pgc-top-title-wrap {
@@ -61,11 +68,12 @@ body.page-participant-giveaway-card {
 .pgc-badge {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 6px;
+  gap: 6px;
+  padding: 8px 8px;                 /* главное */
   background-color: var(--pgc-blue-chip);
   border-radius: 20px;
-  height: 18px;
+  height: auto;                     /* важно: иначе 8px не поместится */
+  box-sizing: border-box;
 }
 
 .pgc-badge-text {
@@ -110,16 +118,15 @@ body.page-participant-giveaway-card {
 .pgc-ticket-pill {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 6px;
+  height: auto;              /* важно */
+  padding: 8px 8px;          /* главное */
   background-color: var(--pgc-blue-chip);
   border-radius: 20px;
+  box-sizing: border-box;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-weight: 400;
   color: #ffffff;
-  font-size: 10px;
-  line-height: 18px;
   white-space: nowrap;
 }
 
@@ -361,5 +368,15 @@ body.page-participant-giveaway-card {
 }
 
 .pgc-badge--winners {
-  flex: 0 0 100%;        /* всегда на второй строке */
+  flex: 0 0 100%;          /* остаётся на второй строке */
+  background: transparent; /* убираем широкий фон у самого бейджа */
+  padding: 0;              /* убираем широкий padding */
+}
+.pgc-badge--winners .pgc-badge-text {
+  display: inline-flex;
+  align-items: center;
+  background: var(--pgc-blue-chip);
+  border-radius: 20px;
+  padding: 8px 8px;        /* как в Figma */
+  white-space: nowrap;
 }
