@@ -61,9 +61,9 @@ function formatLeftTime(endAtUtc) {
   return `${days}д ${hh}:${mm}:${ss}`;
 }
 
-function startCountdown(leftEl, endAtUtc) {
+function startCountdown(leftTimeEl, endAtUtc) {
   const tick = () => {
-    leftEl.textContent = `🕒 Осталось: ${formatLeftTime(endAtUtc)}`;
+    leftTimeEl.textContent = formatLeftTime(endAtUtc);
   };
   tick();
   const t = setInterval(tick, 1000);
@@ -170,15 +170,20 @@ function renderGiveawayCardParticipantPage() {
   if (!giveawayId) return;
 
   const titleEl = main.querySelector('#pgc-title');
-  const leftEl = main.querySelector('#pgc-left');
+  const leftTimeEl = main.querySelector('#pgc-left-time');
   const descEl = main.querySelector('#pgc-description');
   const mediaEl = main.querySelector('#pgc-media');
   const ticketsEl = main.querySelector('#pgc-tickets-list');
   const channelsEl = main.querySelector('#pgc-channels');
   const openBtn = main.querySelector('#pgc-open');
 
+  if (!titleEl || !leftTimeEl || !descEl || !mediaEl || !ticketsEl || !channelsEl || !openBtn) {
+    console.error('[giveaway_card_participant] missing DOM nodes');
+    return;
+  }
+
   titleEl.textContent = 'Загрузка...';
-  leftEl.textContent = '🕒 Осталось: —';
+  leftTimeEl.textContent = '—';
   descEl.textContent = '';
 
   let stopCountdown = null;
@@ -201,7 +206,7 @@ function renderGiveawayCardParticipantPage() {
 
         // countdown
         if (stopCountdown) stopCountdown();
-        stopCountdown = startCountdown(leftEl, data.end_at_utc);
+        stopCountdown = startCountdown(leftTimeEl, data.end_at_utc);
 
         // button → post
         openBtn.disabled = !(data.post_url || data.channels?.[0]?.post_url);
@@ -210,7 +215,7 @@ function renderGiveawayCardParticipantPage() {
     .catch((err) => {
         console.error('[giveaway_card_participant] load error:', err);
         titleEl.textContent = 'Ошибка загрузки';
-        leftEl.textContent = '🕒 Осталось: —';
+        leftTimeEl.textContent = '—';
         descEl.textContent = '';
         openBtn.disabled = true;
     });
