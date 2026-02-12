@@ -83,30 +83,23 @@ async function loadParticipantGiveawayDetails(giveawayId) {
 function renderMedia(container, media) {
   container.innerHTML = '';
 
+  // Figma: если медиа нет — не показываем блок вообще
   if (!media?.url) {
-    container.innerHTML = `<div class="pgc-media-empty">Нет медиа</div>`;
+    container.style.display = 'none';
     return;
   }
 
+  container.style.display = '';
   const type = (media.type || '').toLowerCase();
 
   if (type === 'video') {
     container.innerHTML = `<video class="pgc-media-el" playsinline preload="metadata" controls></video>`;
     const v = container.querySelector('video');
     v.src = media.url;
-    v.addEventListener('loadeddata', () => v.classList.add('is-loaded'), { once: true });
-    v.addEventListener('error', () => {
-      container.innerHTML = `<div class="pgc-media-empty">Не удалось загрузить медиа</div>`;
-    }, { once: true });
     return;
   }
 
   container.innerHTML = `<img class="pgc-media-el" src="${media.url}" alt="">`;
-  const img = container.querySelector('img');
-  img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
-  img.addEventListener('error', () => {
-    container.innerHTML = `<div class="pgc-media-empty">Не удалось загрузить медиа</div>`;
-  }, { once: true });
 }
 
 function renderTickets(container, tickets) {
@@ -187,6 +180,9 @@ function renderGiveawayCardParticipantPage() {
 
         // description
         descEl.textContent = data.description || '—';
+
+        // media (Figma: если медиа нет — блок не показываем)
+        renderMedia(mediaEl, data.media);
 
         // tickets
         renderTickets(ticketsEl, data.tickets);

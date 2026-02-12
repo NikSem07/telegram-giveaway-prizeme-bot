@@ -1,42 +1,55 @@
 // webapp/pages/participant/giveaways/giveaway_card_participant.template.js
 export default function giveawayCardParticipantTemplate() {
   return `
-    <section class="participant-giveaway-card">
+    <section class="pgc-screen participant-giveaway-card">
+      <div class="pgc-footer"></div>
 
-      <!-- Верх: название + статусы -->
+      <!-- TOP: title + badges -->
       <div class="pgc-top">
-        <div class="pgc-title" id="pgc-title">&lt;Название розыгрыша&gt;</div>
+        <div class="pgc-top-title-wrap">
+          <div class="pgc-title" id="pgc-title">&lt;Название розыгрыша&gt;</div>
+        </div>
 
         <div class="pgc-badges">
-          <div class="pgc-badge">⏳ Активный</div>
-          <div class="pgc-badge">🤷 Победители не определены</div>
-          <div class="pgc-badge" id="pgc-left">🕒 Осталось: —</div>
+          <div class="pgc-badge"><span class="pgc-badge-text">⏳ Активный</span></div>
+          <div class="pgc-badge"><span class="pgc-badge-text">🤷 Победители не определены</span></div>
+          <div class="pgc-badge"><span class="pgc-badge-text" id="pgc-left">🕒 Осталось: —</span></div>
         </div>
       </div>
 
-      <!-- Ваши билеты -->
+      <!-- Tickets -->
       <div class="pgc-tickets">
-        <div class="pgc-tickets-title">Ваши билеты</div>
+        <div class="pgc-tickets-title"><span class="pgc-text-10">Ваши билеты</span></div>
         <div class="pgc-tickets-list" id="pgc-tickets-list"></div>
       </div>
 
-      <!-- Нижний серый блок -->
-      <div class="pgc-bottom">
-        <div class="pgc-info-title">Информация о розыгрыше</div>
-
-        <div class="pgc-media" id="pgc-media"></div>
-
-        <div class="pgc-description" id="pgc-description">
-          &lt;Текст описания розыгрыша&gt;
+      <!-- Bottom content -->
+      <div class="pgc-frame">
+        <!-- Media + title -->
+        <div class="pgc-media-block">
+          <div class="pgc-media" id="pgc-media"></div>
+          <div class="pgc-info-title-wrap">
+            <div class="pgc-info-title">Информация о розыгрыше</div>
+          </div>
         </div>
 
-        <div class="pgc-channels-title">Подключенные каналы / группы к розыгрышу</div>
-        <div class="pgc-channels" id="pgc-channels"></div>
+        <!-- Description -->
+        <div class="pgc-desc">
+          <div class="pgc-desc-text" id="pgc-description"></div>
+        </div>
 
-        <button class="big_bottom" type="button" id="pgc-open">
+        <!-- Channels -->
+        <div class="pgc-channels">
+          <div class="pgc-channels-title">Подключенные каналы / группы к розыгрышу</div>
+          <div class="pgc-channels-list" id="pgc-channels"></div>
+        </div>
+
+        <!-- Button -->
+        <button class="big_bottom pgc-open" type="button" id="pgc-open">
           Перейти к розыгрышу
         </button>
       </div>
     </section>
   `;
 }
+

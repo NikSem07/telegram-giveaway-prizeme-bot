@@ -1,200 +1,281 @@
 /* webapp/shared/styles/pages/participant/giveaway_card_participant.css */
 
-.participant-giveaway-card {
+/* Figma variables (локально для экрана) */
+.page-participant-giveaway-card {
+  --pgc-blue: rgba(21, 81, 229, 1);     /* --back-big-shape */
+  --pgc-blue-chip: #4379ff;            /* badges/tickets */
+  --pgc-footer-bg: rgba(28, 28, 28, 1);
+  --pgc-shape: rgba(46, 46, 46, 1);
+  --pgc-text: rgba(250, 250, 250, 1);
+  --pgc-text-muted: rgba(115, 115, 117, 1);
+}
+
+/* Синий фон как в Figma */
+body.page-participant-giveaway-card {
+  background: var(--pgc-blue) !important;
+  background-color: var(--pgc-blue) !important;
+}
+
+/* Screen wrapper */
+.pgc-screen {
+  position: relative;
   width: 100%;
-  box-sizing: border-box;
+  overflow: hidden;
   padding: 0 16px 90px;
 }
 
-/* Верхняя зона (синий фон уже даёт общий bg, но делаем красиво “как Figma”) */
+/* Большая тёмная подложка снизу (footer) */
+.pgc-footer {
+  position: absolute;
+  top: 227px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 227px);
+  background-color: var(--pgc-footer-bg);
+  border-radius: 20px;
+  z-index: 0;
+}
+
+/* Top block */
 .pgc-top {
-  margin-top: 10px;
+  position: relative;
+  z-index: 1;
+  margin-top: 109px;
+  width: 100%;
+  max-width: 418px;
+}
+
+.pgc-top-title-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .pgc-title {
   width: 100%;
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 18px;
   font-weight: 600;
-  line-height: 18px;
   color: #ffffff;
+  font-size: 18px;
+  line-height: 18px;
   text-align: center;
-  margin: 0 0 10px;
 }
 
+/* badges row */
 .pgc-badges {
-  width: 100%;
   display: flex;
+  align-items: center;
   gap: 4px;
-  overflow: hidden;
+  height: 18px;
   border-radius: 20px;
+  overflow: hidden;
+  margin-top: 4px;
 }
 
 .pgc-badge {
-  background: #2c2c2e;
-  border-radius: 5px;
-  padding: 0 6px;
-  height: 18px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  padding: 0 6px;
+  background-color: var(--pgc-blue-chip);
+  border-radius: 20px;
+  height: 18px;
+}
 
+.pgc-badge-text {
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 10px;
   font-weight: 400;
-  line-height: 18px;
   color: #ffffff;
+  font-size: 10px;
+  line-height: 18px;
   white-space: nowrap;
 }
 
-/* Билеты */
+/* Tickets block */
 .pgc-tickets {
-  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+  margin-top: 30px; /* top=157px в figma + контент */
+  width: 100%;
+  max-width: 418px;
+}
+
+.pgc-text-10 {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 400;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .pgc-tickets-title {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 18px;
-  color: rgba(217, 217, 217, 1);
-  margin-bottom: 6px;
+  height: 18px;
+  padding: 0;
+  margin-bottom: 4px;
 }
 
 .pgc-tickets-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
+/* ticket chip */
 .pgc-ticket-pill {
-  background: #2c2c2e;
-  border-radius: 5px;
-  padding: 0 8px;
-  height: 22px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  background-color: var(--pgc-blue-chip);
+  border-radius: 20px;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 22px;
+  font-weight: 400;
   color: #ffffff;
+  font-size: 10px;
+  line-height: 18px;
   white-space: nowrap;
 }
 
-/* Нижний блок (серый большой) */
-.pgc-bottom {
-  margin-top: 18px;
-  background: #1c1c1c;
-  border-radius: 20px 20px 0 0;
-  padding: 18px 16px 24px;
-  box-sizing: border-box;
+/* Bottom frame (418px column) */
+.pgc-frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 418px;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Media + title group (как .div в figma) */
+.pgc-media-block {
+  position: relative;
+  width: 100%;
+  height: auto;
+}
+
+.pgc-info-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
 }
 
 .pgc-info-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 16px;
   font-weight: 500;
   color: #ffffff;
-  margin-bottom: 12px;
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
+/* media frame (как frame-2) */
 .pgc-media {
   width: 100%;
-  min-height: 120px;
-  max-height: 520px;
+  height: 160px;
   border-radius: 10px;
+  background-color: rgba(0,0,0,0.12); /* вместо background-image из figma */
   overflow: hidden;
-  background: transparent;
+  margin-top: 18px;
+}
+
+/* media element */
+.pgc-media-el {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Description (frame-3) */
+.pgc-desc {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-
-.pgc-media-el {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 520px;
-  object-fit: contain;
-  display: block;
-  border-radius: 10px;
-  opacity: 0;
-  transition: opacity 220ms ease;
-  will-change: opacity;
-}
-
-.pgc-media-el.is-loaded {
-  opacity: 1;
-}
-
-.pgc-media-empty {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  color: #a9a9a9;
-}
-
-/* описание серой плашкой */
-.pgc-description {
+  gap: 10px;
+  padding: 4px;
   width: 100%;
-  background: #2e2e2e;
-  border-radius: 10px;
-  padding: 10px 12px;
-  box-sizing: border-box;
+  background-color: #2c2c2e;
+  border-radius: 5px;
+}
+
+.pgc-desc-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
   font-weight: 400;
-  line-height: 18px;
   color: #ffffff;
-  margin-bottom: 14px;
+  font-size: 10px;
+  line-height: 18px;
+
+  /* В реале описание может быть многострочным */
+  white-space: normal;
+}
+
+/* Channels block */
+.pgc-channels {
+  position: relative;
+  width: 100%;
 }
 
 .pgc-channels-title {
   width: 100%;
-  text-align: center;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 10px;
   font-weight: 400;
+  color: var(--pgc-text-muted);
+  font-size: 10px;
   line-height: 18px;
-  color: #a9a9a9;
-  margin-bottom: 6px;
+  white-space: nowrap;
+
+  margin-bottom: 8px;
 }
 
-.pgc-channels {
+.pgc-channels-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 14px;
 }
 
+/* channel row (frame-6/8/10) */
 .pgc-channel-card {
   width: 100%;
   height: 52px;
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #2e2e2e;
+  background-color: var(--pgc-shape);
   border-radius: 5px;
   overflow: hidden;
-  box-sizing: border-box;
-  padding: 0 6px;
 }
 
 .pgc-channel-avatar {
-  width: 40px;
   height: 40px;
+  width: 40px;
+  margin-left: 6px;
   border-radius: 40px;
   overflow: hidden;
-  flex-shrink: 0;
   background: #313133;
 }
 
@@ -205,41 +286,22 @@
 }
 
 .pgc-channel-title {
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  width: 296px;
+
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 10px;
   font-weight: 500;
+  color: rgba(250, 250, 250, 1);
+  font-size: 10px;
   line-height: 18px;
-  color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Скрываем mode-switcher и рисуем заголовок в header как у creator card */
-.page-participant-giveaway-card .mode-switcher {
-  display: none !important;
-}
-
-.page-participant-giveaway-card .mode-switcher-container {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) !important;
-
-  width: 100% !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-
-  pointer-events: none;
-}
-
-.page-participant-giveaway-card .mode-switcher-container::after {
-  content: "";
-}
-
+/* Hide mode switcher on card */
+.page-participant-giveaway-card .mode-switcher,
 .page-participant-giveaway-card .mode-switcher-container {
   display: none !important;
 }
