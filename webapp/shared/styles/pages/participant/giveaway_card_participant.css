@@ -67,7 +67,7 @@ body.page-participant-giveaway-card {
   height: 18px;
   border-radius: 20px;
   overflow: hidden;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .pgc-badge {
@@ -262,43 +262,49 @@ body.page-participant-giveaway-card {
   gap: 8px;
 }
 
-/* channel row (frame-6/8/10) */
+/* channel row */
 .pgc-channel-card {
   width: 100%;
-  height: 52px;
+  box-sizing: border-box;
+
   display: flex;
   align-items: center;
-  gap: 6px;
-  background-color: var(--pgc-shape);
-  border-radius: 5px;
+  gap: 12px;
+
+  height: 58px;                 /* как в giveaways */
+  padding: 10px;
+  border-radius: 10px;
+
+  background: rgba(46, 46, 46, 1);
   overflow: hidden;
 }
 
 .pgc-channel-avatar {
-  height: 40px;
-  width: 40px;
-  margin-left: 6px;
+  width: 50px;
+  height: 50px;
   border-radius: 40px;
+
+  flex-shrink: 0;
+  background: rgba(49, 49, 51, 1);
   overflow: hidden;
-  background: #313133;
+
+  margin-left: 0;
 }
 
 .pgc-channel-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .pgc-channel-title {
-  display: flex;
-  align-items: center;
-  width: 296px;
+  flex: 1;
+  min-width: 0;
 
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-weight: 500;
+  font: 500 12px/18px "Roboto", system-ui, -apple-system, sans-serif;
   color: rgba(250, 250, 250, 1);
-  font-size: 10px;
-  line-height: 18px;
+
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,4 +343,22 @@ html.page-participant-giveaway-card {
 body.page-participant-giveaway-card {
   padding-top: 0 !important;
   margin-top: 0 !important;
+}
+
+/* === Align top (blue) content padding with grey block === */
+.pgc-top,
+.pgc-tickets {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+/* === Global text upsize (keep title and button intact) === */
+.pgc-badge-text,
+.pgc-text-10,
+.pgc-ticket-pill,
+.pgc-info-title,
+.pgc-desc-text,
+.pgc-channels-title {
+  font-size: 12px !important;
+  line-height: 18px !important;
 }
