@@ -135,21 +135,20 @@ body.page-participant-giveaway-card {
   white-space: nowrap;
 }
 
-/* Bottom frame (418px column) */
+/* Bottom frame */
 .pgc-frame {
   margin-top: 18px;
 
-  width: calc(100% + 32px);   /* растягиваем на всю ширину экрана */
-  margin-left: -16px;
-  margin-right: -16px;
+  width: 100vw;                 /* железно на всю ширину экрана */
+  margin-left: calc(50% - 50vw);/* выравниваем относительно вьюпорта */
 
   background: rgba(28, 28, 28, 1);
   border-radius: 20px 20px 0 0;
 
   padding: 18px 16px 24px;
 
-  flex: 1;                    /* тянем до низа */
-  min-height: calc(100vh - 220px); /* страховка, чтобы не “висел” в центре */
+  flex: 1;
+  min-height: calc(100vh - 220px);
   box-sizing: border-box;
 
   display: flex;
@@ -326,10 +325,16 @@ html.page-participant-giveaway-card {
   background: transparent !important;
 }
 
-/* Внутренний контент в колонке, фон серый — на всю ширину */
-.page-participant-giveaway-card .pgc-frame > * {
-  width: 100%;
-  max-width: 418px;
-  margin-left: auto;
-  margin-right: auto;
+/* Убираем внешние top-padding/margins у контейнеров webapp только на этой странице */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* На всякий случай: если где-то есть layout padding */
+body.page-participant-giveaway-card {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
 }
