@@ -100,17 +100,21 @@ async function fetchGiveaways(tab) {
 
 function bindCardNavigation(listEl, tab) {
   const go = (gid) => {
-    // Архитектурно правильно: не городим новую страницу, а ведем в уже существующие flows.
-    // - active: открываем карточку розыгрыша как участник (если у тебя есть такой экран позже — подключим)
-    // - finished/cancelled: ведем в results-flow, если finished, иначе просто показываем "отменен" (позже можно добавить отдельный экран)
-    // Сейчас делаем безопасно: finished -> resultsFlow через loading (как у тебя уже работает).
+    // finished -> results flow (как уже реализовано)
     if (tab === 'finished') {
       window.location.href = `/miniapp/loading.html?gid=results_${gid}`;
       return;
     }
 
-    // Для active/cancelled пока не ломаем UX: оставляем на месте.
-    // Если у тебя уже есть страница "participant giveaway card" — скажи, я подключу переход через Router.navigate.
+    // active -> participant giveaway card
+    if (tab === 'active') {
+      sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
+      Router.navigate('giveaway_card_participant');
+      return;
+    }
+
+    // cancelled -> пока не ведём (логику/экран сделаем позже)
+    // можно оставить no-op, чтобы не ломать UX
   };
 
   listEl.querySelectorAll('.participant-giveaways-card').forEach(card => {

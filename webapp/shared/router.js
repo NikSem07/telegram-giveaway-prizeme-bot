@@ -7,6 +7,7 @@ import AppState from './state.js';
 import { renderHomePage as renderParticipantHome } from '../pages/participant/home/home.js';
 import { renderTasksPage } from '../pages/participant/tasks/tasks.js';
 import { renderGiveawaysPage as renderParticipantGiveaways } from '../pages/participant/giveaways/giveaways.js';
+import { renderGiveawayCardParticipantPage } from '../pages/participant/giveaways/giveaway_card_participant.js';
 import { renderProfilePage } from '../pages/participant/profile/profile.js';
 
 import { renderCreatorHomePage } from '../pages/creator/home/home.js';
@@ -22,13 +23,15 @@ const MODE_PAGE_MAP = {
     services: 'tasks',
     giveaways: 'giveaways',
     stats: 'profile',
-    giveaway_card_creator: 'giveaways'
+    giveaway_card_creator: 'giveaways',
+    giveaway_card_participant: 'giveaways'
   },
   creator: { // switching TO creator (from participant)
     home: 'home',
     tasks: 'services',
     giveaways: 'giveaways',
-    profile: 'stats'
+    profile: 'stats',
+    giveaway_card_participant: 'giveaways'
   }
 };
 
@@ -36,10 +39,11 @@ const Router = {
     // Карта маршрутов: mode -> page -> renderFunction
     routes: {
         participant: {
-            home: renderParticipantHome,
-            tasks: renderTasksPage,
-            giveaways: renderParticipantGiveaways,
-            profile: renderProfilePage
+        home: renderParticipantHome,
+        tasks: renderTasksPage,
+        giveaways: renderParticipantGiveaways,
+        giveaway_card_participant: renderGiveawayCardParticipantPage,
+        profile: renderProfilePage
         },
 
         creator: {
