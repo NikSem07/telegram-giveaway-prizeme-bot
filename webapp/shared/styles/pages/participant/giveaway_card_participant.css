@@ -27,7 +27,7 @@ body.page-participant-giveaway-card {
 /* Top block */
 .pgc-top {
   margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
-  padding-top: 40px;       /* маленький ровный отступ */
+  padding-top: 48px;       /* маленький ровный отступ */
   width: 100%;
 }
 
@@ -340,6 +340,6 @@ body.page-participant-giveaway-card {
 .pgc-info-title,
 .pgc-desc-text,
 .pgc-channels-title {
-  font-size: 12px !important;
+  font-size: 14px !important;
   line-height: 18px !important;
 }
