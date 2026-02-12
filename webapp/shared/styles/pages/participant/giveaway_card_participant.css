@@ -237,10 +237,9 @@
 }
 
 .page-participant-giveaway-card .mode-switcher-container::after {
-  content: "Карточка розыгрыша";
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  color: #737375;
+  content: "";
+}
+
+.page-participant-giveaway-card .mode-switcher-container {
+  display: none !important;
 }

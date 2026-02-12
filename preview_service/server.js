@@ -1714,6 +1714,142 @@ app.post('/api/creator_giveaway_details', async (req, res) => {
   }
 });
 
+// POST /api/participant_giveaway_details
+app.post('/api/participant_giveaway_details', async (req, res) => {
+  try {
+    const { init_data, giveaway_id } = req.body || {};
+
+    // 1) Валидация init_data (используем твой уже существующий парсер/проверку)
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed || !parsed.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsed.user_parsed.id);
+    const gid = Number(giveaway_id);
+
+    if (!Number.isFinite(userId) || !Number.isFinite(gid)) {
+      return res.status(400).json({ ok: false, reason: 'bad_params' });
+    }
+
+    // 2) Берём данные розыгрыша + первый канал + message_id (как в bot.py)
+    const q = await pool.query(
+      `
+      SELECT
+        g.id,
+        g.internal_title,
+        g.public_description,
+        g.end_at_utc,
+
+        oc.chat_id,
+        oc.username,
+        gc.message_id
+
+      FROM giveaways g
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+
+      WHERE g.id = $1
+      ORDER BY gc.id ASC
+      LIMIT 1
+      `,
+      [gid]
+    );
+
+    if (!q.rows || q.rows.length === 0) {
+      return res.status(404).json({ ok: false, reason: 'not_found' });
+    }
+
+    const row = q.rows[0];
+
+    // 3) Билеты участника (в твоей системе билет = entry.ticket_code)
+    const t = await pool.query(
+      `
+      SELECT ticket_code
+      FROM entries
+      WHERE giveaway_id = $1 AND user_id = $2
+      ORDER BY id ASC
+      `,
+      [gid, userId]
+    );
+
+    const tickets = (t.rows || []).map(r => r.ticket_code).filter(Boolean);
+
+    // 4) Ссылки на пост (1:1 логике bot.py)
+    let post_url = null;
+    const username = row.username ? String(row.username).replace(/^@/, '') : null;
+    const message_id = row.message_id ? Number(row.message_id) : null;
+    const chat_id = row.chat_id ? Number(row.chat_id) : null;
+
+    if (message_id) {
+      if (username) {
+        post_url = `https://t.me/${username}/${message_id}`;
+      } else if (chat_id) {
+        // _tg_internal_chat_id аналог твоего bot.py: t.me/c/<internal>/<message_id>
+        // internal = abs(chat_id) - 1000000000000 для супергрупп/каналов
+        const absId = Math.abs(chat_id);
+        const internal = absId > 1000000000000 ? (absId - 1000000000000) : null;
+        if (internal) post_url = `https://t.me/c/${internal}/${message_id}`;
+      }
+    }
+
+    // 5) Каналы/группы (нужно для блока “Подключенные каналы / группы”)
+    const c = await pool.query(
+      `
+      SELECT
+        oc.chat_id,
+        oc.username,
+        COALESCE(oc.title, oc.username) AS title,
+        gc.message_id
+      FROM giveaway_channels gc
+      JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE gc.giveaway_id = $1
+      ORDER BY gc.id ASC
+      `,
+      [gid]
+    );
+
+    const channels = (c.rows || []).map(r => {
+      const uname = r.username ? String(r.username).replace(/^@/, '') : null;
+      const mid = r.message_id ? Number(r.message_id) : null;
+      let url = null;
+
+      if (mid) {
+        if (uname) {
+          url = `https://t.me/${uname}/${mid}`;
+        } else {
+          const absId = Math.abs(Number(r.chat_id));
+          const internal = absId > 1000000000000 ? (absId - 1000000000000) : null;
+          if (internal) url = `https://t.me/c/${internal}/${mid}`;
+        }
+      }
+
+      return {
+        chat_id: r.chat_id,
+        title: r.title,
+        username: uname,
+        post_url: url
+      };
+    });
+
+    // 6) Ответ
+    return res.json({
+      ok: true,
+      id: row.id,
+      title: row.internal_title,
+      description: row.public_description,
+      end_at_utc: row.end_at_utc,
+      tickets,
+      post_url,
+      channels
+    });
+
+  } catch (e) {
+    console.error('[participant_giveaway_details]', e);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
 
 // --- POST /api/verify_captcha ---
 app.post('/api/verify_captcha', async (req, res) => {

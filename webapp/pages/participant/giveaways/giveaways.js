@@ -195,6 +195,7 @@ function bindScrollSaver() {
 }
 
 function renderGiveawaysPage() {
+  document.body.classList.remove('page-participant-giveaway-card');
   const main = document.getElementById('main-content');
   if (!main) return;
 

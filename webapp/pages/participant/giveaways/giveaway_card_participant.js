@@ -5,6 +5,7 @@ import Router from '../../../shared/router.js';
 const STORAGE_TAB_KEY = 'prizeme_participant_giveaways_tab';
 
 function backToGiveaways() {
+  document.body.classList.remove('page-participant-giveaway-card');
   Router.navigate('giveaways');
 }
 
@@ -181,20 +182,32 @@ function renderGiveawayCardParticipantPage() {
   let stopCountdown = null;
   loadParticipantGiveawayDetails(giveawayId)
     .then((data) => {
-      titleEl.textContent = data.title || '—';
-      descEl.textContent = data.description || '—';
+        // title
+        titleEl.textContent = data.title || '—';
 
-      renderMedia(mediaEl, data.media);
-      renderTickets(ticketsEl, data.tickets);
-      renderChannels(channelsEl, data.channels);
+        // description
+        descEl.textContent = data.description || '—';
 
-      if (stopCountdown) stopCountdown();
-      stopCountdown = startCountdown(leftEl, data.end_at_utc);
+        // tickets
+        renderTickets(ticketsEl, data.tickets);
 
-      openBtn.addEventListener('click', () => openGiveawayPost(data));
+        // channels
+        renderChannels(channelsEl, data.channels);
+
+        // countdown
+        if (stopCountdown) stopCountdown();
+        stopCountdown = startCountdown(leftEl, data.end_at_utc);
+
+        // button → post
+        openBtn.disabled = !(data.post_url || data.channels?.[0]?.post_url);
+        openBtn.addEventListener('click', () => openGiveawayPost(data));
     })
-    .catch(() => {
-      titleEl.textContent = 'Ошибка загрузки';
+    .catch((err) => {
+        console.error('[giveaway_card_participant] load error:', err);
+        titleEl.textContent = 'Ошибка загрузки';
+        leftEl.textContent = '🕒 Осталось: —';
+        descEl.textContent = '';
+        openBtn.disabled = true;
     });
 }
 
