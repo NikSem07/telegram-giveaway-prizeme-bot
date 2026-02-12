@@ -81,6 +81,7 @@ body.page-participant-giveaway-card {
   font-size: 18px;
   line-height: 18px;
   text-align: left;
+  margin-bottom: 8px;
 }
 
 .pgc-badges {
@@ -136,7 +137,7 @@ body.page-participant-giveaway-card {
   align-items: center;
   height: 18px;
   padding: 0;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .pgc-tickets-list {
