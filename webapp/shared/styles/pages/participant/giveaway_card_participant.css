@@ -195,12 +195,14 @@ body.page-participant-giveaway-card {
 
 /* Description (frame-3) */
 .pgc-desc {
-  margin-top: 16px;
+  margin-top: 16px;            /* было 8px — увеличили */
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 4px;
+
+  padding: 8px 12px;           /* вертикальные 8px как ты просил */
   width: 100%;
+
   background-color: #2c2c2e;
   border-radius: 5px;
 }
@@ -342,4 +344,22 @@ body.page-participant-giveaway-card {
 .pgc-channels-title {
   font-size: 14px !important;
   line-height: 18px !important;
+}
+
+/* badges: 2 rows (row1: status+left, row2: winners) */
+.pgc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  height: auto;          /* вместо фиксированных 18px */
+  margin-top: 12px;
+  overflow: visible;
+}
+
+.pgc-badge {
+  height: 18px;
+}
+
+.pgc-badge--winners {
+  flex: 0 0 100%;        /* всегда на второй строке */
 }

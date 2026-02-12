@@ -1,7 +1,7 @@
 // webapp/pages/participant/giveaways/giveaway_card_participant.template.js
 export default function giveawayCardParticipantTemplate() {
   return `
-    <section class="pgc-screen participant-giveaway-card">
+    <section class="pgc-screen">
 
       <!-- TOP: title + badges -->
       <div class="pgc-top">
@@ -10,9 +10,17 @@ export default function giveawayCardParticipantTemplate() {
         </div>
 
         <div class="pgc-badges">
-          <div class="pgc-badge"><span class="pgc-badge-text">⏳ Активный</span></div>
-          <div class="pgc-badge"><span class="pgc-badge-text">🤷 Победители не определены</span></div>
-          <div class="pgc-badge"><span class="pgc-badge-text" id="pgc-left">🕒 Осталось: —</span></div>
+        <div class="pgc-badge pgc-badge--status">
+            <span class="pgc-badge-text">⌛ Активный</span>
+        </div>
+
+        <div class="pgc-badge pgc-badge--left">
+            <span class="pgc-badge-text">🕒 Осталось: <span id="pgc-left-time">—</span></span>
+        </div>
+
+        <div class="pgc-badge pgc-badge--winners">
+            <span class="pgc-badge-text">🤷 Победители не определены</span>
+        </div>
         </div>
       </div>
 
