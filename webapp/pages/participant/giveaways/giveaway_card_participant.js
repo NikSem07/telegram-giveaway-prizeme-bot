@@ -5,6 +5,13 @@ import Router from '../../../shared/router.js';
 const STORAGE_TAB_KEY = 'prizeme_participant_giveaways_tab';
 
 function backToGiveaways() {
+  // вернуть UI Telegram в исходное состояние
+  const tg = window.Telegram?.WebApp;
+  if (tg?.BackButton) {
+    try { tg.BackButton.offClick(backToGiveaways); } catch (e) {}
+    tg.BackButton.hide();
+  }
+
   document.body.classList.remove('page-participant-giveaway-card');
   Router.navigate('giveaways');
 }
@@ -117,12 +124,14 @@ function renderTickets(container, tickets) {
 
 function renderChannels(container, channels) {
   container.innerHTML = (channels || []).map(ch => {
-    const avatar = ch.avatar_url || '/miniapp-static/uploads/avatars/default_channel.png';
+    const avatar = ch.avatar_url || '/miniapp-static/assets/images/default-avatar.webp';
     const title = ch.title || ch.username || 'Канал';
 
     return `
       <div class="pgc-channel-card">
-        <div class="pgc-channel-avatar"><img src="${avatar}" alt=""></div>
+        <div class="pgc-channel-avatar">
+          <img src="${avatar}" alt="">
+        </div>
         <div class="pgc-channel-title">${title}</div>
       </div>
     `;

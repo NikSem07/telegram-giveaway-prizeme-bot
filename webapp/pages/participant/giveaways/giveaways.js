@@ -195,6 +195,8 @@ function bindScrollSaver() {
 }
 
 function renderGiveawaysPage() {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.BackButton) tg.BackButton.hide();
   document.body.classList.remove('page-participant-giveaway-card');
   const main = document.getElementById('main-content');
   if (!main) return;

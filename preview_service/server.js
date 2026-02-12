@@ -1828,7 +1828,8 @@ app.post('/api/participant_giveaway_details', async (req, res) => {
         chat_id: r.chat_id,
         title: r.title,
         username: uname,
-        post_url: url
+        post_url: url,
+        avatar_url: r.chat_id ? `/api/chat_avatar/${r.chat_id}` : null,
       };
     });
 

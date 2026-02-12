@@ -18,10 +18,9 @@ body.page-participant-giveaway-card {
 
 /* Screen wrapper */
 .pgc-screen {
-  position: relative;
   width: 100%;
-  overflow: hidden;
-  padding: 0 16px 90px;
+  padding: 12px 16px 90px;
+  box-sizing: border-box;
 }
 
 /* Большая тёмная подложка снизу (footer) */
@@ -38,9 +37,7 @@ body.page-participant-giveaway-card {
 
 /* Top block */
 .pgc-top {
-  position: relative;
-  z-index: 1;
-  margin-top: 109px;
+  margin-top: 6px;            /* было 109px — из-за этого всё ниже */
   width: 100%;
   max-width: 418px;
 }
@@ -58,7 +55,7 @@ body.page-participant-giveaway-card {
   color: #ffffff;
   font-size: 18px;
   line-height: 18px;
-  text-align: center;
+  text-align: left;
 }
 
 /* badges row */
@@ -142,15 +139,19 @@ body.page-participant-giveaway-card {
 
 /* Bottom frame (418px column) */
 .pgc-frame {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   max-width: 418px;
-  align-items: flex-start;
+
+  margin-top: 18px;
+  padding: 18px 16px 24px;
+
+  background: rgba(28, 28, 28, 1);      /* серая зона */
+  border-radius: 20px;                  /* как в Figma */
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  margin-top: 24px;
 }
 
 /* Media + title group (как .div в figma) */

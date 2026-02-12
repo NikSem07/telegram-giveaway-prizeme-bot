@@ -2,7 +2,6 @@
 export default function giveawayCardParticipantTemplate() {
   return `
     <section class="pgc-screen participant-giveaway-card">
-      <div class="pgc-footer"></div>
 
       <!-- TOP: title + badges -->
       <div class="pgc-top">
