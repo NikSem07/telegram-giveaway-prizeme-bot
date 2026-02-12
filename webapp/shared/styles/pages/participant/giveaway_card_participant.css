@@ -20,7 +20,7 @@ body.page-participant-giveaway-card {
 .pgc-screen {
   width: 100%;
   min-height: 100vh;
-  padding: 8px 16px 90px; /* подняли вверх */
+  padding: 0 16px 90px;
   box-sizing: border-box;
 }
 
@@ -38,7 +38,8 @@ body.page-participant-giveaway-card {
 
 /* Top block */
 .pgc-top {
-  margin-top: 6px;
+  margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
+  padding-top: 6px;       /* маленький ровный отступ */
   width: 100%;
 }
 
@@ -66,7 +67,7 @@ body.page-participant-giveaway-card {
   height: 18px;
   border-radius: 20px;
   overflow: hidden;
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
 .pgc-badge {
@@ -138,13 +139,18 @@ body.page-participant-giveaway-card {
 .pgc-frame {
   margin-top: 18px;
 
-  width: 100%;
-  max-width: none;              /* убрали 418 */
-  box-sizing: border-box;
+  width: calc(100% + 32px);   /* растягиваем на всю ширину экрана */
+  margin-left: -16px;
+  margin-right: -16px;
 
   background: rgba(28, 28, 28, 1);
-  border-radius: 20px 20px 0 0; /* серый блок с радиусами как в макете */
+  border-radius: 20px 20px 0 0;
+
   padding: 18px 16px 24px;
+
+  flex: 1;                    /* тянем до низа */
+  min-height: calc(100vh - 220px); /* страховка, чтобы не “висел” в центре */
+  box-sizing: border-box;
 
   display: flex;
   flex-direction: column;
@@ -202,6 +208,7 @@ body.page-participant-giveaway-card {
 
 /* Description (frame-3) */
 .pgc-desc {
+  margin-top: 8px;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -238,16 +245,16 @@ body.page-participant-giveaway-card {
   height: 18px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;   /* было center */
+  text-align: left;              /* важно */
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-weight: 400;
   color: var(--pgc-text-muted);
   font-size: 10px;
   line-height: 18px;
-  white-space: nowrap;
 
-  margin-bottom: 8px;
+  margin: 0 0 8px;
 }
 
 .pgc-channels-list {
