@@ -10,6 +10,7 @@ export default function giveawayCardParticipantTemplate() {
         </div>
 
         <div class="pgc-badges">
+          <div class="pgc-badge"><span class="pgc-badge-text">⏳ Активный</span></div>
           <div class="pgc-badge"><span class="pgc-badge-text">🤷 Победители не определены</span></div>
           <div class="pgc-badge"><span class="pgc-badge-text" id="pgc-left">🕒 Осталось: —</span></div>
         </div>
