@@ -24,18 +24,6 @@ body.page-participant-giveaway-card {
   box-sizing: border-box;
 }
 
-/* Большая тёмная подложка снизу (footer) */
-.pgc-footer {
-  position: absolute;
-  top: 227px;
-  left: 0;
-  width: 100%;
-  height: calc(100% - 227px);
-  background-color: var(--pgc-footer-bg);
-  border-radius: 20px;
-  z-index: 0;
-}
-
 /* Top block */
 .pgc-top {
   margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
@@ -207,7 +195,7 @@ body.page-participant-giveaway-card {
 
 /* Description (frame-3) */
 .pgc-desc {
-  margin-top: 8px;
+  margin-top: 16px;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -343,13 +331,6 @@ html.page-participant-giveaway-card {
 body.page-participant-giveaway-card {
   padding-top: 0 !important;
   margin-top: 0 !important;
-}
-
-/* === Align top (blue) content padding with grey block === */
-.pgc-top,
-.pgc-tickets {
-  padding-left: 16px !important;
-  padding-right: 16px !important;
 }
 
 /* === Global text upsize (keep title and button intact) === */
