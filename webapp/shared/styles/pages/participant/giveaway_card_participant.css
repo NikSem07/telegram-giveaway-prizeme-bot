@@ -16,7 +16,7 @@ body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
     var(--pgc-blue) 0%,
-    var(--pgc-blue) 20%,
+    var(--pgc-blue) 5%,
     rgba(28,28,28,1) 100%
   ) !important;
 
@@ -35,18 +35,6 @@ body.page-participant-giveaway-card {
   min-height: 100vh;
   padding: 0 0 90px;        /* убираем горизонтальный padding, чтобы синий не “уезжал” */
   box-sizing: border-box;
-}
-
-/* Gradient background for the whole screen (top 5% main color, rest dark) */
-.page-participant-giveaway-card .pgc-screen {
-  background: linear-gradient(
-    to bottom,
-    var(--pgc-blue) 0%,
-    var(--pgc-blue) 20%,
-    rgba(28,28,28,1) 100%
-  ) !important;
-
-  background-color: rgba(28,28,28,1) !important;
 }
 
 /* Top block */
@@ -375,13 +363,12 @@ body.page-participant-giveaway-card {
   display: none !important;
 }
 
-/* ===== PAGE BACKGROUND GRADIENT (fix bottom gap) ===== */
-html.page-participant-giveaway-card,
-body.page-participant-giveaway-card {
-  background: transparent !important;
-  background-color: transparent !important;
-  min-height: 100%;
-  height: auto;
+/* ===== FORCE FULL BLUE BACKGROUND (Participant giveaway card) ===== */
+body.page-participant-giveaway-card,
+html.page-participant-giveaway-card {
+  background: var(--pgc-blue) !important;
+  background-color: var(--pgc-blue) !important;
+  min-height: 100vh;
 }
 
 /* убираем чёрные подложки контейнеров webapp */
