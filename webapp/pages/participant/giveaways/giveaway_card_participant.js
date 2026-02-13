@@ -100,13 +100,20 @@ async function loadResultsForGid(gid) {
 }
 
 function applyFinishedTheme(isWinner) {
-  // Меняем переменные, на которые у тебя завязан фон и чипы (badge/ticket)
-  // Фон:
-  document.body.style.setProperty('--pgc-blue', isWinner ? '#024B42' : '#570C07');
+  const bg = isWinner ? '#024B42' : '#570C07';
+  const chip = isWinner ? 'rgba(120, 255, 210, 0.22)' : 'rgba(255, 140, 130, 0.22)';
 
-  // Чипы: делаем светлый оттенок (НЕ используем #570C07 как chip, иначе будет слишком тёмно)
-  // Можно потом тонко подкрутить, но сейчас будет читабельно и “в тему”.
-  document.body.style.setProperty('--pgc-blue-chip', isWinner ? 'rgba(120, 255, 210, 0.22)' : 'rgba(255, 140, 130, 0.22)');
+  document.documentElement.style.setProperty('--pgc-blue', bg);
+  document.documentElement.style.setProperty('--pgc-blue-chip', chip);
+
+  // ВАЖНО: Telegram WebView иначе может вернуть bg в светлый
+  try {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.setBackgroundColor) tg.setBackgroundColor(bg);
+    if (tg?.setBottomBarColor) tg.setBottomBarColor(bg);
+    // headerColor можно оставить как bg_color, но в finished лучше фиксировать
+    if (tg?.setHeaderColor) tg.setHeaderColor(bg);
+  } catch (_) {}
 }
 
 
@@ -304,7 +311,7 @@ function renderGiveawayCardParticipantPage() {
         openBtn.textContent = 'Посмотреть результат';
         openBtn.onclick = () => {
             // Используем твой рабочий results-flow (loading -> results_win/lose)
-            window.location.href = `/miniapp/loading.html?gid=results_${encodeURIComponent(String(giveawayId))}`;
+            window.location.href = `/miniapp/loading?gid=results_${encodeURIComponent(String(giveawayId))}`;
         };
 
         // Узнаем win/lose и красим

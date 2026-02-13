@@ -353,8 +353,8 @@ body.page-participant-giveaway-card {
 /* ===== FORCE FULL BLUE BACKGROUND (Participant giveaway card) ===== */
 body.page-participant-giveaway-card,
 html.page-participant-giveaway-card {
-  background: #1551e5 !important;
-  background-color: #1551e5 !important;
+  background: var(--pgc-blue) !important;
+  background-color: var(--pgc-blue) !important;
   min-height: 100vh;
 }
 
