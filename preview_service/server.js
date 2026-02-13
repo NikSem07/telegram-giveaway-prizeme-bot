@@ -1740,6 +1740,8 @@ app.post('/api/participant_giveaway_details', async (req, res) => {
         g.internal_title,
         g.public_description,
         g.end_at_utc,
+        g.photo_file_id,
+        g.media_position,
 
         oc.chat_id,
         oc.username,
@@ -1761,6 +1763,8 @@ app.post('/api/participant_giveaway_details', async (req, res) => {
     }
 
     const row = q.rows[0];
+
+    const hasPhoto = !!row.photo_file_id;
 
     // 3) Билеты участника (в твоей системе билет = entry.ticket_code)
     const t = await pool.query(
@@ -1842,7 +1846,12 @@ app.post('/api/participant_giveaway_details', async (req, res) => {
       end_at_utc: row.end_at_utc,
       tickets,
       post_url,
-      channels
+      channels,
+      media_position: row.media_position,
+      media: {
+        url: hasPhoto ? `/api/giveaway_media/${row.id}` : null,
+        type: hasPhoto ? 'image' : null
+      },
     });
 
   } catch (e) {

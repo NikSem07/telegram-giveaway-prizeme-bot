@@ -138,7 +138,9 @@ function renderMedia(container, media, data) {
     return;
   }
 
-  container.innerHTML = `<img class="pgc-media-el" src="${url}" alt="">`;
+  container.innerHTML = `<img class="pgc-media-el" src="${url}" alt="" loading="eager" decoding="async">`;
+  const img = container.querySelector('img');
+  try { img.fetchPriority = 'high'; } catch (e) {}
 }
 
 
