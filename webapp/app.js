@@ -1334,17 +1334,21 @@ function initializeResultsWinPage() {
         tg.BackButton.onClick(goBackToCard);
       }
 
-      // Кнопка "В приложение" (на странице results_win обычно есть id кнопки)
-      const toAppBtn =
-        document.getElementById('results-win-to-app') ||
-        document.getElementById('results-to-app') ||
-        document.querySelector('[data-action="to-app"]');
+      // "В приложение" — ловим кликом по документу (кнопка может появиться позже)
+      if (!window.__prizemeResultsToAppBound) {
+        window.__prizemeResultsToAppBound = true;
 
-      if (toAppBtn) {
-        toAppBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          goBackToCard();
-        });
+        document.addEventListener('click', (e) => {
+          const el = e.target.closest('button, a, [role="button"]');
+          if (!el) return;
+
+          const text = (el.textContent || '').trim().toLowerCase();
+          if (text === 'в приложение' || text.includes('в приложение')) {
+            e.preventDefault();
+            e.stopPropagation();
+            goBackToCard();
+          }
+        }, { capture: true });
       }
     }
   } catch (e) {}
@@ -1672,17 +1676,21 @@ function initializeResultsLosePage() {
         tg.BackButton.onClick(goBackToCard);
       }
 
-      // Кнопка "В приложение" (на странице results_win обычно есть id кнопки)
-      const toAppBtn =
-        document.getElementById('results-lose-to-app') ||
-        document.getElementById('results-to-app') ||
-        document.querySelector('[data-action="to-app"]');
+      // "В приложение" — ловим кликом по документу (кнопка может появиться позже)
+      if (!window.__prizemeResultsToAppBound) {
+        window.__prizemeResultsToAppBound = true;
 
-      if (toAppBtn) {
-        toAppBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          goBackToCard();
-        });
+        document.addEventListener('click', (e) => {
+          const el = e.target.closest('button, a, [role="button"]');
+          if (!el) return;
+
+          const text = (el.textContent || '').trim().toLowerCase();
+          if (text === 'в приложение' || text.includes('в приложение')) {
+            e.preventDefault();
+            e.stopPropagation();
+            goBackToCard();
+          }
+        }, { capture: true });
       }
     }
   } catch (e) {}
