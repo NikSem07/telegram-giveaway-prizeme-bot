@@ -115,6 +115,14 @@ function initializeTelegramWebApp() {
 function getStartParam() {
   console.log('🎯 [getStartParam] Starting parameter search...');
 
+  // ONE-SHOT: игнорируем results_<gid> start_param, когда пользователь нажал "В приложение"
+  // иначе /miniapp/ снова стартует results/participation flow
+  if (sessionStorage.getItem('prizeme_ignore_results_start_param_once') === '1') {
+    sessionStorage.removeItem('prizeme_ignore_results_start_param_once');
+    console.log('🎯 [getStartParam] ⏭️ Ignored once (user pressed "to app" from results) [start_param suppressed]');
+    return null; // критично: чтобы ниже не вернулся gid=... и не стартанул flow участия
+  }
+
   // 1. Пробуем получить из URL
   try {
     const url = new URL(location.href);
@@ -245,7 +253,7 @@ function checkImmediateResults() {
       return false;
     }
 
-    // ✅ results-mode детектим по tgWebAppStartParam или initData.start_param
+    // results-mode детектим по tgWebAppStartParam или initData.start_param
     const url = new URL(location.href);
     const urlParam = url.searchParams.get("tgWebAppStartParam");
 
@@ -428,7 +436,7 @@ async function checkFlow() {
     if (requiresCaptcha) {
       console.log("[CAPTCHA] Giveaway requires captcha verification");
 
-      // ✅ Сначала проверяем выполнение условий (подписки) как в обычном флоу
+      // Сначала проверяем выполнение условий (подписки) как в обычном флоу
       const tg = window.Telegram?.WebApp;
       let init_data = tg?.initData || '';
 
@@ -596,7 +604,7 @@ async function resultsFlow(gid) {
       sessionStorage.setItem("prizeme_results", JSON.stringify(results));
     } catch (e) {}
 
-    // ✅ РЕДИРЕКТ СРАЗУ НА ПРАВИЛЬНЫЙ ЭКРАН
+    // РЕДИРЕКТ СРАЗУ НА ПРАВИЛЬНЫЙ ЭКРАН
     if (results.user && results.user.is_winner) {
       console.log("[RESULTS-FLOW] Winner -> results_win");
       window.location.replace(`/miniapp/results_win?gid=${encodeURIComponent(gid)}`);
@@ -646,7 +654,7 @@ function initializeMainPage() {
 function initializeLoadingPage() {
   console.log('🎯 [LOADING] Initializing loading page');
 
-  // ✅ 1) Сначала проверяем results-mode по URL (?gid=results_220)
+  // 1) Сначала проверяем results-mode по URL (?gid=results_220)
   let resultsMode = false;
   let resultsGid = null;
 
@@ -663,7 +671,7 @@ function initializeLoadingPage() {
     }
   } catch (e) {}
 
-  // ✅ 2) Если URL не дал — пробуем sessionStorage (на случай входа с initData)
+  // 2) Если URL не дал — пробуем sessionStorage (на случай входа с initData)
   if (!resultsMode) {
     const sm = sessionStorage.getItem('prizeme_results_mode');
     const sg = sessionStorage.getItem('prizeme_results_gid');
@@ -674,7 +682,7 @@ function initializeLoadingPage() {
     }
   }
 
-  // ✅ 3) Если resultsMode — НЕ запускаем checkFlow(), а идем в resultsFlow()
+  // 3) Если resultsMode — НЕ запускаем checkFlow(), а идем в resultsFlow()
   if (resultsMode && resultsGid) {
     setTimeout(() => {
       resultsFlow(resultsGid);
@@ -829,7 +837,7 @@ async function renderNeedChannels(channels, needChannels) {
     const card = document.createElement('div');
     card.className = 'channel-card';
 
-    // ✅ ПРЕДВАРИТЕЛЬНО ПРОВЕРЯЕМ НАЛИЧИЕ АВАТАРКИ
+    // ПРЕДВАРИТЕЛЬНО ПРОВЕРЯЕМ НАЛИЧИЕ АВАТАРКИ
     let hasAvatar = false;
     if (channel.chat_id) {
         try {
@@ -1013,7 +1021,7 @@ function updateNewCountdown(endAtUtc) {
       if (!isNaN(d.getTime())) return d;
     }
 
-    // 4) ФИКС: конвертируем UTC в MSK
+    // 4) Конвертируем UTC в MSK
     const mskDate = convertUTCtoMSK(raw);
     if (mskDate) return mskDate;
 
@@ -1200,7 +1208,7 @@ async function checkCaptchaRequirement(giveawayId) {
 // Получает публичный ключ Captcha с сервера
 async function getCaptchaSiteKey() {
   try {
-    // 🔄 Делаем запрос к API для получения ключа Captcha
+    // Делаем запрос к API для получения ключа Captcha
     const response = await fetch("/api/captcha_config", {
       method: "GET",
       headers: { "Content-Type": "application/json" }
@@ -1251,11 +1259,11 @@ async function verifyCaptchaToken(token, giveawayId) {
 function handleCaptchaSuccess(giveawayId, token) {
   console.log(`[CAPTCHA] Success for giveaway ${giveawayId}`);
   
-  // 🔄 Сохраняем токен в sessionStorage для использования в основном flow
+  // Сохраняем токен в sessionStorage для использования в основном flow
   sessionStorage.setItem('prizeme_captcha_token', token);
   sessionStorage.setItem('prizeme_captcha_verified', 'true');
   
-  // 🔄 Возвращаем к основному flow
+  // Возвращаем к основному flow
   window.location.href = '/miniapp/loading';
 }
 
@@ -1267,7 +1275,7 @@ async function initializeAlreadyPage() {
   let endAt  = sessionStorage.getItem('prizeme_end_at');
   let gid    = sessionStorage.getItem('prizeme_gid');
 
-  // ✅ Fallback из URL (когда пришли после captcha-redirect)
+  // Fallback из URL (когда пришли после captcha-redirect)
   const ticketFromUrl = getQueryParam('ticket_code');
   const gidFromUrl = getQueryParam('gid');
 
@@ -1281,7 +1289,7 @@ async function initializeAlreadyPage() {
     sessionStorage.setItem('prizeme_ticket', ticket);
   }
 
-  // ✅ если endAt нет — попробуем догрузить через /api/check
+  // если endAt нет — попробуем догрузить через /api/check
   await ensureEndAtInStorage(gid);
   endAt = sessionStorage.getItem('prizeme_end_at');
 
@@ -1311,7 +1319,7 @@ async function initializeAlreadyPage() {
 // ===== Results: "В приложение" handler (used by inline onclick in templates) =====
 window.goToApp = function goToApp() {
   try {
-    // ✅ ESCAPE: чтобы при переходе на /miniapp/ нас НЕ кинуло обратно в results-mode
+    // ESCAPE: чтобы при переходе на /miniapp/ нас НЕ кинуло обратно в results-mode
     // из-за tg start_param=results_XXX (особенно при входе из поста/бота).
     sessionStorage.setItem('prizeme_ignore_results_start_once', '1');
 
@@ -1333,6 +1341,16 @@ window.goToApp = function goToApp() {
       window.location.replace('/miniapp/');
       return;
     }
+    
+    // если мы пришли на results_* из поста/бота и жмем "В приложение",
+    // нужно один раз проигнорировать results start_param, иначе /miniapp/ снова уйдёт в results/participation flow
+    sessionStorage.setItem('prizeme_ignore_results_start_once', '1');          // (если уже используешь — оставь)
+    sessionStorage.setItem('prizeme_ignore_results_start_param_once', '1');   // ← НОВЫЙ флаг
+
+    // почистим results-контекст (чтобы не было "прыжков" обратно)
+    sessionStorage.removeItem('prizeme_results');
+    sessionStorage.removeItem('prizeme_results_mode');
+    sessionStorage.removeItem('prizeme_results_gid');
 
     // Иначе (пришли из поста/бота) — в home mini-app
     window.location.replace('/miniapp/');
@@ -1600,7 +1618,7 @@ function initializeCurrentPage() {
   if (
     path !== '/miniapp/results_win' &&
     path !== '/miniapp/results_lose' &&
-    path !== '/miniapp/loading' &&   // ✅ чтобы не было циклов
+    path !== '/miniapp/loading' &&   // чтобы не было циклов
     checkImmediateResults()
   ) {
     return;
@@ -1643,7 +1661,7 @@ function initializeCurrentPage() {
           initializeResultsLosePage();
           break;
       default: {
-          // ✅ Разрешаем статические страницы (не SPA), чтобы роутер их НЕ редиректил на index
+          // Разрешаем статические страницы (не SPA), чтобы роутер их НЕ редиректил на index
           const allowedStaticPages = new Set([
               '/miniapp/success.html',
               '/miniapp/already_participating.html',
@@ -1653,7 +1671,7 @@ function initializeCurrentPage() {
           if (allowedStaticPages.has(path)) {
             console.log('[MULTI-PAGE] Allowed static page, skipping SPA redirect:', path);
 
-            // ✅ Запускаем нужную инициализацию для статических страниц
+            // Запускаем нужную инициализацию для статических страниц
             if (path === '/miniapp/success.html') {
               initializeSuccessPage();
             } else if (path === '/miniapp/already_participating.html') {
