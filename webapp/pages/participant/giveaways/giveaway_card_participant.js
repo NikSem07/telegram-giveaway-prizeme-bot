@@ -87,27 +87,60 @@ async function loadParticipantGiveawayDetails(giveawayId) {
   return data;
 }
 
-function renderMedia(container, media) {
+function renderMedia(container, media, data) {
   container.innerHTML = '';
 
-  // Figma: если медиа нет — не показываем блок вообще
-  if (!media?.url) {
+  // 1) Нормализуем url из разных возможных форматов ответа
+  let url =
+    (typeof media === 'string' ? media : null) ||
+    media?.url ||
+    media?.media_url ||
+    media?.mediaUrl ||
+    data?.media_url ||
+    data?.mediaUrl ||
+    data?.media;
+
+  // если пришёл объект, но не в url — пробуем вложенность
+  if (!url && typeof data?.media === 'object' && data?.media) {
+    url = data.media.url || data.media.media_url || data.media.mediaUrl;
+  }
+
+  if (!url) {
     container.style.display = 'none';
     return;
   }
 
+  // 2) Подстраховка: относительные пути без "/" превращаем в "/..."
+  if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('/')) {
+    url = `/${url}`;
+  }
+
+  // 3) Тип: берём из ответа или определяем по расширению
+  let type =
+    (typeof media === 'object' ? (media?.type || media?.media_type) : null) ||
+    data?.media_type ||
+    '';
+
+  type = String(type).toLowerCase();
+
+  if (!type) {
+    const lower = String(url).toLowerCase();
+    if (lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.includes('video')) type = 'video';
+    else type = 'image';
+  }
+
   container.style.display = '';
-  const type = (media.type || '').toLowerCase();
 
   if (type === 'video') {
     container.innerHTML = `<video class="pgc-media-el" playsinline preload="metadata" controls></video>`;
     const v = container.querySelector('video');
-    v.src = media.url;
+    v.src = url;
     return;
   }
 
-  container.innerHTML = `<img class="pgc-media-el" src="${media.url}" alt="">`;
+  container.innerHTML = `<img class="pgc-media-el" src="${url}" alt="">`;
 }
+
 
 function renderTickets(container, tickets) {
   const list = (tickets || []).filter(Boolean);
@@ -196,7 +229,7 @@ function renderGiveawayCardParticipantPage() {
         descEl.textContent = data.description || '—';
 
         // media (Figma: если медиа нет — блок не показываем)
-        renderMedia(mediaEl, data.media);
+        renderMedia(mediaEl, data.media, data);
 
         // tickets
         renderTickets(ticketsEl, data.tickets);
