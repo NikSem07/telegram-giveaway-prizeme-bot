@@ -16,7 +16,7 @@ body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
     var(--pgc-blue) 0%,
-    var(--pgc-blue) 5%,
+    var(--pgc-blue) 20%,
     rgba(28,28,28,1) 100%
   ) !important;
 
@@ -42,7 +42,7 @@ body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
     var(--pgc-blue) 0%,
-    var(--pgc-blue) 5%,
+    var(--pgc-blue) 20%,
     rgba(28,28,28,1) 100%
   ) !important;
 
