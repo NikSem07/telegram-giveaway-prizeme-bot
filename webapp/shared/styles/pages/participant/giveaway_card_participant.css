@@ -37,6 +37,18 @@ body.page-participant-giveaway-card {
   box-sizing: border-box;
 }
 
+/* Gradient background for the whole screen (top 5% main color, rest dark) */
+.page-participant-giveaway-card .pgc-screen {
+  background: linear-gradient(
+    to bottom,
+    var(--pgc-blue) 0%,
+    var(--pgc-blue) 5%,
+    rgba(28,28,28,1) 100%
+  ) !important;
+
+  background-color: rgba(28,28,28,1) !important;
+}
+
 /* Top block */
 .pgc-top {
   margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
@@ -363,12 +375,13 @@ body.page-participant-giveaway-card {
   display: none !important;
 }
 
-/* ===== FORCE FULL BLUE BACKGROUND (Participant giveaway card) ===== */
-body.page-participant-giveaway-card,
-html.page-participant-giveaway-card {
-  background: var(--pgc-blue) !important;
-  background-color: var(--pgc-blue) !important;
-  min-height: 100vh;
+/* ===== PAGE BACKGROUND GRADIENT (fix bottom gap) ===== */
+html.page-participant-giveaway-card,
+body.page-participant-giveaway-card {
+  background: transparent !important;
+  background-color: transparent !important;
+  min-height: 100%;
+  height: auto;
 }
 
 /* убираем чёрные подложки контейнеров webapp */
