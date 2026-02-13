@@ -132,6 +132,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Инициализируем роутер
     Router.init();
 
+    // ===== RESULTS -> BACK TO GIVEAWAY CARD (from finished card) =====
+    try {
+    const fromCard =
+        sessionStorage.getItem('prizeme_force_open_card') === '1' ||
+        sessionStorage.getItem('prizeme_results_from_card') === '1';
+
+    const gid = sessionStorage.getItem('prizeme_results_back_gid');
+
+    // чистим флаги, чтобы не было петли
+    sessionStorage.removeItem('prizeme_force_open_card');
+    sessionStorage.removeItem('prizeme_results_from_card');
+
+    if (fromCard && gid) {
+        console.log('[RESULTS->CARD] returning to card, gid=', gid);
+
+        // гарантируем participant режим
+        AppState.setMode('participant');
+
+        // восстановим контекст карточки
+        sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
+        sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
+
+        // ключевое: переводим SPA на карточку (используем ИМПОРТ, а не window.*)
+        AppState.setPage('giveaway_card_participant');
+    }
+    } catch (e) {
+    console.warn('[RESULTS->CARD] Failed:', e);
+    }
+
     // 2.1 Синхронизируем UI переключалки режимов сразу после старта
     syncModeSwitcherUI(AppState.getMode());
 
@@ -166,39 +195,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 15 * 60 * 1000); // 15 минут
 });
-
-// ===== RESULTS -> BACK TO GIVEAWAY CARD (from finished card) =====
-(function maybeOpenCardAfterResults() {
-  try {
-    const fromCard =
-      sessionStorage.getItem('prizeme_force_open_card') === '1' ||
-      sessionStorage.getItem('prizeme_results_from_card') === '1';
-
-    const gid = sessionStorage.getItem('prizeme_results_back_gid');
-
-    // чистим флаг в любом случае (чтобы не ловить петли)
-    sessionStorage.removeItem('prizeme_force_open_card');
-
-    if (!fromCard || !gid) return;
-
-    // восстановим контекст карточки
-    sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
-    sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
-
-    // ключевое: уводим SPA в карточку
-    if (window.AppState?.setPage) {
-      window.AppState.setPage('giveaway_card_participant');
-      return;
-    }
-
-    // fallback (если у тебя Router в глобале)
-    if (window.Router?.navigate) {
-      window.Router.navigate('giveaway_card_participant');
-      return;
-    }
-
-    console.warn('[RESULTS->CARD] No AppState/Router found to navigate');
-  } catch (e) {
-    console.warn('[RESULTS->CARD] Failed:', e);
-  }
-})();
