@@ -217,6 +217,15 @@ function checkImmediateResults() {
   try {
     const path = window.location.pathname;
 
+    // ✅ ESCAPE: если пользователь нажал "В приложение" на results,
+    // то один раз игнорируем авто-редирект обратно в results-mode
+    const ignoreOnce = sessionStorage.getItem('prizeme_ignore_results_start_once') === '1';
+    if (ignoreOnce) {
+      sessionStorage.removeItem('prizeme_ignore_results_start_once');
+      console.log('[IMMEDIATE-RESULTS] ⏭️ Ignored once (user pressed "to app" from results)');
+      return false;
+    }
+
     // ✅ Никогда не вмешиваемся, если уже в "служебных" экранах
     // иначе получим петлю loading <-> already/success и т.п.
     const blocked = new Set([
@@ -1302,6 +1311,14 @@ async function initializeAlreadyPage() {
 // ===== Results: "В приложение" handler (used by inline onclick in templates) =====
 window.goToApp = function goToApp() {
   try {
+    // ✅ ESCAPE: чтобы при переходе на /miniapp/ нас НЕ кинуло обратно в results-mode
+    // из-за tg start_param=results_XXX (особенно при входе из поста/бота).
+    sessionStorage.setItem('prizeme_ignore_results_start_once', '1');
+
+    // (не обязательно, но полезно: чистим results-mode маркеры)
+    sessionStorage.removeItem('prizeme_results_mode');
+    sessionStorage.removeItem('prizeme_results_gid');
+
     const fromCard = sessionStorage.getItem('prizeme_results_from_card') === '1';
     const backGid = sessionStorage.getItem('prizeme_results_back_gid');
 
@@ -1320,6 +1337,12 @@ window.goToApp = function goToApp() {
     // Иначе (пришли из поста/бота) — в home mini-app
     window.location.replace('/miniapp/');
   } catch (e) {
+    // даже при ошибке — всё равно уходим в home
+    try {
+      sessionStorage.setItem('prizeme_ignore_results_start_once', '1');
+      sessionStorage.removeItem('prizeme_results_mode');
+      sessionStorage.removeItem('prizeme_results_gid');
+    } catch {}
     window.location.replace('/miniapp/');
   }
 };
