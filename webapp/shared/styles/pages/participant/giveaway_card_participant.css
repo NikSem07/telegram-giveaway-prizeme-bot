@@ -2,14 +2,9 @@
 
 /* Figma variables (локально для экрана) */
 .page-participant-giveaway-card {
-  --pgc-blue: rgba(21, 81, 229, 1);     /* основной цвет (active) */
+  --pgc-blue: rgba(21, 81, 229, 1);     /* --back-big-shape */
   --pgc-blue-chip: #4379ff;            /* badges/tickets */
   --pgc-footer-bg: rgba(28, 28, 28, 1);
-
-  /* ✅ фон-градиент */
-  --pgc-bg-top: var(--pgc-blue);
-  --pgc-bg-bottom: rgba(28, 28, 28, 1);
-
   --pgc-shape: rgba(46, 46, 46, 1);
   --pgc-text: rgba(250, 250, 250, 1);
   --pgc-text-muted: rgba(115, 115, 117, 1);
@@ -17,15 +12,8 @@
 
 /* Синий фон как в Figma */
 body.page-participant-giveaway-card {
-  background: linear-gradient(
-    to bottom,
-    var(--pgc-bg-top) 0%,
-    var(--pgc-bg-top) 5%,
-    var(--pgc-bg-bottom) 5%,
-    var(--pgc-bg-bottom) 100%
-  ) !important;
-  background-color: var(--pgc-bg-bottom) !important;
-  min-height: 100vh;
+  background: var(--pgc-blue) !important;
+  background-color: var(--pgc-blue) !important;
 }
 
 /* Screen wrapper */
@@ -365,14 +353,8 @@ body.page-participant-giveaway-card {
 /* ===== FORCE FULL BLUE BACKGROUND (Participant giveaway card) ===== */
 body.page-participant-giveaway-card,
 html.page-participant-giveaway-card {
-  background: linear-gradient(
-    to bottom,
-    var(--pgc-bg-top) 0%,
-    var(--pgc-bg-top) 5%,
-    var(--pgc-bg-bottom) 5%,
-    var(--pgc-bg-bottom) 100%
-  ) !important;
-  background-color: var(--pgc-bg-bottom) !important;
+  background: var(--pgc-blue) !important;
+  background-color: var(--pgc-blue) !important;
   min-height: 100vh;
 }
 
@@ -430,14 +412,18 @@ body.page-participant-giveaway-card {
 /* ===== Finished themes (win / lose) ===== */
 body.page-participant-giveaway-card.pgc-finished-win,
 html.pgc-finished-win {
-  --pgc-blue: #024B42 !important; /* оставляем как “основной” */
-  --pgc-bg-top: #024B42 !important; /* top градиента */
+  --pgc-blue: #024B42 !important;
   --pgc-blue-chip: rgba(120, 255, 210, 0.22) !important;
+
+  background: #024B42 !important;
+  background-color: #024B42 !important;
 }
 
 body.page-participant-giveaway-card.pgc-finished-lose,
 html.pgc-finished-lose {
   --pgc-blue: #570C07 !important;
-  --pgc-bg-top: #570C07 !important; /* top градиента */
   --pgc-blue-chip: rgba(255, 140, 130, 0.22) !important;
+
+  background: #570C07 !important;
+  background-color: #570C07 !important;
 }
