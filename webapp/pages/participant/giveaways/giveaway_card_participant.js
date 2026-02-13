@@ -113,12 +113,15 @@ function applyFinishedTheme(isWinner) {
   const bg = isWinner ? '#024B42' : '#570C07';
 
   // Telegram WebView цвета (иначе может "откатить" назад)
+  const top = isWinner ? '#024B42' : '#570C07';
+  const bottom = '#1c1c1c';
+
   try {
     const tg = window.Telegram?.WebApp;
-    if (tg?.setBackgroundColor) tg.setBackgroundColor(bg);
-    if (tg?.setBottomBarColor) tg.setBottomBarColor(bg);
-    if (tg?.setHeaderColor) tg.setHeaderColor(bg);
-  } catch (_) {}
+    if (tg?.setHeaderColor) tg.setHeaderColor(top);
+    if (tg?.setBackgroundColor) tg.setBackgroundColor(bottom);
+    if (tg?.setBottomBarColor) tg.setBottomBarColor(bottom);
+  } catch (e) {}
 }
 
 
@@ -252,6 +255,13 @@ function renderGiveawayCardParticipantPage() {
   main.innerHTML = giveawayCardParticipantTemplate();
   ensureOnlyThisBodyClass();
   showTelegramBackButton();
+
+  try {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.setHeaderColor) tg.setHeaderColor('#1551e5');  // верх
+    if (tg?.setBackgroundColor) tg.setBackgroundColor('#1c1c1c'); // низ
+    if (tg?.setBottomBarColor) tg.setBottomBarColor('#1c1c1c');
+  } catch (e) {}
 
   const giveawayId = sessionStorage.getItem('prizeme_participant_giveaway_id');
   if (!giveawayId) return;

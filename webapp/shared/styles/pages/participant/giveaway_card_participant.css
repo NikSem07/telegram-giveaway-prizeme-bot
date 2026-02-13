@@ -11,6 +11,7 @@
 }
 
 /* Синий фон */
+html.page-participant-giveaway-card,
 body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
@@ -20,6 +21,12 @@ body.page-participant-giveaway-card {
   ) !important;
 
   background-color: rgba(28,28,28,1) !important;
+
+  /* важно для iOS/Telegram, чтобы не “вылезал” другой фон */
+  min-height: 100%;
+  height: auto;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 /* Screen wrapper */
