@@ -213,6 +213,7 @@ body.page-participant-giveaway-card {
   font-size: 10px;
   line-height: 18px;
   white-space: nowrap;
+  margin-bottom: 0;
 }
 
 /* media frame (как frame-2) */
@@ -222,7 +223,8 @@ body.page-participant-giveaway-card {
   border-radius: 10px;
   background-color: rgba(0,0,0,0.12); /* вместо background-image из figma */
   overflow: hidden;
-  margin-top: 18px;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 /* media element */
@@ -235,7 +237,7 @@ body.page-participant-giveaway-card {
 
 /* Description (frame-3) */
 .pgc-desc {
-  margin-top: 16px;            /* было 8px — увеличили */
+  margin-top: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
