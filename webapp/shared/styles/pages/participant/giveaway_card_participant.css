@@ -189,6 +189,8 @@ body.page-participant-giveaway-card {
   position: relative;
   width: 100%;
   height: auto;
+
+  padding-top: 18px;     /* резерв под строку "Информация о розыгрыше" (высота текста 18px) */
 }
 
 .pgc-info-title-wrap {
@@ -224,7 +226,7 @@ body.page-participant-giveaway-card {
   background-color: rgba(0,0,0,0.12); /* вместо background-image из figma */
   overflow: hidden;
   margin-top: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 0px;
 }
 
 /* media element */
