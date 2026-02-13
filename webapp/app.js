@@ -1299,6 +1299,31 @@ async function initializeAlreadyPage() {
   sessionStorage.removeItem('prizeme_init_data');
 }
 
+// ===== Results: "В приложение" handler (used by inline onclick in templates) =====
+window.goToApp = function goToApp() {
+  try {
+    const fromCard = sessionStorage.getItem('prizeme_results_from_card') === '1';
+    const backGid = sessionStorage.getItem('prizeme_results_back_gid');
+
+    // Если пришли из карточки — возвращаемся в карточку
+    if (fromCard && backGid) {
+      sessionStorage.removeItem('prizeme_results_from_card');
+
+      sessionStorage.setItem('prizeme_participant_giveaway_id', String(backGid));
+      sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
+      sessionStorage.setItem('prizeme_force_open_card', '1');
+
+      window.location.replace('/miniapp/');
+      return;
+    }
+
+    // Иначе (пришли из поста/бота) — в home mini-app
+    window.location.replace('/miniapp/');
+  } catch (e) {
+    window.location.replace('/miniapp/');
+  }
+};
+
 // =========================
 // ЭКРАН РЕЗУЛЬТАТОВ — ПОБЕДА
 // =========================
