@@ -408,3 +408,22 @@ body.page-participant-giveaway-card {
   background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
   white-space: nowrap;
 }
+
+/* ===== Finished themes (win / lose) ===== */
+body.page-participant-giveaway-card.pgc-finished-win,
+html.pgc-finished-win {
+  --pgc-blue: #024B42 !important;
+  --pgc-blue-chip: rgba(120, 255, 210, 0.22) !important;
+
+  background: #024B42 !important;
+  background-color: #024B42 !important;
+}
+
+body.page-participant-giveaway-card.pgc-finished-lose,
+html.pgc-finished-lose {
+  --pgc-blue: #570C07 !important;
+  --pgc-blue-chip: rgba(255, 140, 130, 0.22) !important;
+
+  background: #570C07 !important;
+  background-color: #570C07 !important;
+}

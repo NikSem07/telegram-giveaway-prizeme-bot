@@ -1309,6 +1309,46 @@ function initializeResultsWinPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const gid = urlParams.get('gid');
 
+  // ===== Return-to-card support =====
+  try {
+    const fromCard = sessionStorage.getItem('prizeme_results_from_card') === '1';
+    const backGid = sessionStorage.getItem('prizeme_results_back_gid');
+
+    if (fromCard && backGid) {
+      const tg = window.Telegram?.WebApp;
+
+      const goBackToCard = () => {
+        // очищаем флаг, чтобы не "залипало"
+        sessionStorage.removeItem('prizeme_results_from_card');
+
+        sessionStorage.setItem('prizeme_participant_giveaway_id', String(backGid));
+        sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
+        sessionStorage.setItem('prizeme_force_open_card', '1');
+
+        window.location.replace('/miniapp/');
+      };
+
+      // Telegram back button
+      if (tg?.BackButton) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(goBackToCard);
+      }
+
+      // Кнопка "В приложение" (на странице results_win обычно есть id кнопки)
+      const toAppBtn =
+        document.getElementById('results-win-to-app') ||
+        document.getElementById('results-to-app') ||
+        document.querySelector('[data-action="to-app"]');
+
+      if (toAppBtn) {
+        toAppBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          goBackToCard();
+        });
+      }
+    }
+  } catch (e) {}
+
   // Пробуем сначала взять результаты из sessionStorage,
   // которые мог положить results.html перед редиректом.
   let stored = null;
@@ -1606,6 +1646,46 @@ function initializeResultsLosePage() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const gid = urlParams.get('gid');
+
+  // ===== Return-to-card support =====
+  try {
+    const fromCard = sessionStorage.getItem('prizeme_results_from_card') === '1';
+    const backGid = sessionStorage.getItem('prizeme_results_back_gid');
+
+    if (fromCard && backGid) {
+      const tg = window.Telegram?.WebApp;
+
+      const goBackToCard = () => {
+        // очищаем флаг, чтобы не "залипало"
+        sessionStorage.removeItem('prizeme_results_from_card');
+
+        sessionStorage.setItem('prizeme_participant_giveaway_id', String(backGid));
+        sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
+        sessionStorage.setItem('prizeme_force_open_card', '1');
+
+        window.location.replace('/miniapp/');
+      };
+
+      // Telegram back button
+      if (tg?.BackButton) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(goBackToCard);
+      }
+
+      // Кнопка "В приложение" (на странице results_win обычно есть id кнопки)
+      const toAppBtn =
+        document.getElementById('results-lose-to-app') ||
+        document.getElementById('results-to-app') ||
+        document.querySelector('[data-action="to-app"]');
+
+      if (toAppBtn) {
+        toAppBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          goBackToCard();
+        });
+      }
+    }
+  } catch (e) {}
 
   // Пробуем взять результаты из sessionStorage (как для win)
   let stored = null;
