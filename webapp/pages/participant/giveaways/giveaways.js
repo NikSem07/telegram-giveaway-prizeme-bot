@@ -100,17 +100,20 @@ async function fetchGiveaways(tab) {
 
 function bindCardNavigation(listEl, tab) {
   const go = (gid) => {
-    // finished -> results flow (как уже реализовано)
-    if (tab === 'finished') {
-      window.location.href = `/miniapp/loading.html?gid=results_${gid}`;
-      return;
-    }
-
     // active -> participant giveaway card
     if (tab === 'active') {
-      sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
-      Router.navigate('giveaway_card_participant');
-      return;
+        sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
+        sessionStorage.setItem('prizeme_participant_card_mode', 'active');
+        Router.navigate('giveaway_card_participant');
+        return;
+    }
+
+    // finished -> participant giveaway card (как active)
+    if (tab === 'finished') {
+        sessionStorage.setItem('prizeme_participant_giveaway_id', String(gid));
+        sessionStorage.setItem('prizeme_participant_card_mode', 'finished');
+        Router.navigate('giveaway_card_participant');
+        return;
     }
 
     // cancelled -> пока не ведём (логику/экран сделаем позже)

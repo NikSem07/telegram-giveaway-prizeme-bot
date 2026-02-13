@@ -70,6 +70,46 @@ function startCountdown(leftTimeEl, endAtUtc) {
   return () => clearInterval(t);
 }
 
+function formatDateDDMMYYYY(endAtUtc) {
+  if (!endAtUtc) return '—';
+  const d = new Date(endAtUtc);
+  if (Number.isNaN(d.getTime())) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}.${mm}.${yy}`;
+}
+
+async function loadResultsForGid(gid) {
+  const init_data = getInitData();
+  if (!init_data) throw new Error('no_init_data_results');
+
+  // ВАЖНО: в твоём app_js.txt resultsFlow вызывает api("/api/results", { gid, init_data })
+  // поэтому тут делаем так же.
+  const resp = await fetch('/api/results', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gid: String(gid), init_data }),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok || !data || !data.ok) {
+    throw new Error(data?.reason || `http_${resp.status}`);
+  }
+  return data;
+}
+
+function applyFinishedTheme(isWinner) {
+  // Меняем переменные, на которые у тебя завязан фон и чипы (badge/ticket)
+  // Фон:
+  document.body.style.setProperty('--pgc-blue', isWinner ? '#024B42' : '#570C07');
+
+  // Чипы: делаем светлый оттенок (НЕ используем #570C07 как chip, иначе будет слишком тёмно)
+  // Можно потом тонко подкрутить, но сейчас будет читабельно и “в тему”.
+  document.body.style.setProperty('--pgc-blue-chip', isWinner ? 'rgba(120, 255, 210, 0.22)' : 'rgba(255, 140, 130, 0.22)');
+}
+
+
 async function loadParticipantGiveawayDetails(giveawayId) {
   const init_data = getInitData();
   if (!init_data) throw new Error('no_init_data');
@@ -206,13 +246,17 @@ function renderGiveawayCardParticipantPage() {
 
   const titleEl = main.querySelector('#pgc-title');
   const leftTimeEl = main.querySelector('#pgc-left-time');
+  const statusBadgeEl = main.querySelector('#pgc-badge-status');
+  const secondaryLabelEl = main.querySelector('#pgc-badge-secondary-label');
+  const winnerBadgeEl = main.querySelector('#pgc-badge-winner');
   const descEl = main.querySelector('#pgc-description');
   const mediaEl = main.querySelector('#pgc-media');
   const ticketsEl = main.querySelector('#pgc-tickets-list');
   const channelsEl = main.querySelector('#pgc-channels');
   const openBtn = main.querySelector('#pgc-open');
 
-  if (!titleEl || !leftTimeEl || !descEl || !mediaEl || !ticketsEl || !channelsEl || !openBtn) {
+  if (!titleEl || !leftTimeEl || !descEl || !mediaEl || !ticketsEl || !channelsEl || !openBtn
+      || !statusBadgeEl || !secondaryLabelEl || !winnerBadgeEl) {
     console.error('[giveaway_card_participant] missing DOM nodes');
     return;
   }
@@ -239,13 +283,53 @@ function renderGiveawayCardParticipantPage() {
         // channels
         renderChannels(channelsEl, data.channels);
 
-        // countdown
+        // countdown OR finished date
         if (stopCountdown) stopCountdown();
+        stopCountdown = null;
+
+        const mode = sessionStorage.getItem('prizeme_participant_card_mode') || 'active';
+        const status = String(data.status || '').toLowerCase();
+
+        // finished режим определяем по табу (mode) или по статусу из API
+        const isFinished = (mode === 'finished') || (status === 'finished');
+
+        if (isFinished) {
+        // Бейджи
+        statusBadgeEl.textContent = '🏁 Завершенный';
+        secondaryLabelEl.textContent = '📅 Дата завершения:';
+        leftTimeEl.textContent = formatDateDDMMYYYY(data.end_at_utc);
+
+        // Кнопка: результат
+        openBtn.disabled = false;
+        openBtn.textContent = 'Посмотреть результат';
+        openBtn.onclick = () => {
+            // Используем твой рабочий results-flow (loading -> results_win/lose)
+            window.location.href = `/miniapp/loading.html?gid=results_${encodeURIComponent(String(giveawayId))}`;
+        };
+
+        // Узнаем win/lose и красим
+        loadResultsForGid(giveawayId)
+            .then((results) => {
+            const isWinner = !!(results.user && results.user.is_winner);
+            winnerBadgeEl.textContent = isWinner ? '🏆 Вы победили' : '🎟️ Вы не победили';
+            applyFinishedTheme(isWinner);
+            })
+            .catch(() => {
+            // фоллбек без падения карточки
+            winnerBadgeEl.textContent = '🎟️ Результаты недоступны';
+            });
+
+        } else {
+        // ACTIVE (как было)
+        statusBadgeEl.textContent = '⌛ Активный';
+        secondaryLabelEl.textContent = '🕒 Осталось:';
         stopCountdown = startCountdown(leftTimeEl, data.end_at_utc);
 
-        // button → post
         openBtn.disabled = !(data.post_url || data.channels?.[0]?.post_url);
-        openBtn.addEventListener('click', () => openGiveawayPost(data));
+        openBtn.textContent = 'Перейти к розыгрышу';
+        openBtn.onclick = () => openGiveawayPost(data);
+        }
+
     })
     .catch((err) => {
         console.error('[giveaway_card_participant] load error:', err);
