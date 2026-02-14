@@ -3,6 +3,7 @@
 import AppState from './shared/state.js';
 import Router from './shared/router.js';
 import Navbar from './shared/navbar.js';
+import BackgroundManager from './shared/background-manager.js';
 import { loadGiveawaysLists } from './pages/participant/home/home.js';
 
 console.log('[HOME] Script loaded');
@@ -128,8 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 1. Инициализируем тему сразу при загрузке
     initTheme();
-    
-    // 2. Инициализируем роутер
+
+    // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
+    BackgroundManager.init(AppState);
+
+    // 3. Инициализируем роутер
     Router.init();
 
     // ===== RESULTS -> BACK TO GIVEAWAY CARD (from finished card) =====

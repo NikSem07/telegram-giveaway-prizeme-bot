@@ -1,0 +1,18 @@
+/* webapp/shared/styles/spa-background.css */
+/* SPA-only: единый root background для бесшовного iOS overscroll.
+   SA-экраны не подключают этот файл — регрессий по SA не будет. */
+
+:root {
+  /* Единый источник истины для фона приложения (цвет, не контентные блоки) */
+  --app-bg: var(--color-bg);
+}
+
+/* iOS rubber-band показывает фон html, поэтому задаём фон на обоих */
+html,
+body {
+  background: var(--app-bg);
+  background-color: var(--app-bg);
+  min-height: 100%;
+}
+
+/* Важно: не меняем отступы/лейаут — только фон */
