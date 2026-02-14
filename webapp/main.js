@@ -70,61 +70,72 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ====== ИНИЦИАЛИЗАЦИЯ ТЕМЫ TELEGRAM ======
     const initTheme = () => {
+    try {
+        const syncTelegramChromeWithCssBg = () => {
+        const tg = window.Telegram?.WebApp;
+        if (!tg) return;
+
+        const bg = getComputedStyle(document.documentElement)
+            .getPropertyValue('--color-bg')
+            .trim();
+
+        if (!bg) return;
+
+        try { tg.setBackgroundColor?.(bg); } catch (e) {}
+        try { tg.setBottomBarColor?.(bg); } catch (e) {}
+
+        // Header fallback for iOS/clients where hex may be ignored
         try {
-            const tg = window.Telegram?.WebApp;
-            if (tg) {
-                // Определяем тему Telegram (dark/light)
-                const isDark = tg.colorScheme === 'dark';
-                const themeClass = isDark ? 'theme-dark' : 'theme-light';
-                
-                // Применяем класс к корневому элементу
-                document.documentElement.classList.remove('theme-dark', 'theme-light');
-                document.documentElement.classList.add(themeClass);
-                
-                console.log(`[THEME] Applied ${themeClass} (Telegram colorScheme: ${tg.colorScheme})`);
-
-                // ✅ FIX: синхронизируем системный фон Telegram для СВЕТЛОЙ темы
-                // (тёмную тему намеренно не трогаем)
-                try {
-                    if (!isDark) {
-                        tg.setBackgroundColor('#EFEEF4');
-                        tg.setHeaderColor('#EFEEF4');
-                    }
-                } catch (e) {
-                    console.warn('[THEME] Failed to set Telegram colors', e);
-                }
-                
-                // Следим за изменениями темы
-                if (tg.onEvent) {
-                    tg.onEvent('themeChanged', () => {
-                        const newIsDark = tg.colorScheme === 'dark';
-                        const newThemeClass = newIsDark ? 'theme-dark' : 'theme-light';
-                        document.documentElement.classList.remove('theme-dark', 'theme-light');
-                        document.documentElement.classList.add(newThemeClass);
-                        console.log(`[THEME] Theme changed to ${newThemeClass}`);
-
-                        // ✅ FIX: при смене на светлую — снова ставим нужный фон/шапку
-                        try {
-                            if (!newIsDark) {
-                                tg.setBackgroundColor('#EFEEF4');
-                                tg.setHeaderColor('#EFEEF4');
-                            }
-                        } catch (e) {
-                            console.warn('[THEME] Failed to set Telegram colors', e);
-                        }
-                    });
-                }
-            } else {
-                // Fallback: если не в Telegram, определяем по prefers-color
-                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                const themeClass = prefersDark ? 'theme-dark' : 'theme-light';
-                document.documentElement.classList.remove('theme-dark', 'theme-light');
-                document.documentElement.classList.add(themeClass);
-                console.log(`[THEME] Fallback theme applied: ${themeClass}`);
-            }
-        } catch (err) {
-            console.error('[THEME] initTheme error:', err);
+            tg.setHeaderColor?.(bg);
+        } catch (e) {
+            try { tg.setHeaderColor?.('bg_color'); } catch (e2) {}
         }
+        };
+
+        const tg = window.Telegram?.WebApp;
+
+        if (tg) {
+        const isDark = tg.colorScheme === 'dark';
+        const themeClass = isDark ? 'theme-dark' : 'theme-light';
+
+        document.documentElement.classList.remove('theme-dark', 'theme-light');
+        document.documentElement.classList.add(themeClass);
+
+        // ✅ ВАЖНО: синкаем сразу при первичном применении темы
+        syncTelegramChromeWithCssBg();
+
+        console.log(`[THEME] Applied ${themeClass} (Telegram colorScheme: ${tg.colorScheme})`);
+
+        if (tg.onEvent) {
+            tg.onEvent('themeChanged', () => {
+            const newIsDark = tg.colorScheme === 'dark';
+            const newThemeClass = newIsDark ? 'theme-dark' : 'theme-light';
+
+            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.add(newThemeClass);
+
+            syncTelegramChromeWithCssBg();
+
+            console.log(`[THEME] Theme changed to ${newThemeClass}`);
+            });
+        }
+
+        } else {
+        // Fallback: если не в Telegram, определяем по prefers-color
+        const prefersDark =
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        const themeClass = prefersDark ? 'theme-dark' : 'theme-light';
+        document.documentElement.classList.remove('theme-dark', 'theme-light');
+        document.documentElement.classList.add(themeClass);
+
+        // Вне Telegram sync не нужен (tg отсутствует), но оставим лог
+        console.log(`[THEME] Fallback theme applied: ${themeClass}`);
+        }
+    } catch (err) {
+        console.error('[THEME] initTheme error:', err);
+    }
     };
     
     // 1. Инициализируем тему сразу при загрузке
