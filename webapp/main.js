@@ -84,12 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try { tg.setBackgroundColor?.(bg); } catch (e) {}
         try { tg.setBottomBarColor?.(bg); } catch (e) {}
 
-        // Header fallback for iOS/clients where hex may be ignored
-        try {
-            tg.setHeaderColor?.(bg);
-        } catch (e) {
-            try { tg.setHeaderColor?.('bg_color'); } catch (e2) {}
-        }
+        // Header: iOS часто "молча" игнорирует hex без исключения.
+        // Поэтому: 1) пробуем hex 2) ВСЕГДА ставим token bg_color, чтобы точно не осталось темным.
+        try { tg.setHeaderColor?.(bg); } catch (e) {}
+        try { tg.setHeaderColor?.('bg_color'); } catch (e2) {}
         };
 
         const tg = window.Telegram?.WebApp;
@@ -146,6 +144,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Инициализируем роутер
     Router.init();
+
+    // ===== iOS: prevent pull-to-close / rubber-band collapsing the Mini App =====
+    try {
+        const tg = window.Telegram?.WebApp;
+        const isIOS = tg?.platform === 'ios';
+
+        if (isIOS) {
+            let startY = 0;
+
+            document.addEventListener('touchstart', (e) => {
+                if (!e.touches || e.touches.length !== 1) return;
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!e.touches || e.touches.length !== 1) return;
+
+                const currentY = e.touches[0].clientY;
+                const deltaY = currentY - startY;
+
+                // Только если тянем вниз и мы в самом верху страницы
+                if (deltaY > 0 && window.scrollY <= 0) {
+                    // важно: preventDefault только если можно
+                    if (e.cancelable) e.preventDefault();
+                }
+            }, { passive: false });
+        }
+    } catch (e) {
+        console.warn('[iOS] pull-to-close guard init failed', e);
+    }
 
     // ===== RESULTS -> BACK TO GIVEAWAY CARD (from finished card) =====
     try {
