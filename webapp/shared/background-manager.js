@@ -64,22 +64,37 @@ function syncTelegram(color) {
   const tg = window.Telegram?.WebApp;
   if (!tg) return;
 
-  const hex = rgbToHex(color) || color;
+  const hex = (rgbToHex(color) || color || '').trim();
+  const tp = tg.themeParams || {};
 
-  // 1) WebView background — поддерживает HEX
+  const norm = (c) => String(c || '').trim().toLowerCase();
+  const hexNorm = norm(hex);
+
+  // Prefer Telegram theme keys when the target color equals a known theme param.
+  // This is the most stable behavior on iOS (matches reference apps).
+  const bgKey =
+    (tp.secondary_bg_color && norm(tp.secondary_bg_color) === hexNorm) ? 'secondary_bg_color' :
+    (tp.bg_color && norm(tp.bg_color) === hexNorm) ? 'bg_color' :
+    null;
+
+  const bottomKey =
+    (tp.bottom_bar_bg_color && norm(tp.bottom_bar_bg_color) === hexNorm) ? 'bottom_bar_bg_color' :
+    bgKey; // fallback to same key if matched
+
+  // Background
   try {
-    if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(hex);
+    if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(bgKey || hex);
   } catch (e) {}
 
-  // 2) Bottom bar — поддерживает HEX
+  // Bottom bar
   try {
-    if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(hex);
+    if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(bottomKey || hex);
   } catch (e) {}
 
-  // header: iOS Telegram часто не принимает hex, ожидает токен.
-  // Используем bg_color — он совпадает с темой Telegram и убирает "чёрную полосу".
+  // Header (critical for the “black strip”)
+  // Do NOT force bg_color. Use key when matched, else hex.
   try {
-    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('bg_color');
+    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(bgKey || hex);
   } catch (e) {}
 }
 
