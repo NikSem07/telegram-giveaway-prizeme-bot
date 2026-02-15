@@ -66,17 +66,24 @@ function syncTelegram(color) {
 
   const hex = rgbToHex(color) || color;
 
+  // 1) WebView background — поддерживает HEX
   try {
     if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(hex);
   } catch (e) {}
 
+  // 2) Bottom bar — поддерживает HEX
   try {
     if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(hex);
   } catch (e) {}
 
-  // header — по необходимости; в большинстве случаев это даёт бесшовность
+  // 3) Header — enterprise-safe: используем только допустимые токены
+  // В light теме у Telegram bg_color часто белый, поэтому берём secondary_bg_color (обычно серый)
   try {
-    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(hex);
+    if (typeof tg.setHeaderColor === 'function') {
+      const scheme = tg.colorScheme; // 'light' | 'dark' (если доступно)
+      const token = scheme === 'light' ? 'secondary_bg_color' : 'bg_color';
+      tg.setHeaderColor(token);
+    }
   } catch (e) {}
 }
 
@@ -97,6 +104,26 @@ const BackgroundManager = {
     // microtask-ish: после того как Router/страница успеет проставить классы
     setTimeout(() => {
       this._scheduled = false;
+      // Ensure theme class is applied to :root (variables.css uses :root.theme-light / :root.theme-dark)
+      try {
+        const html = document.documentElement;
+        const body = document.body;
+        const tg = window.Telegram?.WebApp;
+
+        const hasRootTheme = html.classList.contains('theme-light') || html.classList.contains('theme-dark');
+        if (!hasRootTheme) {
+          if (body.classList.contains('theme-light')) html.classList.add('theme-light');
+          if (body.classList.contains('theme-dark')) html.classList.add('theme-dark');
+
+          // fallback to Telegram colorScheme if body also has no theme
+          if (!(html.classList.contains('theme-light') || html.classList.contains('theme-dark'))) {
+            const scheme = tg?.colorScheme;
+            if (scheme === 'light') html.classList.add('theme-light');
+            if (scheme === 'dark') html.classList.add('theme-dark');
+          }
+        }
+      } catch (e) {}
+      
       this.applyNow();
     }, 0);
   },
