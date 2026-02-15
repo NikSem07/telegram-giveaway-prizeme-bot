@@ -97,10 +97,27 @@ document.addEventListener('DOMContentLoaded', () => {
         try { tg.setBackgroundColor?.(bg); } catch (e) {}
         try { tg.setBottomBarColor?.(bg); } catch (e) {}
 
-        // Header: iOS часто "молча" игнорирует hex без исключения.
-        // Поэтому: 1) пробуем hex 2) ВСЕГДА ставим token bg_color, чтобы точно не осталось темным.
-        try { tg.setHeaderColor?.(bg); } catch (e) {}
-        try { tg.setHeaderColor?.('bg_color'); } catch (e2) {}
+        // iOS/Telegram: если цвет совпадает с themeParams.bg_color / secondary_bg_color — ставим key (стабильнее, как в референсе).
+        const tp = tg.themeParams || {};
+        const norm = (c) => String(c || '').trim().toLowerCase();
+
+        const bgNorm = norm(bg);
+        const bgKey =
+        (tp.secondary_bg_color && norm(tp.secondary_bg_color) === bgNorm) ? 'secondary_bg_color' :
+        (tp.bg_color && norm(tp.bg_color) === bgNorm) ? 'bg_color' :
+        null;
+
+        try { tg.setBackgroundColor?.(bgKey || bg); } catch (e) {}
+        try {
+        // bottom bar: если Telegram даёт bottom_bar_bg_color — предпочитаем его ключом только когда совпало
+        const bottomKey =
+            (tp.bottom_bar_bg_color && norm(tp.bottom_bar_bg_color) === bgNorm) ? 'bottom_bar_bg_color' :
+            (bgKey || bg);
+        tg.setBottomBarColor?.(bottomKey);
+        } catch (e) {}
+
+        // Header: если совпало — key, иначе hex. НЕ делаем принудительно bg_color.
+        try { tg.setHeaderColor?.(bgKey || bg); } catch (e) {}
         };
 
         const tg = window.Telegram?.WebApp;
@@ -193,8 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
 
     // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
-    // BackgroundManager временно отключаем для проверки конфликтов с цветами Telegram
-    // BackgroundManager.init(AppState);
+    BackgroundManager.init(AppState);
 
     // 3. Инициализируем роутер
     Router.init();
