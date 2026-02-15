@@ -181,8 +181,24 @@ body.page-participant-giveaway-card .pgc-screen {
 }
 
 /* Bottom frame */
-body.page-participant-giveaway-card .pgc-frame {
-  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+.pgc-frame {
+  margin-top: 18px;
+
+  width: 100vw;                 /* железно на всю ширину экрана */
+  margin-left: calc(50% - 50vw);/* выравниваем относительно вьюпорта */
+
+  background: rgba(28, 28, 28, 1);
+  border-radius: 20px 20px 0 0;
+
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+
+  flex: 1;
+  min-height: calc(100vh - 220px);
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Media + title group (как .div в figma) */
