@@ -28,7 +28,7 @@ body {
   color: var(--color-text);
   line-height: 1.4;
   overflow-x: hidden;
-  min-height: 100vh;
+  min-height: 100%;
   padding-top: var(--tg-top-pad);
   overscroll-behavior-y: none;       /* не даём странице уходить в "pull-to-close" */
   -webkit-overflow-scrolling: touch; /* нормальный скролл на iOS */
@@ -36,7 +36,7 @@ body {
 
 /* Основной контейнер приложения */
 #app {
-  min-height: 100vh;
+  min-height: 100%;
 }
 
 /* Ссылки */

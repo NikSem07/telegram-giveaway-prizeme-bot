@@ -66,6 +66,19 @@ function syncModeSwitcherUI(mode) {
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', () => {
+
+    // ===== iOS: hard-disable pinch-to-zoom (gesture events) =====
+    try {
+        const prevent = (e) => {
+            if (e.cancelable) e.preventDefault();
+        };
+        document.addEventListener('gesturestart', prevent, { passive: false });
+        document.addEventListener('gesturechange', prevent, { passive: false });
+        document.addEventListener('gestureend', prevent, { passive: false });
+    } catch (e) {
+        console.warn('[iOS] gesture disable failed', e);
+    }
+
     console.log('[HOME] DOM ready');
     
     // ====== ИНИЦИАЛИЗАЦИЯ ТЕМЫ TELEGRAM ======
