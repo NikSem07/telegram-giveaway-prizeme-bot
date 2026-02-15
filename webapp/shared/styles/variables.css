@@ -10,6 +10,7 @@
     
   /* Фоны темной темы (по умолчанию) */
   --color-bg: #0f1115;
+  --app-bg: var(--color-bg);
   --color-bg-secondary: #1c1c1e;
   --color-bg-tertiary: #2c2c2e;
     
@@ -81,9 +82,8 @@
   
   /* Основные фоны */
   --color-bg: #EFEEF4;              /* ← ГЛАВНОЕ: ФОН СВЕТЛОЙ ТЕМЫ */
+  --app-bg: var(--color-bg);
   --color-bg-primary: #EFEEF4;
-  --color-bg-secondary: #E5E4EA;
-  --color-bg-tertiary: #DAD9DF;
   
   /* Текст */
   --color-text: #000000;
@@ -134,9 +134,8 @@
 :root.theme-dark {
   /* ОСНОВНЫЕ ФОНЫ */
   --color-bg: #0f1115;
+  --app-bg: var(--color-bg);
   --color-bg-primary: #0f1115;
-  --color-bg-secondary: #181818;
-  --color-bg-tertiary: #2c2c2e;
   
   /* ТЕКСТ */
   --color-text: #ffffff;

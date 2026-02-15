@@ -4,7 +4,7 @@
 
 :root {
   /* Единый источник истины для фона приложения (цвет, не контентные блоки) */
-  --app-bg: var(--color-bg);
+  background: var(--app-bg, var(--color-bg));
 }
 
 /* iOS rubber-band показывает фон html, поэтому задаём фон на обоих */
