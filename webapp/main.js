@@ -8,6 +8,28 @@ import { loadGiveawaysLists } from './pages/participant/home/home.js';
 
 console.log('[HOME] Script loaded');
 
+function detectInitialThemeClass() {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.colorScheme === 'dark') return 'theme-dark';
+  if (tg?.colorScheme === 'light') return 'theme-light';
+
+  // Outside Telegram (browser preview)
+  const prefersDark =
+    window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  return prefersDark ? 'theme-dark' : 'theme-light';
+}
+
+function applyThemeClass(themeClass) {
+  const root = document.documentElement;
+  root.classList.remove('theme-dark', 'theme-light');
+  root.classList.add(themeClass);
+}
+
+// Apply ASAP to avoid first-frame wrong background (FOUC)
+applyThemeClass(detectInitialThemeClass());
+
 // Переключение режима Участник / Создатель
 function switchMode(targetMode) {
   console.log('[HOME] switchMode:', targetMode);
