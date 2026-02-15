@@ -193,8 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
 
     // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
-    // Инициализируем ПОСЛЕ темы, но ДО роутера, чтобы фон применился до первого рендера
-    BackgroundManager.init(AppState);
+    // BackgroundManager временно отключаем для проверки конфликтов с цветами Telegram
+    // BackgroundManager.init(AppState);
 
     // 3. Инициализируем роутер
     Router.init();
