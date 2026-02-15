@@ -19,7 +19,7 @@ body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
     var(--pgc-blue) 0%,
-    var(--pgc-blue) 90%,
+    var(--pgc-blue) 50%,
     #1c1c1c 100%
   ) !important;
 
