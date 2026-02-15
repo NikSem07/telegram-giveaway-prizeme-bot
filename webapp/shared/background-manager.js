@@ -64,38 +64,21 @@ function syncTelegram(color) {
   const tg = window.Telegram?.WebApp;
   if (!tg) return;
 
-  const hex = (rgbToHex(color) || color || '').trim();
   const tp = tg.themeParams || {};
+  const isLight = document.documentElement.classList.contains('theme-light');
 
-  const norm = (c) => String(c || '').trim().toLowerCase();
-  const hexNorm = norm(hex);
+  // В светлой теме используем secondary_bg_color (как системный светло-серый),
+  // в тёмной — bg_color. Это максимально стабильно на iOS.
+  const bgKey = isLight ? 'secondary_bg_color' : 'bg_color';
 
-  // Prefer Telegram theme keys when the target color equals a known theme param.
-  // This is the most stable behavior on iOS (matches reference apps).
-  const bgKey =
-    (tp.secondary_bg_color && norm(tp.secondary_bg_color) === hexNorm) ? 'secondary_bg_color' :
-    (tp.bg_color && norm(tp.bg_color) === hexNorm) ? 'bg_color' :
-    null;
+  // bottom bar: если доступен bottom_bar_bg_color — используем его, иначе bgKey
+  const bottomKey = tp.bottom_bar_bg_color ? 'bottom_bar_bg_color' : bgKey;
 
-  const bottomKey =
-    (tp.bottom_bar_bg_color && norm(tp.bottom_bar_bg_color) === hexNorm) ? 'bottom_bar_bg_color' :
-    bgKey; // fallback to same key if matched
+  try { tg.setBackgroundColor?.(bgKey); } catch (e) {}
+  try { tg.setBottomBarColor?.(bottomKey); } catch (e) {}
 
-  // Background
-  try {
-    if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(bgKey || hex);
-  } catch (e) {}
-
-  // Bottom bar
-  try {
-    if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(bottomKey || hex);
-  } catch (e) {}
-
-  // Header (critical for the “black strip”)
-  // Do NOT force bg_color. Use key when matched, else hex.
-  try {
-    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(bgKey || hex);
-  } catch (e) {}
+  // КРИТИЧНО: header — только ключом, никаких HEX.
+  try { tg.setHeaderColor?.(bgKey); } catch (e) {}
 }
 
 const BackgroundManager = {
