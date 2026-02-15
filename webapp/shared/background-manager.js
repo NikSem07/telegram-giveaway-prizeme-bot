@@ -76,14 +76,10 @@ function syncTelegram(color) {
     if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(hex);
   } catch (e) {}
 
-  // 3) Header — enterprise-safe: используем только допустимые токены
-  // В light теме у Telegram bg_color часто белый, поэтому берём secondary_bg_color (обычно серый)
+  // header: iOS Telegram часто не принимает hex, ожидает токен.
+  // Используем bg_color — он совпадает с темой Telegram и убирает "чёрную полосу".
   try {
-    if (typeof tg.setHeaderColor === 'function') {
-      const scheme = tg.colorScheme; // 'light' | 'dark' (если доступно)
-      const token = scheme === 'light' ? 'secondary_bg_color' : 'bg_color';
-      tg.setHeaderColor(token);
-    }
+    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('bg_color');
   } catch (e) {}
 }
 
