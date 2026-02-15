@@ -56,8 +56,24 @@ function pickBgColor() {
 }
 
 function applyCssBg(color) {
-  // Single source of truth for root
-  document.documentElement.style.setProperty('--app-bg', color);
+  const root = document.documentElement;
+
+  // Текущий "нормальный" фон темы (из CSS, после применения theme-light/theme-dark)
+  const themeBg = getComputedStyle(root).getPropertyValue('--color-bg').trim();
+
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  const c = norm(color);
+  const t = norm(themeBg);
+
+  // Если цвет совпадает с темой (или color пустой) — НЕ держим inline override.
+  // Это убирает ситуацию, когда ранний fallback "приклеивает" тёмный фон навсегда.
+  if (!c || c === t) {
+    root.style.removeProperty('--app-bg');
+    return;
+  }
+
+  // Если реально нужен "особый" фон (например finished win/lose) — ставим override.
+  root.style.setProperty('--app-bg', color);
 }
 
 function syncTelegram(color) {
