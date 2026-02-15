@@ -98,5 +98,10 @@
   <!-- Сначала общий app.js, потом логика экрана участника -->
   <script src="/miniapp-static/app.js?v=MULTI-PAGE-V2"></script>
   <script type="module" src="/miniapp-static/main.js?v=MULTI-PAGE-V2"></script>
+  <script type="module">
+    import BackgroundManager from "/miniapp-static/shared/background-manager.js?v=ARCH-1";
+    BackgroundManager.init(null);
+  </script>
 </body>
 </html>
+
