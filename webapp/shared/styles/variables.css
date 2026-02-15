@@ -65,11 +65,12 @@
   /* ===== Telegram Fullscreen top padding ===== */
   --tg-safe-top: env(safe-area-inset-top, 0px);
 
-  /* Базовый “воздух” под системные кнопки Telegram (Close / …) */
-  --tg-top-ui: 88px;
-
-  /* Итоговый верхний отступ для контента */
-  --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
+  /*
+    WebView Telegram уже учитывает верхний UI (Close / …).
+    Фиксированный отступ 88px создаёт "зебру" (пустая полоса под хедером).
+    Оставляем только safe-area (если он вообще нужен на iOS).
+  */
+  --tg-top-pad: var(--tg-safe-top);
 }
 
 /* ====== СВЕТЛАЯ ТЕМА ====== */
