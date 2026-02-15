@@ -136,20 +136,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     };
     
-    // 1. Инициализируем тему сразу при загрузке
-    initTheme();
-
-    // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
-    BackgroundManager.init(AppState);
-
-    // 3. Инициализируем роутер
-    Router.init();
-
-    // ===== iOS: prevent pull-to-close / rubber-band collapsing the Mini App =====
+    // ===== iOS/Telegram: prevent pull-to-minimize/close by vertical swipes =====
     try {
         const tg = window.Telegram?.WebApp;
-        const isIOS = tg?.platform === 'ios';
+        if (tg) {
+            // Ask Telegram to expand webview as much as possible
+            try { tg.expand?.(); } catch (e) {}
 
+            // Official API (new clients)
+            try { tg.disableVerticalSwipes?.(); } catch (e) {}
+
+            // Fallback flag (some clients read it)
+            try { tg.isVerticalSwipesEnabled = false; } catch (e) {}
+        }
+
+        // Extra guard for iOS rubber-band at scrollY=0
+        const isIOS = tg?.platform === 'ios';
         if (isIOS) {
             let startY = 0;
 
@@ -164,16 +166,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentY = e.touches[0].clientY;
                 const deltaY = currentY - startY;
 
-                // Только если тянем вниз и мы в самом верху страницы
+                // Only when pulling down at the very top
                 if (deltaY > 0 && window.scrollY <= 0) {
-                    // важно: preventDefault только если можно
                     if (e.cancelable) e.preventDefault();
                 }
             }, { passive: false });
         }
     } catch (e) {
-        console.warn('[iOS] pull-to-close guard init failed', e);
+        console.warn('[TG/iOS] swipe guard init failed', e);
     }
+
+    // 1. Инициализируем тему сразу при загрузке
+    initTheme();
+
+    // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
+    // BackgroundManager временно отключаем для проверки конфликтов с цветами Telegram
+    // BackgroundManager.init(AppState);
+
+    // 3. Инициализируем роутер
+    Router.init();
 
     // ===== RESULTS -> BACK TO GIVEAWAY CARD (from finished card) =====
     try {
