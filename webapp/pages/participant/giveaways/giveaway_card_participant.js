@@ -12,6 +12,8 @@ function backToGiveaways() {
     tg.BackButton.hide();
   }
 
+  document.documentElement.classList.remove('pgc-finished-win', 'pgc-finished-lose');
+  document.body.classList.remove('pgc-finished-win', 'pgc-finished-lose');
   document.body.classList.remove('page-participant-giveaway-card');
   Router.navigate('giveaways');
 }
@@ -256,6 +258,11 @@ function renderGiveawayCardParticipantPage() {
   main.innerHTML = giveawayCardParticipantTemplate();
   ensureOnlyThisBodyClass();
   showTelegramBackButton();
+
+  // ВАЖНО: finished-классы могли "залипнуть" в SPA с прошлого открытия.
+  // Снимаем ДО чтения --pgc-blue, иначе Active станет зелёным/красным.
+  document.documentElement.classList.remove('pgc-finished-win', 'pgc-finished-lose');
+  document.body.classList.remove('pgc-finished-win', 'pgc-finished-lose');
 
   try {
     const tg = window.Telegram?.WebApp;

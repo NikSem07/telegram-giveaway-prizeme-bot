@@ -31,14 +31,25 @@ body.page-participant-giveaway-card {
   height: auto !important;
 }
 
+/* ТОЛЬКО карточка: body не скроллится, скроллится внутренний экран */
+html.page-participant-giveaway-card,
+body.page-participant-giveaway-card {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;                    /* фиксируем высоту под внутренний скролл */
+  overflow-y: auto;                 /* скролл ТОЛЬКО здесь */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;        /* убираем bounce/overscroll */
 
-  /* не создаём искусственную "полосу" под серым контейнером */
   padding: 0 0 env(safe-area-inset-bottom, 0px) !important;
-
   box-sizing: border-box;
+
+  display: flex;                    /* нужно чтобы серый блок занял остаток */
+  flex-direction: column;
 }
 
 /* Top block */
@@ -193,7 +204,7 @@ body.page-participant-giveaway-card .pgc-screen {
   padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 
   flex: 1;
-  min-height: calc(100vh - 220px);
+  min-height: 0;
   box-sizing: border-box;
 
   display: flex;
