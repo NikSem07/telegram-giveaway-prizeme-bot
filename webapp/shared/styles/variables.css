@@ -70,7 +70,7 @@
     ВАЖНО: этот отступ — не "фон", а геометрия, чтобы контент не попадал под системные кнопки.
     88px соответствует текущим пропорциям
   */
-  --tg-top-ui: 88px;
+  --tg-top-ui: 56px;
 
   /* Итоговый верхний отступ для контента */
   --tg-top-pad: calc(var(--tg-safe-top) + var(--tg-top-ui));
@@ -133,9 +133,9 @@
 /* ====== ТЁМНАЯ ТЕМА (ЯВНОЕ ПЕРЕОПРЕДЕЛЕНИЕ) ====== */
 :root.theme-dark {
   /* ОСНОВНЫЕ ФОНЫ */
-  --color-bg: #0f1115;
+  --color-bg: var(--tg-chrome-bg, #0f1115);
   --app-bg: var(--color-bg);
-  --color-bg-primary: #0f1115;
+  --color-bg-primary: var(--tg-chrome-bg, #0f1115);
   
   /* ТЕКСТ */
   --color-text: #ffffff;
