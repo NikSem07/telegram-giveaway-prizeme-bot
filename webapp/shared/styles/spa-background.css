@@ -10,8 +10,8 @@
 /* iOS rubber-band показывает фон html, поэтому задаём фон на обоих */
 html,
 body {
-  background: var(--app-bg);
-  background-color: var(--app-bg);
+  background: var(--app-bg, var(--color-bg));
+  background-color: var(--app-bg, var(--color-bg));
   min-height: 100%;
 }
 

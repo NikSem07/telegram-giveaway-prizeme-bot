@@ -8,6 +8,38 @@ import { loadGiveawaysLists } from './pages/participant/home/home.js';
 
 console.log('[HOME] Script loaded');
 
+function syncTelegramChromeCssVars() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return;
+
+  const tp = tg.themeParams || {};
+  const scheme = tg.colorScheme; // 'dark' | 'light'
+
+  // Telegram "official" background for webapp
+  const tpBg = (tp.bg_color || '').trim();
+  const tpSecondary = (tp.secondary_bg_color || '').trim();
+
+  // Enterprise rule:
+  // - dark: aim for chrome-like black; if Telegram gives non-black bg, use #000 fallback
+  // - light: keep as Telegram secondary bg if available (обычно тот самый системный светло-серый)
+  let chromeBg = '';
+
+  if (scheme === 'dark') {
+    chromeBg = tpBg || '#000000';
+    // Если Telegram отдаёт серый (например #0f1115), а тебе нужен chrome-black — принудительно #000
+    // (иначе overscroll всегда будет контрастировать с верх/низ chrome)
+    chromeBg = '#000000';
+  } else {
+    chromeBg = tpSecondary || tpBg || '#EFEEF4';
+  }
+
+  document.documentElement.style.setProperty('--tg-chrome-bg', chromeBg);
+}
+
+// Apply ASAP (before first paint)
+try { syncTelegramChromeCssVars(); } catch (e) {}
+
+
 function detectInitialThemeClass() {
   const tg = window.Telegram?.WebApp;
   if (tg?.colorScheme === 'dark') return 'theme-dark';
@@ -158,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tg.onEvent) {
             tg.onEvent('themeChanged', () => {
+            try { syncTelegramChromeCssVars(); } catch (e) {}
             const newIsDark = tg.colorScheme === 'dark';
             const newThemeClass = newIsDark ? 'theme-dark' : 'theme-light';
 
