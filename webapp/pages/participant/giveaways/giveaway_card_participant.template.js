@@ -35,7 +35,7 @@ export default function giveawayCardParticipantTemplate() {
         <div class="pgc-tickets-list" id="pgc-tickets-list"></div>
       </div>
 
-      <!-- Bottom content frame - теперь без кнопки -->
+      <!-- Bottom content frame с кнопкой внутри -->
       <div class="pgc-frame">
         <!-- Media + title -->
         <div class="pgc-media-block">
@@ -55,12 +55,12 @@ export default function giveawayCardParticipantTemplate() {
           <div class="pgc-channels-title">Подключенные каналы / группы к розыгрышу</div>
           <div class="pgc-channels-list" id="pgc-channels"></div>
         </div>
-      </div>
 
-      <!-- Кнопка отдельно - класс big_bottom сохраняется полностью -->
-      <button class="big_bottom" type="button" id="pgc-open">
-        Перейти к розыгрышу
-      </button>
+        <!-- Button внутри как было -->
+        <button class="big_bottom" type="button" id="pgc-open">
+          Перейти к розыгрышу
+        </button>
+      </div>
     </section>
   `;
 }

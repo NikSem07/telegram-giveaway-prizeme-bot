@@ -257,36 +257,6 @@ function renderChannels(container, channels) {
   }).join('');
 }
 
-function hideEmptyBlocks() {
-  // Скрываем заголовок каналов, если нет каналов
-  const channelsList = document.getElementById('pgc-channels');
-  if (channelsList && channelsList.children.length === 0) {
-    const channelsBlock = document.querySelector('.pgc-channels');
-    if (channelsBlock) {
-      channelsBlock.style.display = 'none';
-    }
-  }
-  
-  // Скрываем медиа-блок, если нет медиа
-  const mediaEl = document.getElementById('pgc-media');
-  if (mediaEl && mediaEl.children.length === 0) {
-    const mediaBlock = document.querySelector('.pgc-media-block');
-    if (mediaBlock) {
-      mediaBlock.style.display = 'none';
-    }
-  }
-  
-  // Скрываем описание, если оно пустое
-  const descEl = document.getElementById('pgc-description');
-  if (descEl && (!descEl.textContent || descEl.textContent === '—' || descEl.textContent.trim() === '')) {
-    const descBlock = document.querySelector('.pgc-desc');
-    if (descBlock) {
-      descBlock.style.display = 'none';
-    }
-  }
-}
-
-
 function openGiveawayPost(data) {
   // 1) приоритет: data.post_url
   // 2) fallback: channels[0].post_url
@@ -460,8 +430,6 @@ function renderGiveawayCardParticipantPage() {
 
         // channels
         renderChannels(channelsEl, data.channels);
-
-        hideEmptyBlocks();
 
         // countdown OR finished date
         if (stopCountdown) stopCountdown();
