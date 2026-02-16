@@ -3,6 +3,7 @@ import giveawayCardParticipantTemplate from './giveaway_card_participant.templat
 import Router from '../../../shared/router.js';
 
 const STORAGE_TAB_KEY = 'prizeme_participant_giveaways_tab';
+let iosTouchMoveHandler = null;
 
 function backToGiveaways() {
   // вернуть UI Telegram в исходное состояние
@@ -10,6 +11,12 @@ function backToGiveaways() {
   if (tg?.BackButton) {
     try { tg.BackButton.offClick(backToGiveaways); } catch (e) {}
     tg.BackButton.hide();
+  }
+
+  // ВАЖНО: снимаем iOS touchmove-guard, иначе он ломает scroll на следующем экране
+  if (iosTouchMoveHandler) {
+    try { document.removeEventListener('touchmove', iosTouchMoveHandler); } catch (e) {}
+    iosTouchMoveHandler = null;
   }
 
   document.documentElement.classList.remove('pgc-finished-win', 'pgc-finished-lose');
@@ -290,16 +297,19 @@ function renderGiveawayCardParticipantPage() {
   // Минимальный защитный слой для iOS (без сложной логики)
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
     try {
-      // Только предотвращаем всплытие touchmove на document
-      document.addEventListener('touchmove', (e) => {
-        // Если событие идет не от pgc-screen или его детей с скроллом - игнорируем
+      // снимаем старый, если вдруг остался (SPA)
+      if (iosTouchMoveHandler) {
+        try { document.removeEventListener('touchmove', iosTouchMoveHandler); } catch (e) {}
+        iosTouchMoveHandler = null;
+      }
+
+      iosTouchMoveHandler = (e) => {
         const target = e.target;
-        const isInScrollableArea = target.closest('.pgc-screen');
-        
-        if (!isInScrollableArea) {
-          e.preventDefault();
-        }
-      }, { passive: false });
+        const isInScrollableArea = target?.closest?.('.pgc-screen');
+        if (!isInScrollableArea) e.preventDefault();
+      };
+
+      document.addEventListener('touchmove', iosTouchMoveHandler, { passive: false });
       
       console.log('[iOS] Minimal scroll protection active');
     } catch (e) {

@@ -207,15 +207,17 @@ function renderGiveawaysPage() {
   const context = { timestamp: new Date().toISOString() };
   main.innerHTML = giveawaysTemplate(context);
 
+  // Всегда возвращаем список в начало при заходе на экран
+  sessionStorage.setItem(STORAGE_SCROLL_KEY, '0');
+  window.scrollTo(0, 0);
+
   bindTabs();
   bindScrollSaver();
 
   const savedTab = localStorage.getItem(STORAGE_TAB_KEY);
   const initialTab = TAB_TO_API_STATUS[savedTab] ? savedTab : 'active';
 
-  loadTab(initialTab).then(() => {
-    restoreScroll();
-  });
+  loadTab(initialTab);
 }
 
 export { renderGiveawaysPage };

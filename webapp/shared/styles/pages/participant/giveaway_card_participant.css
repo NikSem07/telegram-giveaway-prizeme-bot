@@ -219,87 +219,6 @@ body.page-participant-giveaway-card .pgc-screen {
   padding-left: 0 !important;
 }
 
-.pgc-top-title-wrap {
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.pgc-title {
-  width: 100%;
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-weight: 600;
-  color: #ffffff;
-  font-size: 18px;
-  line-height: 18px;
-  text-align: left;
-  margin-bottom: 8px;
-}
-
-.pgc-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  row-gap: 8px;     /* важно: чтобы нижний бейдж не налезал */
-  align-items: flex-start;
-}
-
-.pgc-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
-  padding: 8px 10px;
-  min-height: 32px;
-  background-color: var(--pgc-blue-chip);
-
-  border-radius: 999px;   /* максимальное скругление */
-  box-sizing: border-box;
-
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.pgc-badge-text {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-weight: 400;
-  color: #ffffff;
-  font-size: 14px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-/* Tickets block */
-.pgc-tickets {
-  margin-top: 14px;
-  width: 100%;
-  padding: 0 16px;  /* добавляем отступы для билетов, чтобы не прилипали к краям */
-  box-sizing: border-box;
-}
-
-.pgc-text-10 {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-weight: 400;
-  color: #ffffff;
-  font-size: 10px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.pgc-tickets-title {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0;
-  margin-bottom: 8px;
-}
-
-.pgc-tickets-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
 /* ticket chip */
 .pgc-ticket-pill {
   display: inline-flex;
@@ -320,6 +239,7 @@ body.page-participant-giveaway-card .pgc-screen {
 /* Bottom frame */
 .pgc-frame {
   margin-top: 18px;
+  margin-bottom: 12px;
   margin-left: 0;
   margin-right: 0;
   
@@ -338,8 +258,8 @@ body.page-participant-giveaway-card .pgc-screen {
   padding: 18px 16px 18px;
   
   /* Растягиваем серый блок на всю оставшуюся высоту */
-  flex: 1 0 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: auto;
   
   box-sizing: border-box;
   
@@ -359,10 +279,13 @@ body.page-participant-giveaway-card .pgc-screen {
   outline: none;
 }
 
-/* CTA под серым блоком (кнопка вынесена из .pgc-frame) */
+/* CTA под серым блоком */
 .page-participant-giveaway-card .pgc-cta {
   width: 100%;
   box-sizing: border-box;
+
+  /* ВАЖНО: фон под кнопкой = основной цвет (blue/green/red), чтобы не было чёрной полосы */
+  background: var(--pgc-gradient-top);
 
   padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
@@ -693,3 +616,4 @@ body.page-participant-giveaway-card {
   background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
   white-space: nowrap;
 }
+
