@@ -1,6 +1,6 @@
 /* webapp/shared/styles/pages/participant/giveaway_card_participant.css */
 
-/* Figma variables (локально для экрана) */
+/* Variables (локально для экрана) */
 .page-participant-giveaway-card {
   --pgc-blue: rgba(21, 81, 229, 1);     /* --back-big-shape */
   --pgc-blue-chip: #4379ff;            /* badges/tickets */
@@ -27,16 +27,19 @@ body.page-participant-giveaway-card {
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  min-height: 100% !important;
-  height: auto !important;
-  
-  /* ВАЖНО: включаем скролл для всей страницы */
+  /* ВАЖНО: Разрешаем скролл на уровне документа */
   overflow-y: auto !important;
   overflow-x: hidden !important;
   
-  /* Умный overscroll - запрещаем pull-to-refresh, но разрешаем скролл */
-  overscroll-behavior-y: contain !important;
+  /* Запрещаем overscroll (пустоту за пределами контента) */
+  overscroll-behavior-y: none !important;
+  
+  /* Плавный скролл на iOS */
   -webkit-overflow-scrolling: touch !important;
+  
+  /* Минимальная высота - по контенту */
+  min-height: 100% !important;
+  height: auto !important;
 }
 
 /* ТОЛЬКО карточка: body не скроллится, скроллится внутренний экран */
@@ -48,7 +51,11 @@ body.page-participant-giveaway-card {
 
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
+  
+  /* ВАЖНО: высота по контенту, а не фиксированная */
+  height: auto;
   min-height: 100vh;
+  
   padding: 0;
   margin: 0;
   box-sizing: border-box;
@@ -56,7 +63,7 @@ body.page-participant-giveaway-card .pgc-screen {
   display: flex;
   flex-direction: column;
   
-  /* Убираем внутренний скролл, так как скролл теперь на body */
+  /* НЕ ограничиваем скролл на этом уровне */
   overflow: visible;
 }
 
