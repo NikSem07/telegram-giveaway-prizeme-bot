@@ -20,11 +20,11 @@
 /* Root background ONLY for participant giveaway card */
 html.page-participant-giveaway-card,
 body.page-participant-giveaway-card {
-  /* ГРАДИЕНТ: верхняя часть цветная, нижняя всегда серый */
   background: linear-gradient(
     to bottom,
     var(--pgc-gradient-top) 0%,
-    var(--pgc-gradient-top) 45%,
+    var(--pgc-gradient-top) var(--pgc-gradient-stop),
+    var(--pgc-gradient-bottom) var(--pgc-gradient-stop),
     var(--pgc-gradient-bottom) 100%
   ) !important;
 
@@ -332,10 +332,10 @@ body.page-participant-giveaway-card .pgc-screen {
   margin-right: 0;
   
   background: rgba(28, 28, 28, 1);
-  border-radius: 20px 20px 0 0;
-  
-  /* Внутренние отступы для контента внутри серого блока */
-  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  border-radius: 20px;
+
+  /* Серый блок заканчивается на последнем канале + аккуратный отступ */
+  padding: 18px 16px 18px;
   
   /* Растягиваем серый блок на всю оставшуюся высоту */
   flex: 1 0 auto;
@@ -357,6 +357,18 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Убираем любые просветы */
   border: none;
   outline: none;
+}
+
+/* CTA под серым блоком (кнопка вынесена из .pgc-frame) */
+.page-participant-giveaway-card .pgc-cta {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.page-participant-giveaway-card .pgc-cta .big_bottom {
+  width: 100%;
 }
 
 /* Гарантируем, что внутренности тоже растягиваются */

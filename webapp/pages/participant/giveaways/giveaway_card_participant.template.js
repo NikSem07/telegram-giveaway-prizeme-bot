@@ -56,7 +56,10 @@ export default function giveawayCardParticipantTemplate() {
           <div class="pgc-channels-list" id="pgc-channels"></div>
         </div>
 
-        <!-- Button внутри как было -->
+      </div>
+
+      <!-- CTA: кнопка вынесена ИЗ серого блока -->
+      <div class="pgc-cta">
         <button class="big_bottom" type="button" id="pgc-open">
           Перейти к розыгрышу
         </button>
