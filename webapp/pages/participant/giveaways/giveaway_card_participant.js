@@ -287,54 +287,24 @@ function renderGiveawayCardParticipantPage() {
     behavior: 'auto'
   });
 
-  // Жестко блокируем любой overscroll через JavaScript
-  try {
-    // Предотвращаем touch-события, которые могут вызвать overscroll
-    const preventOverscroll = (e) => {
-      const target = e.target;
-      const isAtTop = window.scrollY <= 0;
-      const isAtBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight;
+  // Минимальный защитный слой для iOS (без сложной логики)
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    try {
+      // Только предотвращаем всплытие touchmove на document
+      document.addEventListener('touchmove', (e) => {
+        // Если событие идет не от pgc-screen или его детей с скроллом - игнорируем
+        const target = e.target;
+        const isInScrollableArea = target.closest('.pgc-screen');
+        
+        if (!isInScrollableArea) {
+          e.preventDefault();
+        }
+      }, { passive: false });
       
-      // Если мы на верху и пытаемся тянуть вниз - блокируем
-      if (isAtTop && e.deltaY < 0) {
-        e.preventDefault();
-      }
-      
-      // Если мы внизу и пытаемся тянуть вверх - блокируем
-      if (isAtBottom && e.deltaY > 0) {
-        e.preventDefault();
-      }
-    };
-
-    // Для колесика мыши
-    window.addEventListener('wheel', preventOverscroll, { passive: false });
-    
-    // Для touch-событий
-    let startY = 0;
-    window.addEventListener('touchstart', (e) => {
-      startY = e.touches[0].clientY;
-    }, { passive: true });
-    
-    window.addEventListener('touchmove', (e) => {
-      const currentY = e.touches[0].clientY;
-      const deltaY = currentY - startY;
-      const isAtTop = window.scrollY <= 0;
-      const isAtBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight;
-      
-      // Если мы на верху и тянем вниз - блокируем
-      if (isAtTop && deltaY > 0) {
-        e.preventDefault();
-      }
-      
-      // Если мы внизу и тянем вверх - блокируем
-      if (isAtBottom && deltaY < 0) {
-        e.preventDefault();
-      }
-    }, { passive: false });
-    
-    console.log('[SCROLL] Overscroll protection enabled');
-  } catch (e) {
-    console.warn('[SCROLL] Failed to setup protection', e);
+      console.log('[iOS] Minimal scroll protection active');
+    } catch (e) {
+      console.warn('[iOS] Failed to setup minimal protection', e);
+    }
   }
 
   // Принудительно устанавливаем Telegram API для блокировки свайпов
