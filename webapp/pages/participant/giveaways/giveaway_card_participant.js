@@ -287,6 +287,22 @@ function renderGiveawayCardParticipantPage() {
     behavior: 'auto'
   });
 
+  // Добавляем обработчик для блокировки навигационных жестов вниз
+  try {
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      // Отключаем вертикальные свайпы (чтобы нельзя было закрыть мини-апп свайпом вниз)
+      if (tg.disableVerticalSwipes) {
+        tg.disableVerticalSwipes();
+      }
+      
+      // Но разрешаем pull-to-refresh (overscroll вверх)
+      // Это делается через CSS, не через Telegram API
+    }
+  } catch (e) {
+    console.warn('[TG] swipe config failed', e);
+  }
+
   main.innerHTML = giveawayCardParticipantTemplate();
   ensureOnlyThisBodyClass();
   showTelegramBackButton();

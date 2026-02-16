@@ -32,14 +32,14 @@ body.page-participant-giveaway-card {
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  /* Разрешаем скролл на уровне документа */
+  /* Разрешаем скролл */
   overflow-y: auto !important;
   overflow-x: hidden !important;
   
-  /* Запрещаем overscroll */
-  overscroll-behavior-y: none !important;
+  /* ВАЖНО: разрешаем overscroll только вверх, запрещаем вниз */
+  overscroll-behavior-y: contain !important;  /* contain разрешает pull-to-refresh сверху, но блокирует навигацию жестами */
   
-  /* Плавный скролл на iOS */
+  /* Для iOS дополнительно настраиваем */
   -webkit-overflow-scrolling: touch !important;
   
   /* Минимальная высота - весь экран */
@@ -49,6 +49,32 @@ body.page-participant-giveaway-card {
   /* Убираем любые артефакты */
   margin: 0 !important;
   padding: 0 !important;
+}
+
+/* Для iOS добавляем дополнительную защиту */
+@supports (-webkit-overflow-scrolling: touch) {
+  html.page-participant-giveaway-card,
+  body.page-participant-giveaway-card {
+    /* Это позволяет "резиновый" эффект сверху, но блокирует навигацию */
+    overscroll-behavior-y: auto !important;  /* auto на iOS работает иначе */
+  }
+  
+  /* Запрещаем жест "назад" свайпом */
+  html.page-participant-giveaway-card {
+    /* Предотвращаем свайп-навигацию в браузере */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  body.page-participant-giveaway-card {
+    height: 100%;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    position: relative;
+    width: 100%;
+  }
 }
 
 /* Для finished состояний гарантируем правильные цвета */
@@ -104,12 +130,61 @@ body.page-participant-giveaway-card .pgc-screen {
   overflow: visible;
 }
 
-/* Top block */
-.pgc-top {
-  margin-top: 0;
-  padding: 48px 0 0 0;  /* убираем горизонтальные padding, оставляем только сверху */
+/* Отступы для верхней части */
+.page-participant-giveaway-card .pgc-top {
+  padding: 48px 16px 0 16px !important;  /* добавляем горизонтальные отступы */
   width: 100%;
   box-sizing: border-box;
+}
+
+.page-participant-giveaway-card .pgc-title {
+  width: 100%;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 18px;
+  text-align: left;
+  margin-bottom: 8px;
+  padding-left: 0;  /* убираем внутренний padding, оставляем внешний от родителя */
+}
+
+.page-participant-giveaway-card .pgc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 8px;
+  align-items: flex-start;
+  padding-left: 0;  /* убираем внутренний padding */
+}
+
+.page-participant-giveaway-card .pgc-tickets {
+  margin-top: 14px;
+  width: 100%;
+  padding: 0 16px !important;  /* гарантируем отступы */
+  box-sizing: border-box;
+}
+
+.page-participant-giveaway-card .pgc-tickets-title {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.page-participant-giveaway-card .pgc-tickets-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 0;
+}
+
+/* Убеждаемся, что внутренние элементы не добавляют лишних отступов */
+.page-participant-giveaway-card .pgc-top > *,
+.page-participant-giveaway-card .pgc-tickets > * {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 /* ВАЖНО: .pgc-top НЕ паддим, иначе получается двойной отступ (wrap + pgc-top) */
@@ -117,17 +192,6 @@ body.page-participant-giveaway-card .pgc-screen {
   padding-left: 16px;
   padding-right: 16px;
   box-sizing: border-box;
-}
-
-.pgc-top {
-  padding-left: 0;
-  padding-right: 0;
-  box-sizing: border-box;
-}
-
-/* FIX: убираем второй слой отступов внутри синего блока */
-.pgc-top > * {
-  margin-left: 0 !important;
 }
 
 .pgc-top .pgc-container,
