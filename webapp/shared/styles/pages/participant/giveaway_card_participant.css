@@ -32,19 +32,18 @@ body.page-participant-giveaway-card {
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  /* ВАЖНО: Полностью отключаем overscroll */
-  overscroll-behavior: none !important;  /* none = никакого overscroll вообще */
-  -webkit-overflow-scrolling: touch !important; /* но оставляем плавный скролл */
+  /* Overscroll - мягкое отключение */
+  overscroll-behavior: none !important;
   
   /* Минимальная высота - весь экран */
   min-height: 100vh !important;
-  height: 100vh !important;
+  height: auto !important; /* меняем с 100vh на auto */
   
   /* Убираем любые артефакты */
   margin: 0 !important;
   padding: 0 !important;
   
-  /* Оставляем скролл, но без эффекта "резинки" */
+  /* Оставляем скролл */
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
@@ -53,53 +52,36 @@ body.page-participant-giveaway-card {
 @supports (-webkit-overflow-scrolling: touch) {
   html.page-participant-giveaway-card,
   body.page-participant-giveaway-card {
-    /* iOS требует особого подхода */
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    /* Убираем fixed позиционирование */
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
     width: 100%;
-    height: 100%;
-    overflow: hidden;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
   
   body.page-participant-giveaway-card {
-    /* Убираем скролл с body, переносим на внутренний контейнер */
-    overflow: hidden !important;
-    -webkit-overflow-scrolling: auto !important;
-    position: fixed;
-  }
-  
-  /* Переносим скролл на pgc-screen */
-  body.page-participant-giveaway-card .pgc-screen {
-    height: 100%;
+    /* Возвращаем нормальный скролл */
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    
-    /* Отключаем резиновый эффект на контейнере */
-    overscroll-behavior: none !important;
-    
-    /* Предотвращаем bounce */
-    scroll-snap-type: none !important;
-    
-    /* Важно: контент не должен выходить за границы */
-    -webkit-overflow-scrolling: touch !important;
+    position: relative;
+    height: auto;
+    min-height: 100vh;
   }
   
-  /* Защита от скролла на дочерних элементах */
-  body.page-participant-giveaway-card .pgc-screen > * {
-    overscroll-behavior: none !important;
-  }
-  
-  /* Дополнительная защита для предотвращения bounce */
-  body.page-participant-giveaway-card::before,
-  body.page-participant-giveaway-card::after,
-  body.page-participant-giveaway-card .pgc-screen::before,
-  body.page-participant-giveaway-card .pgc-screen::after {
-    display: none !important;
+  /* Убираем лишние ограничения с pgc-screen */
+  body.page-participant-giveaway-card .pgc-screen {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible !important;
+    -webkit-overflow-scrolling: auto !important;
   }
 }
+
 
 /* finished win — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-win,
@@ -413,14 +395,7 @@ body.page-participant-giveaway-card .pgc-screen {
   display: flex;
   flex-direction: column;
   flex: 1 0 auto;
-  overflow: visible;
-  
-  /* Важно для iOS */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  
-  /* Добавляем сглаживание скролла для всех платформ */
-  scroll-behavior: smooth;
+  overflow: visible; /* важно: visible, а не hidden/auto */
 }
 
 /* Для iOS переопределим */
