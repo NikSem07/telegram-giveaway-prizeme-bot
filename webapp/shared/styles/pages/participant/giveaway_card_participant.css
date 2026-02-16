@@ -24,7 +24,7 @@ body.page-participant-giveaway-card {
   background: linear-gradient(
     to bottom,
     var(--pgc-gradient-top) 0%,
-    var(--pgc-gradient-top) var(--pgc-gradient-stop),
+    var(--pgc-gradient-top) 45%,
     var(--pgc-gradient-bottom) 100%
   ) !important;
 
@@ -45,9 +45,13 @@ body.page-participant-giveaway-card {
   /* Минимальная высота - весь экран */
   min-height: 100vh !important;
   height: 100vh !important;
+  
+  /* Убираем любые артефакты */
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-/* finished win — переопределяем переменные градиента */
+/* Для finished состояний гарантируем правильные цвета */
 html.page-participant-giveaway-card.pgc-finished-win,
 body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-blue: #024B42 !important;
@@ -56,7 +60,6 @@ body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-gradient-bottom: #1c1c1c !important;
 }
 
-/* finished lose — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-lose,
 body.page-participant-giveaway-card.pgc-finished-lose {
   --pgc-blue: #570C07 !important;
@@ -249,13 +252,13 @@ body.page-participant-giveaway-card .pgc-screen {
   margin-left: 0;
   margin-right: 0;
   
-  /* Хак для полной ширины, игнорирующей родительские padding */
-  width: 100vw;
+  /* ВАЖНО: Убираем хак с шириной, используем нормальный поток */
+  width: 100%;
   position: relative;
-  left: 50%;
-  right: 50%;
-  margin-left: -50vw;
-  margin-right: -50vw;
+  left: auto;
+  right: auto;
+  margin-left: 0;
+  margin-right: 0;
   
   background: rgba(28, 28, 28, 1);
   border-radius: 20px 20px 0 0;
@@ -263,15 +266,26 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Внутренние отступы для контента внутри серого блока */
   padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
   
-  /* КЛЮЧЕВОЕ: растягиваем серый блок на всю оставшуюся высоту */
+  /* Растягиваем серый блок на всю оставшуюся высоту */
   flex: 1 0 auto;
-  min-height: 0; /* Важно для правильной работы flex внутри flex-контейнера */
+  min-height: 0;
   
   box-sizing: border-box;
   
   display: flex;
   flex-direction: column;
   gap: 12px;
+  
+  /* Добавляем тень для плавного перехода */
+  box-shadow: 0 -2px 0 rgba(0, 0, 0, 0.05);
+  
+  /* Гарантируем, что фон полностью покрывает область */
+  background-clip: padding-box;
+  -webkit-background-clip: padding-box;
+  
+  /* Убираем любые просветы */
+  border: none;
+  outline: none;
 }
 
 /* Гарантируем, что внутренности тоже растягиваются */
@@ -287,6 +301,42 @@ body.page-participant-giveaway-card .pgc-screen {
 /* Добавляем небольшой отступ снизу для контента внутри серого блока */
 .pgc-frame > *:not(:last-child) {
   flex-shrink: 0;
+}
+
+/* Убираем возможные зазоры у родительского контейнера */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+}
+
+/* Гарантируем, что pgc-screen занимает всю ширину без зазоров */
+.page-participant-giveaway-card .pgc-screen {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Защитный слой для гарантии отсутствия зазоров */
+.pgc-background-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Убеждаемся, что pgc-screen имеет правильный контекст наложения */
+.pgc-screen {
+  position: relative;
+  z-index: 1;
 }
 
 /* Media + title group (как .div в figma) */

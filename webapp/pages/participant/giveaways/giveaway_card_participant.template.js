@@ -2,7 +2,9 @@
 export default function giveawayCardParticipantTemplate() {
   return `
     <section class="pgc-screen">
-
+      <!-- Защитный слой для гарантии отсутствия зазоров -->
+      <div class="pgc-background-layer"></div>
+      
       <!-- TOP: title + badges -->
       <div class="pgc-top">
         <div class="pgc-top-title-wrap">
@@ -62,4 +64,3 @@ export default function giveawayCardParticipantTemplate() {
     </section>
   `;
 }
-
