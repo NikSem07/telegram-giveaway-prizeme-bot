@@ -20,7 +20,6 @@
 /* Root background ONLY for participant giveaway card */
 html.page-participant-giveaway-card,
 body.page-participant-giveaway-card {
-  /* ЧИСТЫЙ цвет сверху + резкий переход в серый снизу (без серого градиента в цветной зоне) */
   background: linear-gradient(
     to bottom,
     var(--pgc-gradient-top) 0%,
@@ -29,8 +28,7 @@ body.page-participant-giveaway-card {
     var(--pgc-gradient-bottom) 100%
   ) !important;
 
-  /* ВАЖНО: нижняя “подкнопочная” зона должна быть серой, не чёрной */
-  background-color: var(--pgc-gradient-bottom) !important;
+  background-color: var(--pgc-gradient-top) !important;
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
@@ -694,22 +692,4 @@ body.page-participant-giveaway-card {
 
   background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
   white-space: nowrap;
-}
-
-/* Зона под серым блоком (между блоком и фиксированной/нижней кнопкой) всегда серого цвета */
-.page-participant-giveaway-card .pgc-screen {
-  background: var(--pgc-gradient-bottom);
-}
-
-/* CTA контейнер под серым блоком тоже серый, чтобы не было “чёрной полосы” */
-.page-participant-giveaway-card .pgc-cta {
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--pgc-gradient-bottom);
-
-  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
-}
-
-.page-participant-giveaway-card .pgc-cta .big_bottom {
-  width: 100%;
 }
