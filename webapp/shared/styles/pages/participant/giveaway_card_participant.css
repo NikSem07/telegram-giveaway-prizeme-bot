@@ -45,9 +45,11 @@ body.page-participant-giveaway-card {
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
   
-  /* ВАЖНО: высота по контенту, а не фиксированная */
-  height: auto;
+  /* Минимальная высота - весь экран */
   min-height: 100vh;
+  
+  /* Высота по контенту, но не меньше экрана */
+  height: auto;
   
   padding: 0;
   margin: 0;
@@ -222,8 +224,9 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Внутренние отступы для контента внутри серого блока */
   padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
   
-  flex: 1;
-  min-height: 0;
+  /* ВАЖНО: растягиваем серый блок на всю оставшуюся высоту */
+  flex: 1 0 auto;
+  
   box-sizing: border-box;
   
   display: flex;

@@ -258,7 +258,7 @@ function renderGiveawayCardParticipantPage() {
   // Прокручиваем окно в самый верх перед рендерингом карточки
   window.scrollTo({
     top: 0,
-    behavior: 'auto' // Мгновенно, без анимации
+    behavior: 'auto'
   });
 
   main.innerHTML = giveawayCardParticipantTemplate();
@@ -272,24 +272,38 @@ function renderGiveawayCardParticipantPage() {
 
   try {
     const tg = window.Telegram?.WebApp;
-
-    // Берём текущий основной цвет карточки из CSS-переменной (active=синий, finished=переопределится)
-    const top = getComputedStyle(document.documentElement)
+    
+    // Берём текущий основной цвет карточки из CSS-переменной
+    const topColor = getComputedStyle(document.documentElement)
       .getPropertyValue('--pgc-blue')
       .trim() || '#1551e5';
-
-    const bottom = getComputedStyle(document.documentElement)
+    
+    // Цвет нижней части (серый блок)
+    const bottomColor = getComputedStyle(document.documentElement)
       .getPropertyValue('--pgc-bottom')
       .trim() || '#1c1c1c';
 
-    if (tg?.setHeaderColor) tg.setHeaderColor(top);
-
-    // Важно: backgroundColor задаём "верхним" цветом — тогда overscroll сверху совпадает с карточкой
-    if (tg?.setBackgroundColor) tg.setBackgroundColor(top);
-
-    // А низ (нижняя панель/ощущение нижнего chrome) — серым, как у зоны 1
-    if (tg?.setBottomBarColor) tg.setBottomBarColor(bottom);
-  } catch (e) {}
+    if (tg) {
+      // 1. Header color (верхняя полоса Telegram) - цвет верхней части карточки
+      if (tg.setHeaderColor) {
+        tg.setHeaderColor(topColor);
+      }
+      
+      // 2. Background color (фон при overscroll сверху) - тоже цвет верхней части
+      // Это уберет черную полосу при скролле вверх за пределы контента
+      if (tg.setBackgroundColor) {
+        tg.setBackgroundColor(topColor);
+      }
+      
+      // 3. Bottom bar color (нижняя полоса Telegram) - цвет нижней части (серый)
+      // Это уберет черную полосу при скролле вниз за пределы контента
+      if (tg.setBottomBarColor) {
+        tg.setBottomBarColor(bottomColor);
+      }
+    }
+  } catch (e) {
+    console.warn('[TG] color sync failed', e);
+  }
 
   const giveawayId = sessionStorage.getItem('prizeme_participant_giveaway_id');
   if (!giveawayId) return;
