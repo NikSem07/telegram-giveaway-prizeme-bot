@@ -15,19 +15,19 @@
 /* Root background ONLY for participant giveaway card */
 html.page-participant-giveaway-card,
 body.page-participant-giveaway-card {
-  /* верх = цвет карточки (active/finished), низ = серый как зона 1 */
+  /* Динамический градиент: верхняя часть цветная, нижняя всегда серый */
   background: linear-gradient(
     to bottom,
     var(--pgc-blue) 0%,
-    var(--pgc-blue) 50%,
-    #1c1c1c 100%
+    var(--pgc-blue) 35%,
+    var(--pgc-bottom) 100%
   ) !important;
 
   background-color: var(--pgc-blue) !important;
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  /* ВАЖНО: Разрешаем скролл на уровне документа */
+  /* Разрешаем скролл на уровне документа */
   overflow-y: auto !important;
   overflow-x: hidden !important;
   
@@ -37,19 +37,18 @@ body.page-participant-giveaway-card {
   /* Плавный скролл на iOS */
   -webkit-overflow-scrolling: touch !important;
   
-  /* Минимальная высота - по контенту */
-  min-height: 100% !important;
-  height: auto !important;
+  /* Минимальная высота - весь экран */
+  min-height: 100vh !important;
+  height: 100vh !important;
 }
+
 
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
   
-  /* Минимальная высота - весь экран */
+  /* Занимаем всю высоту родителя */
   min-height: 100vh;
-  
-  /* Высота по контенту, но не меньше экрана */
-  height: auto;
+  height: 100%;
   
   padding: 0;
   margin: 0;
@@ -58,7 +57,9 @@ body.page-participant-giveaway-card .pgc-screen {
   display: flex;
   flex-direction: column;
   
-  /* НЕ ограничиваем скролл на этом уровне */
+  /* Растягиваемся на всю доступную высоту */
+  flex: 1 0 auto;
+  
   overflow: visible;
 }
 
@@ -224,14 +225,30 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Внутренние отступы для контента внутри серого блока */
   padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
   
-  /* ВАЖНО: растягиваем серый блок на всю оставшуюся высоту */
+  /* КЛЮЧЕВОЕ: растягиваем серый блок на всю оставшуюся высоту */
   flex: 1 0 auto;
+  min-height: 0; /* Важно для правильной работы flex внутри flex-контейнера */
   
   box-sizing: border-box;
   
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Гарантируем, что внутренности тоже растягиваются */
+.pgc-frame > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Растягиваем последний элемент, если нужно */
+.pgc-frame {
+  justify-content: flex-start;
+}
+
+/* Добавляем небольшой отступ снизу для контента внутри серого блока */
+.pgc-frame > *:not(:last-child) {
+  flex-shrink: 0;
 }
 
 /* Media + title group (как .div в figma) */

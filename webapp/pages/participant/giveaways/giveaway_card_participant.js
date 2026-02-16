@@ -270,39 +270,64 @@ function renderGiveawayCardParticipantPage() {
   document.documentElement.classList.remove('pgc-finished-win', 'pgc-finished-lose');
   document.body.classList.remove('pgc-finished-win', 'pgc-finished-lose');
 
+  // Функция для принудительной установки цветов Telegram
+  const forceTelegramColors = () => {
+    try {
+      const tg = window.Telegram?.WebApp;
+      
+      // Берём текущий основной цвет карточки из CSS-переменной
+      const topColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--pgc-blue')
+        .trim() || '#1551e5';
+      
+      // Цвет нижней части (серый блок)
+      const bottomColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--pgc-bottom')
+        .trim() || '#1c1c1c';
+
+      if (tg) {
+        // Принудительно устанавливаем цвета (игнорируем background-manager)
+        if (tg.setHeaderColor) {
+          tg.setHeaderColor(topColor);
+        }
+        
+        if (tg.setBackgroundColor) {
+          tg.setBackgroundColor(topColor);
+        }
+        
+        if (tg.setBottomBarColor) {
+          tg.setBottomBarColor(bottomColor);
+        }
+        
+        console.log('[TG] Colors forced:', { topColor, bottomColor });
+      }
+    } catch (e) {
+      console.warn('[TG] color sync failed', e);
+    }
+  };
+
+  // Применяем цвета немедленно
+  forceTelegramColors();
+
+  // Применяем цвета снова после полной загрузки DOM (обходит background-manager)
+  setTimeout(forceTelegramColors, 50);
+  setTimeout(forceTelegramColors, 150);
+
+  // Подписываемся на изменения темы Telegram, чтобы возвращать наши цвета
   try {
     const tg = window.Telegram?.WebApp;
-    
-    // Берём текущий основной цвет карточки из CSS-переменной
-    const topColor = getComputedStyle(document.documentElement)
-      .getPropertyValue('--pgc-blue')
-      .trim() || '#1551e5';
-    
-    // Цвет нижней части (серый блок)
-    const bottomColor = getComputedStyle(document.documentElement)
-      .getPropertyValue('--pgc-bottom')
-      .trim() || '#1c1c1c';
-
-    if (tg) {
-      // 1. Header color (верхняя полоса Telegram) - цвет верхней части карточки
-      if (tg.setHeaderColor) {
-        tg.setHeaderColor(topColor);
-      }
+    if (tg && tg.onEvent) {
+      // Сохраняем ссылку на старый обработчик, если он был
+      const oldHandler = tg.onEvent;
       
-      // 2. Background color (фон при overscroll сверху) - тоже цвет верхней части
-      // Это уберет черную полосу при скролле вверх за пределы контента
-      if (tg.setBackgroundColor) {
-        tg.setBackgroundColor(topColor);
-      }
-      
-      // 3. Bottom bar color (нижняя полоса Telegram) - цвет нижней части (серый)
-      // Это уберет черную полосу при скролле вниз за пределы контента
-      if (tg.setBottomBarColor) {
-        tg.setBottomBarColor(bottomColor);
-      }
+      // Добавляем свой обработчик
+      tg.onEvent('themeChanged', () => {
+        console.log('[TG] themeChanged detected, reapplying card colors');
+        setTimeout(forceTelegramColors, 10);
+      });
     }
   } catch (e) {
-    console.warn('[TG] color sync failed', e);
+    console.warn('[TG] failed to subscribe to themeChanged', e);
   }
 
   const giveawayId = sessionStorage.getItem('prizeme_participant_giveaway_id');

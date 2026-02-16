@@ -81,3 +81,20 @@ img {
   padding: 20px;
   min-height: calc(100vh - var(--navbar-height));
 }
+
+/* ===== ИСКЛЮЧЕНИЕ ДЛЯ КАРТОЧКИ УЧАСТНИКА ===== */
+/* Отключаем глобальные ограничения высоты для страницы карточки */
+body.page-participant-giveaway-card {
+  min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
+}
+
+body.page-participant-giveaway-card #app,
+body.page-participant-giveaway-card .wrap,
+body.page-participant-giveaway-card #main-content {
+  min-height: 0 !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
