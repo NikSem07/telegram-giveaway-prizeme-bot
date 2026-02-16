@@ -255,6 +255,12 @@ function renderGiveawayCardParticipantPage() {
   const main = document.getElementById('main-content');
   if (!main) return;
 
+  // Прокручиваем окно в самый верх перед рендерингом карточки
+  window.scrollTo({
+    top: 0,
+    behavior: 'auto' // Мгновенно, без анимации
+  });
+
   main.innerHTML = giveawayCardParticipantTemplate();
   ensureOnlyThisBodyClass();
   showTelegramBackButton();

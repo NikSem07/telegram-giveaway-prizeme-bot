@@ -40,15 +40,15 @@ body.page-participant-giveaway-card {
 
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  height: 100vh;                    /* фиксируем высоту под внутренний скролл */
-  overflow-y: auto;                 /* скролл ТОЛЬКО здесь */
+  min-height: 100vh;                 /* Меняем height на min-height */
+  overflow-y: auto;                  /* скролл ТОЛЬКО здесь */
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: none;        /* убираем bounce/overscroll */
+  overscroll-behavior: contain;      /* УБИРАЕМ none, СТАВИМ contain для мягкого контроля */
 
   padding: 0 0 env(safe-area-inset-bottom, 0px) !important;
   box-sizing: border-box;
 
-  display: flex;                    /* нужно чтобы серый блок занял остаток */
+  display: flex;                      /* нужно чтобы серый блок занял остаток */
   flex-direction: column;
 }
 
@@ -195,8 +195,9 @@ body.page-participant-giveaway-card .pgc-screen {
 .pgc-frame {
   margin-top: 18px;
 
-  width: 100vw;                 /* железно на всю ширину экрана */
-  margin-left: calc(50% - 50vw);/* выравниваем относительно вьюпорта */
+  /* Убираем width: 100vw и margin-left, чтобы блок занимал всю ширину родителя */
+  width: 100%;
+  margin-left: 0;
 
   background: rgba(28, 28, 28, 1);
   border-radius: 20px 20px 0 0;
@@ -205,7 +206,7 @@ body.page-participant-giveaway-card .pgc-screen {
 
   flex: 1;
   min-height: 0;
-  box-sizing: border-box;
+  box-sizing: border-box; /* Убеждаемся, что padding учитывается в ширине */
 
   display: flex;
   flex-direction: column;
