@@ -112,21 +112,47 @@ function applyFinishedTheme(isWinner) {
   body.classList.add(cls);
   html.classList.add(cls);
 
-  const top = isWinner ? '#024B42' : '#570C07';
-  const bottom = '#1c1c1c';
-
-  try {
-    const tg = window.Telegram?.WebApp;
-    if (tg?.setHeaderColor) tg.setHeaderColor(top);
-
-    // Важно: фон WebView — верхний цвет карточки (overscroll сверху будет в цвет)
-    if (tg?.setBackgroundColor) tg.setBackgroundColor(top);
-
-    // Нижняя панель — серый как зона 1
-    if (tg?.setBottomBarColor) tg.setBottomBarColor(bottom);
-  } catch (e) {}
+  // Принудительно обновляем цвета Telegram
+  setTimeout(() => forceTelegramColors(), 10);
 }
 
+// Функция для получения актуальных цветов карточки
+function getCardColors() {
+  const html = document.documentElement;
+  const body = document.body;
+  
+  // Определяем базовый цвет в зависимости от класса
+  let topColor = '#1551e5'; // синий по умолчанию
+  let chipColor = '#4379ff';
+  let bottomColor = '#1c1c1c';
+  
+  if (html.classList.contains('pgc-finished-win') || body.classList.contains('pgc-finished-win')) {
+    topColor = '#024B42'; // зеленый для победителя
+    chipColor = 'rgba(120, 255, 210, 0.22)';
+  } else if (html.classList.contains('pgc-finished-lose') || body.classList.contains('pgc-finished-lose')) {
+    topColor = '#570C07'; // красный для проигравшего
+    chipColor = 'rgba(255, 155, 155, 0.18)';
+  }
+  
+  // Получаем цвет из CSS-переменной (приоритет)
+  const cssTopColor = getComputedStyle(html)
+    .getPropertyValue('--pgc-blue')
+    .trim();
+  
+  if (cssTopColor) {
+    topColor = cssTopColor;
+  }
+  
+  const cssBottomColor = getComputedStyle(html)
+    .getPropertyValue('--pgc-bottom')
+    .trim();
+  
+  if (cssBottomColor) {
+    bottomColor = cssBottomColor;
+  }
+  
+  return { topColor, chipColor, bottomColor };
+}
 
 async function loadParticipantGiveawayDetails(giveawayId) {
   const init_data = getInitData();
@@ -274,32 +300,27 @@ function renderGiveawayCardParticipantPage() {
   const forceTelegramColors = () => {
     try {
       const tg = window.Telegram?.WebApp;
+      const colors = getCardColors();
       
-      // Берём текущий основной цвет карточки из CSS-переменной
-      const topColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--pgc-blue')
-        .trim() || '#1551e5';
-      
-      // Цвет нижней части (серый блок)
-      const bottomColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--pgc-bottom')
-        .trim() || '#1c1c1c';
-
       if (tg) {
-        // Принудительно устанавливаем цвета (игнорируем background-manager)
+        console.log('[TG] Applying colors:', colors);
+        
+        // Принудительно устанавливаем цвета
         if (tg.setHeaderColor) {
-          tg.setHeaderColor(topColor);
+          tg.setHeaderColor(colors.topColor);
         }
         
         if (tg.setBackgroundColor) {
-          tg.setBackgroundColor(topColor);
+          tg.setBackgroundColor(colors.topColor);
         }
         
         if (tg.setBottomBarColor) {
-          tg.setBottomBarColor(bottomColor);
+          tg.setBottomBarColor(colors.bottomColor);
         }
         
-        console.log('[TG] Colors forced:', { topColor, bottomColor });
+        // Дополнительно устанавливаем CSS-переменные для градиента
+        document.documentElement.style.setProperty('--pgc-active-top', colors.topColor);
+        document.documentElement.style.setProperty('--pgc-active-bottom', colors.bottomColor);
       }
     } catch (e) {
       console.warn('[TG] color sync failed', e);
@@ -402,15 +423,27 @@ function renderGiveawayCardParticipantPage() {
 
         // Узнаем win/lose и красим
         loadResultsForGid(giveawayId)
-            .then((results) => {
+          .then((results) => {
             const isWinner = !!(results.user && results.user.is_winner);
             winnerBadgeEl.textContent = isWinner ? '🏆 Вы победили' : '🎟️ Вы не победили';
             applyFinishedTheme(isWinner);
-            })
-            .catch(() => {
+            
+            // Обновляем CSS-переменные для градиента
+            const html = document.documentElement;
+            if (isWinner) {
+              html.style.setProperty('--pgc-gradient-top', '#024B42');
+            } else {
+              html.style.setProperty('--pgc-gradient-top', '#570C07');
+            }
+            html.style.setProperty('--pgc-gradient-bottom', '#1c1c1c');
+            
+            // Принудительно применяем цвета Telegram
+            setTimeout(forceTelegramColors, 50);
+          })
+          .catch(() => {
             // фоллбек без падения карточки
             winnerBadgeEl.textContent = '🎟️ Результаты недоступны';
-            });
+          });
 
         } else {
         // ACTIVE (как было)
