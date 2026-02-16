@@ -29,6 +29,14 @@ body.page-participant-giveaway-card {
 
   min-height: 100% !important;
   height: auto !important;
+  
+  /* ВАЖНО: включаем скролл для всей страницы */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  
+  /* Умный overscroll - запрещаем pull-to-refresh, но разрешаем скролл */
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
 /* ТОЛЬКО карточка: body не скроллится, скроллится внутренний экран */
@@ -40,23 +48,24 @@ body.page-participant-giveaway-card {
 
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  min-height: 100vh;                 /* Меняем height на min-height */
-  overflow-y: auto;                  /* скролл ТОЛЬКО здесь */
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;      /* УБИРАЕМ none, СТАВИМ contain для мягкого контроля */
-
-  padding: 0 0 env(safe-area-inset-bottom, 0px) !important;
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
   box-sizing: border-box;
-
-  display: flex;                      /* нужно чтобы серый блок занял остаток */
+  
+  display: flex;
   flex-direction: column;
+  
+  /* Убираем внутренний скролл, так как скролл теперь на body */
+  overflow: visible;
 }
 
 /* Top block */
 .pgc-top {
-  margin-top: 0;          /* было 6px — убираем, чтобы поднять максимально */
-  padding-top: 48px;       /* маленький ровный отступ */
+  margin-top: 0;
+  padding: 48px 0 0 0;  /* убираем горизонтальные padding, оставляем только сверху */
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* ВАЖНО: .pgc-top НЕ паддим, иначе получается двойной отступ (wrap + pgc-top) */
@@ -149,6 +158,8 @@ body.page-participant-giveaway-card .pgc-screen {
 .pgc-tickets {
   margin-top: 14px;
   width: 100%;
+  padding: 0 16px;  /* добавляем отступы для билетов, чтобы не прилипали к краям */
+  box-sizing: border-box;
 }
 
 .pgc-text-10 {
@@ -194,20 +205,27 @@ body.page-participant-giveaway-card .pgc-screen {
 /* Bottom frame */
 .pgc-frame {
   margin-top: 18px;
-
-  /* Убираем width: 100vw и margin-left, чтобы блок занимал всю ширину родителя */
-  width: 100%;
   margin-left: 0;
-
+  margin-right: 0;
+  
+  /* Хак для полной ширины, игнорирующей родительские padding */
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  
   background: rgba(28, 28, 28, 1);
   border-radius: 20px 20px 0 0;
-
+  
+  /* Внутренние отступы для контента внутри серого блока */
   padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
-
+  
   flex: 1;
   min-height: 0;
-  box-sizing: border-box; /* Убеждаемся, что padding учитывается в ширине */
-
+  box-sizing: border-box;
+  
   display: flex;
   flex-direction: column;
   gap: 12px;
