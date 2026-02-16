@@ -20,19 +20,24 @@
 /* Root background ONLY for participant giveaway card */
 html.page-participant-giveaway-card,
 body.page-participant-giveaway-card {
-  /* Убираем градиент, оставляем сплошной цвет */
-  background: var(--pgc-gradient-top) !important;
+  /* ГРАДИЕНТ: верхняя часть цветная, нижняя всегда серый */
+  background: linear-gradient(
+    to bottom,
+    var(--pgc-gradient-top) 0%,
+    var(--pgc-gradient-top) 45%,
+    var(--pgc-gradient-bottom) 100%
+  ) !important;
+
   background-color: var(--pgc-gradient-top) !important;
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  /* ВАЖНО: Полностью отключаем overscroll */
+  /* Overscroll - мягкое отключение */
   overscroll-behavior: none !important;
-  -webkit-overflow-scrolling: touch !important;
   
   /* Минимальная высота - весь экран */
   min-height: 100vh !important;
-  height: auto !important;
+  height: auto !important; /* меняем с 100vh на auto */
   
   /* Убираем любые артефакты */
   margin: 0 !important;
@@ -43,7 +48,42 @@ body.page-participant-giveaway-card {
   overflow-x: hidden !important;
 }
 
-/* finished win — переопределяем переменные */
+/* Специально для iOS */
+@supports (-webkit-overflow-scrolling: touch) {
+  html.page-participant-giveaway-card,
+  body.page-participant-giveaway-card {
+    /* Убираем fixed позиционирование */
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  
+  body.page-participant-giveaway-card {
+    /* Возвращаем нормальный скролл */
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    position: relative;
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  /* Убираем лишние ограничения с pgc-screen */
+  body.page-participant-giveaway-card .pgc-screen {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible !important;
+    -webkit-overflow-scrolling: auto !important;
+  }
+}
+
+
+/* finished win — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-win,
 body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-blue: #024B42 !important;
@@ -52,7 +92,7 @@ body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-gradient-bottom: #1c1c1c !important;
 }
 
-/* finished lose — переопределяем переменные */
+/* finished lose — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-lose,
 body.page-participant-giveaway-card.pgc-finished-lose {
   --pgc-blue: #570C07 !important;
@@ -61,22 +101,45 @@ body.page-participant-giveaway-card.pgc-finished-lose {
   --pgc-gradient-bottom: #1c1c1c !important;
 }
 
+/* Для устройств с большой высотой экрана */
+@media (min-height: 800px) {
+  html.page-participant-giveaway-card,
+  body.page-participant-giveaway-card {
+    --pgc-gradient-stop: 40%; /* чуть меньше цветной зоны */
+  }
+}
+
+/* Для устройств с маленькой высотой */
+@media (max-height: 600px) {
+  html.page-participant-giveaway-card,
+  body.page-participant-giveaway-card {
+    --pgc-gradient-stop: 60%; /* чуть больше цветной зоны */
+  }
+}
+
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
+  
+  /* Занимаем всю высоту родителя */
   min-height: 100vh;
-  height: auto;
+  height: 100%;
+  
   padding: 0;
   margin: 0;
   box-sizing: border-box;
+  
   display: flex;
   flex-direction: column;
+  
+  /* Растягиваемся на всю доступную высоту */
   flex: 1 0 auto;
+  
   overflow: visible;
 }
 
 /* Отступы для верхней части */
 .page-participant-giveaway-card .pgc-top {
-  padding: 48px 16px 0 16px !important;
+  padding: 48px 16px 0 16px !important;  /* добавляем горизонтальные отступы */
   width: 100%;
   box-sizing: border-box;
 }
@@ -90,6 +153,7 @@ body.page-participant-giveaway-card .pgc-screen {
   line-height: 18px;
   text-align: left;
   margin-bottom: 8px;
+  padding-left: 0;  /* убираем внутренний padding, оставляем внешний от родителя */
 }
 
 .page-participant-giveaway-card .pgc-badges {
@@ -98,14 +162,128 @@ body.page-participant-giveaway-card .pgc-screen {
   gap: 8px;
   row-gap: 8px;
   align-items: flex-start;
+  padding-left: 0;  /* убираем внутренний padding */
+}
+
+.page-participant-giveaway-card .pgc-tickets {
+  margin-top: 14px;
+  width: 100%;
+  padding: 0 16px !important;  /* гарантируем отступы */
+  box-sizing: border-box;
+}
+
+.page-participant-giveaway-card .pgc-tickets-title {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.page-participant-giveaway-card .pgc-tickets-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 0;
+}
+
+/* Убеждаемся, что внутренние элементы не добавляют лишних отступов */
+.page-participant-giveaway-card .pgc-top > *,
+.page-participant-giveaway-card .pgc-tickets > * {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* ВАЖНО: .pgc-top НЕ паддим, иначе получается двойной отступ (wrap + pgc-top) */
+.pgc-tickets {
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.pgc-top .pgc-container,
+.pgc-top .pgc-inner,
+.pgc-top .container,
+.pgc-top .content {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.pgc-title,
+.pgc-badges,
+.pgc-tickets-title,
+.pgc-tickets {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+.pgc-top-title-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.pgc-title {
+  width: 100%;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 18px;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.pgc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 8px;     /* важно: чтобы нижний бейдж не налезал */
+  align-items: flex-start;
+}
+
+.pgc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 8px 10px;
+  min-height: 32px;
+  background-color: var(--pgc-blue-chip);
+
+  border-radius: 999px;   /* максимальное скругление */
+  box-sizing: border-box;
+
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pgc-badge-text {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 400;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 /* Tickets block */
 .pgc-tickets {
   margin-top: 14px;
   width: 100%;
-  padding: 0 16px;
+  padding: 0 16px;  /* добавляем отступы для билетов, чтобы не прилипали к краям */
   box-sizing: border-box;
+}
+
+.pgc-text-10 {
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 400;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .pgc-tickets-title {
@@ -122,24 +300,44 @@ body.page-participant-giveaway-card .pgc-screen {
   gap: 4px;
 }
 
-/* Bottom frame - снова с кнопкой внутри (возвращаем как было) */
+/* ticket chip */
+.pgc-ticket-pill {
+  display: inline-flex;
+  align-items: center;
+  height: auto;              /* важно */
+  padding: 8px 8px;          /* главное */
+  background-color: var(--pgc-blue-chip);
+  border-radius: 999px;
+  min-height: 32px;
+  box-sizing: border-box;
+
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* Bottom frame */
 .pgc-frame {
   margin-top: 18px;
   margin-left: 0;
   margin-right: 0;
   
+  /* ВАЖНО: Убираем хак с шириной, используем нормальный поток */
   width: 100%;
   position: relative;
   left: auto;
   right: auto;
+  margin-left: 0;
+  margin-right: 0;
   
   background: rgba(28, 28, 28, 1);
-  border-radius: 20px 20px 20px 20px; /* одинаковые скругления */
+  border-radius: 20px 20px 0 0;
   
-  /* Внутренние отступы для контента */
-  padding: 18px 16px 24px 16px;
+  /* Внутренние отступы для контента внутри серого блока */
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
   
-  /* Растягиваем серый блок */
+  /* Растягиваем серый блок на всю оставшуюся высоту */
   flex: 1 0 auto;
   min-height: 0;
   
@@ -149,44 +347,208 @@ body.page-participant-giveaway-card .pgc-screen {
   flex-direction: column;
   gap: 12px;
   
+  /* Добавляем тень для плавного перехода */
+  box-shadow: 0 -2px 0 rgba(0, 0, 0, 0.05);
+  
+  /* Гарантируем, что фон полностью покрывает область */
   background-clip: padding-box;
   -webkit-background-clip: padding-box;
   
+  /* Убираем любые просветы */
   border: none;
   outline: none;
 }
 
-/* Media block */
+/* Гарантируем, что внутренности тоже растягиваются */
+.pgc-frame > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Растягиваем последний элемент, если нужно */
+.pgc-frame {
+  justify-content: flex-start;
+}
+
+/* Добавляем небольшой отступ снизу для контента внутри серого блока */
+.pgc-frame > *:not(:last-child) {
+  flex-shrink: 0;
+}
+
+/* Убираем возможные зазоры у родительского контейнера */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+}
+
+/* Контейнер скролла */
+.page-participant-giveaway-card .pgc-screen {
+  width: 100%;
+  min-height: 100vh;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  overflow: visible; /* важно: visible, а не hidden/auto */
+}
+
+/* Для iOS переопределим */
+@supports (-webkit-overflow-scrolling: touch) {
+  .page-participant-giveaway-card .pgc-screen {
+    /* На iOS пусть скроллится плавно */
+    -webkit-overflow-scrolling: touch;
+    /* Но без резинки */
+    overscroll-behavior: none;
+  }
+}
+
+/* Запрещаем любые попытки выйти за пределы */
+.page-participant-giveaway-card .pgc-screen::before,
+.page-participant-giveaway-card .pgc-screen::after {
+  display: none !important;
+}
+
+/* Убираем возможность перетягивания через touch-события */
+.page-participant-giveaway-card {
+  touch-action: pan-y !important; /* разрешаем только вертикальное перемещение, но без overscroll */
+}
+
+/* iOS overscroll protection */
+.ios-scroll-guard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* Убираем bounce effect на iOS */
+body.page-participant-giveaway-card {
+  /* Предотвращаем bounce effect */
+  position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  
+  /* Жестко ограничиваем скролл */
+  max-height: 100vh;
+}
+
+/* Дополнительная защита для всех элементов */
+.page-participant-giveaway-card * {
+  overscroll-behavior: none !important;
+}
+
+/* Защитный слой для гарантии отсутствия зазоров */
+.pgc-background-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Убеждаемся, что pgc-screen имеет правильный контекст наложения */
+.pgc-screen {
+  position: relative;
+  z-index: 1;
+}
+
+/* Media + title group (как .div в figma) */
 .pgc-media-block {
   position: relative;
   width: 100%;
   height: auto;
-  padding-top: 18px;
+
+  padding-top: 18px;     /* резерв под строку "Информация о розыгрыше" (высота текста 18px) */
 }
 
+.pgc-info-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+}
+
+.pgc-info-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 500;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  margin-bottom: 0;
+}
+
+/* media frame (как frame-2) */
 .pgc-media {
   width: 100%;
   height: 160px;
   border-radius: 10px;
-  background-color: rgba(0,0,0,0.12);
+  background-color: rgba(0,0,0,0.12); /* вместо background-image из figma */
   overflow: hidden;
   margin-top: 8px;
   margin-bottom: 0px;
 }
 
-/* Description */
+/* media element */
+.pgc-media-el {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Description (frame-3) */
 .pgc-desc {
   margin-top: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 8px 12px;
+
+  padding: 8px 12px;           /* вертикальные 8px как ты просил */
   width: 100%;
+
   background-color: #2c2c2e;
   border-radius: 5px;
 }
 
-/* Channels */
+.pgc-desc-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 400;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 18px;
+
+  /* В реале описание может быть многострочным */
+  white-space: normal;
+}
+
+/* Channels block */
 .pgc-channels {
   position: relative;
   width: 100%;
@@ -197,12 +559,15 @@ body.page-participant-giveaway-card .pgc-screen {
   height: 18px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-start;   /* было center */
+  text-align: left;              /* важно */
+
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-weight: 400;
   color: var(--pgc-text-muted);
   font-size: 10px;
   line-height: 18px;
+
   margin: 0 0 8px;
 }
 
@@ -212,13 +577,107 @@ body.page-participant-giveaway-card .pgc-screen {
   gap: 8px;
 }
 
-/* Кнопка - оставляем внутри как было, но можно добавить отступ снизу если нужно */
-.big_bottom {
-  margin-top: 12px !important;
-  width: 100% !important;
+/* channel row */
+.pgc-channel-card {
+  width: 100%;
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  height: 58px;                 /* как в giveaways */
+  padding: 10px;
+  border-radius: 10px;
+
+  background: rgba(46, 46, 46, 1);
+  overflow: hidden;
 }
 
-/* Скрываем пустые блоки */
-.pgc-channels:has(.pgc-channels-list:empty) {
-  display: none;
+.pgc-channel-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 40px;
+
+  flex-shrink: 0;
+  background: rgba(49, 49, 51, 1);
+  overflow: hidden;
+
+  margin-left: 0;
+}
+
+.pgc-channel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pgc-channel-title {
+  flex: 1;
+  min-width: 0;
+
+  font: 500 14px/20px "Roboto", system-ui, -apple-system, sans-serif;
+  color: rgba(250, 250, 250, 1);
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hide mode switcher on card */
+.page-participant-giveaway-card .mode-switcher,
+.page-participant-giveaway-card .mode-switcher-container {
+  display: none !important;
+}
+
+/* убираем чёрные подложки контейнеров webapp */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  background: transparent !important;
+}
+
+/* Убираем внешние top-padding/margins у контейнеров webapp только на этой странице */
+.page-participant-giveaway-card .wrap,
+.page-participant-giveaway-card #main-content,
+.page-participant-giveaway-card .main-content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* На всякий случай: если где-то есть layout padding */
+body.page-participant-giveaway-card {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* === Global text upsize (keep title and button intact) === */
+.pgc-badge-text,
+.pgc-text-10,
+.pgc-ticket-pill,
+.pgc-info-title,
+.pgc-desc-text,
+.pgc-channels-title {
+  font-size: 14px !important;
+  line-height: 18px !important;
+}
+
+.pgc-badge--winners {
+  flex: 0 0 100%;
+  background: transparent;
+  padding: 0;
+  margin-top: 0;          /* важно: убрать любые отрицательные/лишние отступы */
+}
+
+.pgc-badge--winners .pgc-badge-text {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 8px 10px;
+  min-height: 32px;
+  border-radius: 999px;
+
+  background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
+  white-space: nowrap;
 }
