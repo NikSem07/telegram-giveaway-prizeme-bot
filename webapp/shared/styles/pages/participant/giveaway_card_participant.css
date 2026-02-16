@@ -32,15 +32,9 @@ body.page-participant-giveaway-card {
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 
-  /* Разрешаем скролл */
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  
-  /* ВАЖНО: разрешаем overscroll только вверх, запрещаем вниз */
-  overscroll-behavior-y: contain !important;  /* contain разрешает pull-to-refresh сверху, но блокирует навигацию жестами */
-  
-  /* Для iOS дополнительно настраиваем */
-  -webkit-overflow-scrolling: touch !important;
+  /* ВАЖНО: Полностью отключаем overscroll */
+  overscroll-behavior: none !important;  /* none = никакого overscroll вообще */
+  -webkit-overflow-scrolling: touch !important; /* но оставляем плавный скролл */
   
   /* Минимальная высота - весь экран */
   min-height: 100vh !important;
@@ -49,35 +43,49 @@ body.page-participant-giveaway-card {
   /* Убираем любые артефакты */
   margin: 0 !important;
   padding: 0 !important;
+  
+  /* Оставляем скролл, но без эффекта "резинки" */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
-/* Для iOS добавляем дополнительную защиту */
+/* Специально для iOS */
 @supports (-webkit-overflow-scrolling: touch) {
   html.page-participant-giveaway-card,
   body.page-participant-giveaway-card {
-    /* Это позволяет "резиновый" эффект сверху, но блокирует навигацию */
-    overscroll-behavior-y: auto !important;  /* auto на iOS работает иначе */
-  }
-  
-  /* Запрещаем жест "назад" свайпом */
-  html.page-participant-giveaway-card {
-    /* Предотвращаем свайп-навигацию в браузере */
+    /* Для iOS нужен особый подход */
     position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
   }
   
   body.page-participant-giveaway-card {
-    height: 100%;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     position: relative;
-    width: 100%;
+    height: 100%;
+    
+    /* Отключаем резиновый эффект */
+    overscroll-behavior: none !important;
+    
+    /* Убираем возможность потянуть за пределы */
+    -webkit-overflow-scrolling: touch !important;
+    scroll-snap-type: none !important;
+  }
+  
+  /* Дополнительная защита для скролла */
+  body.page-participant-giveaway-card::before,
+  body.page-participant-giveaway-card::after {
+    display: none !important;
   }
 }
 
-/* Для finished состояний гарантируем правильные цвета */
+/* finished win — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-win,
 body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-blue: #024B42 !important;
@@ -86,6 +94,7 @@ body.page-participant-giveaway-card.pgc-finished-win {
   --pgc-gradient-bottom: #1c1c1c !important;
 }
 
+/* finished lose — переопределяем переменные градиента */
 html.page-participant-giveaway-card.pgc-finished-lose,
 body.page-participant-giveaway-card.pgc-finished-lose {
   --pgc-blue: #570C07 !important;
@@ -378,11 +387,61 @@ body.page-participant-giveaway-card .pgc-screen {
 }
 
 /* Гарантируем, что pgc-screen занимает всю ширину без зазоров */
+/* Контейнер скролла */
 .page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
+  min-height: 100vh;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  overflow: visible;
+  
+  /* Важно для iOS */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Запрещаем любые попытки выйти за пределы */
+.page-participant-giveaway-card .pgc-screen::before,
+.page-participant-giveaway-card .pgc-screen::after {
+  display: none !important;
+}
+
+/* Убираем возможность перетягивания через touch-события */
+.page-participant-giveaway-card {
+  touch-action: pan-y !important; /* разрешаем только вертикальное перемещение, но без overscroll */
+}
+
+/* iOS overscroll protection */
+.ios-scroll-guard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* Убираем bounce effect на iOS */
+body.page-participant-giveaway-card {
+  /* Предотвращаем bounce effect */
   position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  
+  /* Жестко ограничиваем скролл */
+  max-height: 100vh;
+}
+
+/* Дополнительная защита для всех элементов */
+.page-participant-giveaway-card * {
+  overscroll-behavior: none !important;
 }
 
 /* Защитный слой для гарантии отсутствия зазоров */

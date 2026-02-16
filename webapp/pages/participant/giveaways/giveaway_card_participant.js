@@ -287,17 +287,69 @@ function renderGiveawayCardParticipantPage() {
     behavior: 'auto'
   });
 
-  // Добавляем обработчик для блокировки навигационных жестов вниз
+  // Жестко блокируем любой overscroll через JavaScript
+  try {
+    // Предотвращаем touch-события, которые могут вызвать overscroll
+    const preventOverscroll = (e) => {
+      const target = e.target;
+      const isAtTop = window.scrollY <= 0;
+      const isAtBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight;
+      
+      // Если мы на верху и пытаемся тянуть вниз - блокируем
+      if (isAtTop && e.deltaY < 0) {
+        e.preventDefault();
+      }
+      
+      // Если мы внизу и пытаемся тянуть вверх - блокируем
+      if (isAtBottom && e.deltaY > 0) {
+        e.preventDefault();
+      }
+    };
+
+    // Для колесика мыши
+    window.addEventListener('wheel', preventOverscroll, { passive: false });
+    
+    // Для touch-событий
+    let startY = 0;
+    window.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    
+    window.addEventListener('touchmove', (e) => {
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - startY;
+      const isAtTop = window.scrollY <= 0;
+      const isAtBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight;
+      
+      // Если мы на верху и тянем вниз - блокируем
+      if (isAtTop && deltaY > 0) {
+        e.preventDefault();
+      }
+      
+      // Если мы внизу и тянем вверх - блокируем
+      if (isAtBottom && deltaY < 0) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    console.log('[SCROLL] Overscroll protection enabled');
+  } catch (e) {
+    console.warn('[SCROLL] Failed to setup protection', e);
+  }
+
+  // Принудительно устанавливаем Telegram API для блокировки свайпов
   try {
     const tg = window.Telegram?.WebApp;
     if (tg) {
-      // Отключаем вертикальные свайпы (чтобы нельзя было закрыть мини-апп свайпом вниз)
+      // Отключаем вертикальные свайпы полностью
       if (tg.disableVerticalSwipes) {
         tg.disableVerticalSwipes();
       }
       
-      // Но разрешаем pull-to-refresh (overscroll вверх)
-      // Это делается через CSS, не через Telegram API
+      // Дополнительно просим расшириться на весь экран
+      if (tg.expand) {
+        tg.expand();
+      }
     }
   } catch (e) {
     console.warn('[TG] swipe config failed', e);
