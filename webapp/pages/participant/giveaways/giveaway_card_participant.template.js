@@ -12,20 +12,20 @@ export default function giveawayCardParticipantTemplate() {
         </div>
 
         <div class="pgc-badges">
-        <div class="pgc-badge pgc-badge--status">
-        <span class="pgc-badge-text" id="pgc-badge-status">⌛ Активный</span>
-        </div>
+          <div class="pgc-badge pgc-badge--status">
+            <span class="pgc-badge-text" id="pgc-badge-status">⌛ Активный</span>
+          </div>
 
-        <div class="pgc-badge pgc-badge--left">
-        <span class="pgc-badge-text">
-            <span id="pgc-badge-secondary-label">🕒 Осталось:</span>
-            <span id="pgc-left-time">—</span>
-        </span>
-        </div>
+          <div class="pgc-badge pgc-badge--left">
+            <span class="pgc-badge-text">
+              <span id="pgc-badge-secondary-label">🕒 Осталось:</span>
+              <span id="pgc-left-time">—</span>
+            </span>
+          </div>
 
-        <div class="pgc-badge pgc-badge--winners">
-        <span class="pgc-badge-text" id="pgc-badge-winner">🤷 Победители не определены</span>
-        </div>
+          <div class="pgc-badge pgc-badge--winners">
+            <span class="pgc-badge-text" id="pgc-badge-winner">🤷 Победители не определены</span>
+          </div>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export default function giveawayCardParticipantTemplate() {
         <div class="pgc-tickets-list" id="pgc-tickets-list"></div>
       </div>
 
-      <!-- Bottom content -->
+      <!-- Bottom content frame - теперь без кнопки -->
       <div class="pgc-frame">
         <!-- Media + title -->
         <div class="pgc-media-block">
@@ -55,12 +55,12 @@ export default function giveawayCardParticipantTemplate() {
           <div class="pgc-channels-title">Подключенные каналы / группы к розыгрышу</div>
           <div class="pgc-channels-list" id="pgc-channels"></div>
         </div>
-
-        <!-- Button -->
-        <button class="big_bottom pgc-open" type="button" id="pgc-open">
-          Перейти к розыгрышу
-        </button>
       </div>
+
+      <!-- Кнопка отдельно - класс big_bottom сохраняется полностью -->
+      <button class="big_bottom" type="button" id="pgc-open">
+        Перейти к розыгрышу
+      </button>
     </section>
   `;
 }

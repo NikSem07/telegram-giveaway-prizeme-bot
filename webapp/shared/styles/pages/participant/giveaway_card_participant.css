@@ -323,22 +323,19 @@ body.page-participant-giveaway-card .pgc-screen {
   margin-left: 0;
   margin-right: 0;
   
-  /* ВАЖНО: Убираем хак с шириной, используем нормальный поток */
   width: 100%;
   position: relative;
   left: auto;
   right: auto;
-  margin-left: 0;
-  margin-right: 0;
   
   background: rgba(28, 28, 28, 1);
-  border-radius: 20px 20px 0 0;
+  border-radius: 20px 20px 20px 20px; /* Одинаковые скругления со всех сторон */
   
-  /* Внутренние отступы для контента внутри серого блока */
-  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  /* Внутренние отступы для контента */
+  padding: 18px 16px 16px 16px; /* убрали большой нижний отступ */
   
-  /* Растягиваем серый блок на всю оставшуюся высоту */
-  flex: 1 0 auto;
+  /* Блок занимает только свой контент */
+  flex: 0 0 auto;
   min-height: 0;
   
   box-sizing: border-box;
@@ -347,16 +344,32 @@ body.page-participant-giveaway-card .pgc-screen {
   flex-direction: column;
   gap: 12px;
   
-  /* Добавляем тень для плавного перехода */
-  box-shadow: 0 -2px 0 rgba(0, 0, 0, 0.05);
-  
   /* Гарантируем, что фон полностью покрывает область */
   background-clip: padding-box;
   -webkit-background-clip: padding-box;
   
-  /* Убираем любые просветы */
   border: none;
   outline: none;
+}
+
+/* Кнопка - добавляем только внешние отступы, внутренние стили не трогаем */
+#pgc-open.big_bottom {
+  margin: 8px 16px 24px 16px !important; /* внешние отступы: сверху 8px, по бокам 16px, снизу 24px */
+  width: calc(100% - 32px) !important; /* ширина с учетом отступов */
+  box-sizing: border-box !important;
+}
+
+/* Скрываем пустые блоки */
+.pgc-channels:has(.pgc-channels-list:empty) {
+  display: none;
+}
+
+.pgc-media-block:has(#pgc-media:empty) {
+  display: none;
+}
+
+.pgc-desc:has(#pgc-description:empty) {
+  display: none;
 }
 
 /* Гарантируем, что внутренности тоже растягиваются */
