@@ -42,13 +42,6 @@ body.page-participant-giveaway-card {
   height: auto !important;
 }
 
-/* ТОЛЬКО карточка: body не скроллится, скроллится внутренний экран */
-html.page-participant-giveaway-card,
-body.page-participant-giveaway-card {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-}
-
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
   
