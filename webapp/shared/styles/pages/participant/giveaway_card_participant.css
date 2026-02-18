@@ -9,7 +9,7 @@
   --pgc-text: rgba(250, 250, 250, 1);
   --pgc-text-muted: rgba(115, 115, 117, 1);
   /* Нижняя часть градиента должна "сливаться" с серым контейнером */
-  --pgc-bottom: rgba(28, 28, 28, 1);
+  --pgc-bottom: rgba(10, 10, 10, 1);
   
   /* Динамические переменные для градиента Telegram Chrome */
   --pgc-gradient-top: var(--pgc-blue);
