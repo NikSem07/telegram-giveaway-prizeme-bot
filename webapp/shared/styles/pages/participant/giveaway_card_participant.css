@@ -8,13 +8,13 @@
   --pgc-shape: rgba(46, 46, 46, 1);
   --pgc-text: rgba(250, 250, 250, 1);
   --pgc-text-muted: rgba(115, 115, 117, 1);
-  /* Нижняя часть градиента должна "сливаться" с серым контейнером */
-  --pgc-bottom: rgba(10, 10, 10, 1);
-  
+  /* Нижний фон = тот же основной цвет, градиента нет */
+  --pgc-bottom: var(--pgc-blue);
+
   /* Динамические переменные для градиента Telegram Chrome */
   --pgc-gradient-top: var(--pgc-blue);
-  --pgc-gradient-bottom: var(--pgc-bottom);
-  --pgc-gradient-stop: 50%; /* точка перехода градиента */
+  --pgc-gradient-bottom: var(--pgc-blue);
+  --pgc-gradient-stop: 100%; /* нет перехода — весь фон одного цвета */
 }
 
 /* Root background ONLY for participant giveaway card */
@@ -99,22 +99,6 @@ body.page-participant-giveaway-card.pgc-finished-lose {
   --pgc-blue-chip: rgba(255, 155, 155, 0.18) !important;
   --pgc-gradient-top: #570C07 !important;
   --pgc-gradient-bottom: #1c1c1c !important;
-}
-
-/* Для устройств с большой высотой экрана */
-@media (min-height: 800px) {
-  html.page-participant-giveaway-card,
-  body.page-participant-giveaway-card {
-    --pgc-gradient-stop: 40%; /* чуть меньше цветной зоны */
-  }
-}
-
-/* Для устройств с маленькой высотой */
-@media (max-height: 600px) {
-  html.page-participant-giveaway-card,
-  body.page-participant-giveaway-card {
-    --pgc-gradient-stop: 60%; /* чуть больше цветной зоны */
-  }
 }
 
 body.page-participant-giveaway-card .pgc-screen {
@@ -247,11 +231,11 @@ body.page-participant-giveaway-card .pgc-screen {
   margin-left: 0;
   margin-right: 0;
 
-  /* Ширина — вся доступная */
+  /* Ширина — вся доступная, высота — только по контенту */
   width: 100%;
   box-sizing: border-box;
 
-  /* Скругление со ВСЕХ четырёх сторон */
+  /* Скругление со ВСЕХ четырёх сторон — верх и низ одинаково */
   border-radius: 20px;
 
   /* Фон серого блока */
@@ -262,33 +246,24 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Внутренние отступы */
   padding: 18px 16px 18px;
 
-  /* flex: 0 0 auto — не растягиваемся */
+  /* flex-item не растягивается по высоте */
   flex: 0 0 auto;
-
-  /* КЛЮЧЕВОЕ: align-self: flex-start запрещает элементу растягиваться
-     по высоте flex-контейнера, даже если контейнер выше содержимого.
-     Это единственный надёжный способ ограничить высоту блока его контентом
-     при любом состоянии родителя. */
   align-self: flex-start;
-
-  /* Но ширину сохраняем через width: 100% — align-self не трогает ширину
-     при flex-direction: column у родителя */
 
   /* Внутренняя раскладка */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   gap: 12px;
-
-  /* Дочерние элементы не растягиваются */
   align-items: stretch;
 
-  /* Сброс лишнего */
+  box-shadow: none;
+
   border: none;
   outline: none;
-  box-shadow: none;
   position: static;
 }
+
 
 /* Отступ снизу, чтобы контент не уходил под фиксированную кнопку */
 .page-participant-giveaway-card .pgc-scroll-spacer {
