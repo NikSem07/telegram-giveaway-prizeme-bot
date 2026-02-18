@@ -444,24 +444,29 @@ body.page-participant-giveaway-card {
   margin-bottom: 0;
 }
 
-/* media frame (как frame-2) */
+/* media frame — адаптивная высота по содержимому */
 .pgc-media {
   width: 100%;
-  height: 160px;
+  /* height убран — блок растягивается под реальный размер медиа */
+  height: auto;
   border-radius: 10px;
-  background-color: rgba(0,0,0,0.12); /* вместо background-image из figma */
+  background-color: rgba(0,0,0,0.12);
   overflow: hidden;
   margin-top: 8px;
-  margin-bottom: 0px;
+  margin-bottom: 0;
+  /* Пока медиа грузится — минимальная высота, чтобы не схлопнулось */
+  min-height: 40px;
 }
 
-/* media element */
+/* media element — адаптируется под натуральные пропорции */
 .pgc-media-el {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;       /* натуральная высота изображения/видео */
   display: block;
+  border-radius: 10px; /* скругление сохраняется */
+  object-fit: contain; /* показываем полностью, без обрезки */
 }
+
 
 /* Description (frame-3) */
 .pgc-desc {
@@ -608,6 +613,99 @@ body.page-participant-giveaway-card {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Кнопка "Перейти" внутри карточки канала */
+.pgc-channel-btn {
+  flex-shrink: 0;
+
+  height: 28px;
+  padding: 0 12px;
+
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+
+  font: 500 12px/28px "Roboto", system-ui, -apple-system, sans-serif;
+  color: rgba(250, 250, 250, 0.9);
+  white-space: nowrap;
+
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.pgc-channel-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ===== Модальное окно подтверждения перехода ===== */
+.pgc-channel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pgc-channel-modal {
+  background: rgba(44, 44, 46, 1);
+  border-radius: 20px;
+  padding: 24px;
+  max-width: 320px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: "Roboto", system-ui, -apple-system, sans-serif;
+}
+
+.pgc-channel-modal__text {
+  margin: 0 0 24px 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(250, 250, 250, 1);
+  text-align: center;
+}
+
+.pgc-channel-modal__text b {
+  font-weight: 700;
+}
+
+.pgc-channel-modal__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.pgc-channel-modal__btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 12px;
+  font: 500 14px/1 "Roboto", system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pgc-channel-modal__btn--cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(250, 250, 250, 1);
+}
+
+.pgc-channel-modal__btn--cancel:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pgc-channel-modal__btn--confirm {
+  background: linear-gradient(180deg, #2f7cff 0%, #1b4dff 100%);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.pgc-channel-modal__btn--confirm:active {
+  background: linear-gradient(180deg, #1b6aee 0%, #0e3de8 100%);
+}
+
 
 /* Hide mode switcher on card */
 .page-participant-giveaway-card .mode-switcher,

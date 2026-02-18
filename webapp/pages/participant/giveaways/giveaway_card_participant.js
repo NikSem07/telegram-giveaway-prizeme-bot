@@ -248,20 +248,100 @@ function renderTickets(container, tickets) {
   }).join('');
 }
 
+/**
+ * Показывает модальное окно подтверждения перехода в канал/группу.
+ * При подтверждении — открывает ссылку через Telegram API (mini-app сворачивается, не закрывается).
+ */
+function showChannelModal(title, url) {
+  // Удаляем предыдущий модал, если вдруг остался
+  document.getElementById('pgc-channel-modal')?.remove();
+
+  const safeTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pgc-channel-modal';
+  overlay.className = 'pgc-channel-modal-overlay';
+  overlay.innerHTML = `
+    <div class="pgc-channel-modal" role="dialog" aria-modal="true">
+      <p class="pgc-channel-modal__text">
+        Вы действительно хотите перейти в <b>${safeTitle}</b>?
+      </p>
+      <div class="pgc-channel-modal__actions">
+        <button type="button" class="pgc-channel-modal__btn pgc-channel-modal__btn--cancel">
+          Отмена
+        </button>
+        <button type="button" class="pgc-channel-modal__btn pgc-channel-modal__btn--confirm">
+          Перейти
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+
+  // Отмена
+  overlay.querySelector('.pgc-channel-modal__btn--cancel').addEventListener('click', close);
+
+  // Клик по оверлею (вне модала)
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // Подтверждение — открываем ссылку, mini-app сворачивается через openTelegramLink
+  overlay.querySelector('.pgc-channel-modal__btn--confirm').addEventListener('click', () => {
+    close();
+    const tg = window.Telegram?.WebApp;
+    if (url) {
+      if (tg?.openTelegramLink) {
+        // openTelegramLink сворачивает mini-app, но не закрывает — пользователь может вернуться
+        tg.openTelegramLink(url);
+      } else {
+        window.open(url, '_blank');
+      }
+    }
+  });
+}
+
 function renderChannels(container, channels) {
-  container.innerHTML = (channels || []).map(ch => {
+  if (!channels || channels.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = channels.map(ch => {
     const avatar = ch.avatar_url || '/miniapp-static/assets/images/default-avatar.webp';
     const title = ch.title || ch.username || 'Канал';
+    // Используем post_url или формируем t.me-ссылку из username
+    const url = ch.post_url || (ch.username ? `https://t.me/${ch.username.replace('@', '')}` : '');
+    const safeTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeUrl = url.replace(/"/g, '&quot;');
 
     return `
       <div class="pgc-channel-card">
         <div class="pgc-channel-avatar">
           <img src="${avatar}" alt="">
         </div>
-        <div class="pgc-channel-title">${title}</div>
+        <div class="pgc-channel-title">${safeTitle}</div>
+        <button
+          type="button"
+          class="pgc-channel-btn"
+          data-channel-title="${safeTitle}"
+          data-channel-url="${safeUrl}"
+        >Перейти</button>
       </div>
     `;
   }).join('');
+
+  // Вешаем обработчики на все кнопки одним делегированием
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pgc-channel-btn');
+    if (!btn) return;
+    const channelTitle = btn.dataset.channelTitle || 'канал';
+    const channelUrl = btn.dataset.channelUrl || '';
+    showChannelModal(channelTitle, channelUrl);
+  });
 }
 
 function openGiveawayPost(data) {
