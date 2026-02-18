@@ -749,18 +749,18 @@ body.page-participant-giveaway-card {
   flex: 0 0 100%;
   background: transparent;
   padding: 0;
-  margin-top: 0;          /* важно: убрать любые отрицательные/лишние отступы */
+  margin-top: 0;
 }
 
+/* Подложка для всех трёх бейджей: статус, время, победитель */
+.pgc-badge--status .pgc-badge-text,
+.pgc-badge--left .pgc-badge-text,
 .pgc-badge--winners .pgc-badge-text {
   display: inline-flex;
   align-items: center;
-
   padding: 8px 10px;
   min-height: 32px;
   border-radius: 999px;
-
-  background-color: var(--pgc-blue-chip); /* ← ДОБАВЬ ЭТО, вернёт подложку */
+  background-color: var(--pgc-blue-chip);
   white-space: nowrap;
 }
-
