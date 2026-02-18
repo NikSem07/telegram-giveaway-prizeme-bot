@@ -247,11 +247,11 @@ body.page-participant-giveaway-card .pgc-screen {
   margin-left: 0;
   margin-right: 0;
 
-  /* Ширина — вся доступная, высота — ТОЛЬКО по содержимому */
+  /* Ширина — вся доступная */
   width: 100%;
   box-sizing: border-box;
 
-  /* Скругление со ВСЕХ четырёх сторон — одинаково для синего/зелёного/красного */
+  /* Скругление со ВСЕХ четырёх сторон */
   border-radius: 20px;
 
   /* Фон серого блока */
@@ -262,11 +262,17 @@ body.page-participant-giveaway-card .pgc-screen {
   /* Внутренние отступы */
   padding: 18px 16px 18px;
 
-  /* КЛЮЧЕВОЕ: flex-item НЕ растягивается по высоте.
-     flex-grow:0 — не занимает свободное место.
-     flex-shrink:0 — не сжимается.
-     flex-basis:auto — высота = высота контента. */
+  /* flex: 0 0 auto — не растягиваемся */
   flex: 0 0 auto;
+
+  /* КЛЮЧЕВОЕ: align-self: flex-start запрещает элементу растягиваться
+     по высоте flex-контейнера, даже если контейнер выше содержимого.
+     Это единственный надёжный способ ограничить высоту блока его контентом
+     при любом состоянии родителя. */
+  align-self: flex-start;
+
+  /* Но ширину сохраняем через width: 100% — align-self не трогает ширину
+     при flex-direction: column у родителя */
 
   /* Внутренняя раскладка */
   display: flex;
@@ -336,6 +342,13 @@ body.page-participant-giveaway-card .pgc-screen {
   padding: 0 !important;
   margin: 0 !important;
   overflow-x: hidden !important;
+
+  /* КЛЮЧЕВОЕ: base.css включает display:flex на этих контейнерах для карточки.
+     Это заставляет pgc-screen растягиваться на всю высоту родителя.
+     Сбрасываем обратно на block — тогда высота идёт от контента, а не от экрана. */
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
 }
 
 /* Контейнер скролла */
