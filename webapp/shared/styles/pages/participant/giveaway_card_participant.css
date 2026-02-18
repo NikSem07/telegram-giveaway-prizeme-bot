@@ -76,7 +76,7 @@ body.page-participant-giveaway-card {
   /* Убираем лишние ограничения с pgc-screen */
   body.page-participant-giveaway-card .pgc-screen {
     height: auto;
-    min-height: 100vh;
+    min-height: 0;
     overflow: visible !important;
     -webkit-overflow-scrolling: auto !important;
   }
@@ -119,21 +119,23 @@ body.page-participant-giveaway-card.pgc-finished-lose {
 
 body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  
-  /* Занимаем всю высоту родителя */
-  min-height: 100vh;
-  height: 100%;
-  
+
+  /* КЛЮЧЕВОЕ: высота строго по контенту, не по экрану.
+     Фон покрывает экран через html/body с background-attachment: fixed — 
+     pgc-screen не обязан занимать 100vh. */
+  min-height: 0;
+  height: auto;
+
   padding: 0;
   margin: 0;
   box-sizing: border-box;
-  
+
   display: flex;
   flex-direction: column;
-  
-  /* Растягиваемся на всю доступную высоту */
-  flex: 1 0 auto;
-  
+
+  /* flex: 0 0 auto — не растягиваемся сами по себе */
+  flex: 0 0 auto;
+
   overflow: visible;
 }
 
@@ -339,16 +341,18 @@ body.page-participant-giveaway-card .pgc-screen {
 /* Контейнер скролла */
 .page-participant-giveaway-card .pgc-screen {
   width: 100%;
-  min-height: 100vh;
+  /* Высота строго по контенту — фон идёт от html/body, не от pgc-screen */
+  min-height: 0;
   height: auto;
   padding: 0;
   margin: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  flex: 1 0 auto;
-  overflow: visible; /* важно: visible, а не hidden/auto */
+  flex: 0 0 auto;
+  overflow: visible;
 }
+
 
 /* Для iOS переопределим */
 @supports (-webkit-overflow-scrolling: touch) {
