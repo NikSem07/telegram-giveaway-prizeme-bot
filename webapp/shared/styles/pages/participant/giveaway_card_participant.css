@@ -236,40 +236,50 @@ body.page-participant-giveaway-card .pgc-screen {
   white-space: nowrap;
 }
 
-/* Bottom frame — единый для всех состояний (active/win/lose) */
+/* Bottom frame — единый для всех состояний (active/win/lose)
+   Высота строго по контенту, скругление со всех сторон */
 .pgc-frame {
-  /* Отступы вокруг блока */
+  /* Отступы снаружи */
   margin-top: 18px;
   margin-bottom: 12px;
   margin-left: 0;
   margin-right: 0;
 
-  /* Занимает всю ширину, высота — только по контенту */
+  /* Ширина — вся доступная, высота — ТОЛЬКО по содержимому */
   width: 100%;
   box-sizing: border-box;
 
-  /* Скругление со ВСЕХ сторон — одинаково для синего/зелёного/красного фона */
-  background: rgba(28, 28, 28, 1);
+  /* Скругление со ВСЕХ четырёх сторон — одинаково для синего/зелёного/красного */
   border-radius: 20px;
+
+  /* Фон серого блока */
+  background: rgba(28, 28, 28, 1);
+  background-clip: padding-box;
+  -webkit-background-clip: padding-box;
 
   /* Внутренние отступы */
   padding: 18px 16px 18px;
 
-  /* НЕ растягиваем на оставшуюся высоту — только по контенту */
+  /* КЛЮЧЕВОЕ: flex-item НЕ растягивается по высоте.
+     flex-grow:0 — не занимает свободное место.
+     flex-shrink:0 — не сжимается.
+     flex-basis:auto — высота = высота контента. */
   flex: 0 0 auto;
-  align-self: stretch;
 
+  /* Внутренняя раскладка */
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   gap: 12px;
 
-  /* Гарантируем что фон не вылезает за border-radius */
-  background-clip: padding-box;
-  -webkit-background-clip: padding-box;
+  /* Дочерние элементы не растягиваются */
+  align-items: stretch;
 
+  /* Сброс лишнего */
   border: none;
   outline: none;
   box-shadow: none;
+  position: static;
 }
 
 /* Отступ снизу, чтобы контент не уходил под фиксированную кнопку */
@@ -300,14 +310,15 @@ body.page-participant-giveaway-card .pgc-screen {
   width: 100%;
 }
 
-/* Гарантируем, что внутренности тоже растягиваются */
+/* Последний дочерний элемент без лишнего нижнего отступа */
 .pgc-frame > *:last-child {
   margin-bottom: 0;
+  flex-shrink: 0;
 }
 
-/* Растягиваем последний элемент, если нужно */
-.pgc-frame {
-  justify-content: flex-start;
+/* Остальные дочерние элементы тоже не сжимаются */
+.pgc-frame > *:not(:last-child) {
+  flex-shrink: 0;
 }
 
 /* Добавляем небольшой отступ снизу для контента внутри серого блока */
@@ -378,9 +389,10 @@ body.page-participant-giveaway-card {
   position: relative;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  
-  /* Жестко ограничиваем скролл */
-  max-height: 100vh;
+
+  /* ВАЖНО: убираем max-height: 100vh — он создавал отдельный scroll-контекст
+     из-за которого pgc-frame растягивался на весь экран при синем фоне.
+     Скролл работает через body без ограничения высоты. */
 }
 
 /* Дополнительная защита для всех элементов */
