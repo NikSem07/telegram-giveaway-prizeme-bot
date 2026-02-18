@@ -1,136 +1,201 @@
 /* webapp/shared/styles/pages/creator/giveaway_card_creator.css */
 
-.creator-giveaway-card-detail {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 0px 90px; /* как в giveaways */
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* ===== ФОН: синий на весь экран (идентично карточке участника) ===== */
+html.page-creator-giveaway-card,
+body.page-creator-giveaway-card {
+  background: rgba(21, 81, 229, 1) !important;
+  background-color: rgba(21, 81, 229, 1) !important;
+  background-attachment: fixed !important;
+
+  overscroll-behavior: none !important;
+  min-height: 100vh !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
-.creator-giveaway-card-block {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+/* iOS override (аналог участника) */
+@supports (-webkit-overflow-scrolling: touch) {
+  html.page-creator-giveaway-card,
+  body.page-creator-giveaway-card {
+    position: relative;
+    top: auto; left: auto; right: auto; bottom: auto;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  body.page-creator-giveaway-card {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
 }
 
-/* Заголовки блоков */
-.creator-giveaway-card-label {
+/* ===== Контейнеры: прозрачный фон, без top-padding ===== */
+body.page-creator-giveaway-card .wrap,
+body.page-creator-giveaway-card #main-content,
+body.page-creator-giveaway-card .main-content {
+  background: transparent !important;
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+body.page-creator-giveaway-card {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* ===== Скрываем переключатель режима и заголовок-дубль ===== */
+.page-creator-giveaway-card .mode-switcher,
+.page-creator-giveaway-card .mode-switcher-container {
+  display: none !important;
+}
+
+/* ===== Заголовок хедера "Карточка розыгрыша" через ::after ===== */
+.page-creator-giveaway-card .mode-switcher-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) !important;
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  pointer-events: none;
+}
+
+.page-creator-giveaway-card .mode-switcher-container::after {
+  content: "Карточка розыгрыша";
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;      /* было 10 */
-  line-height: 16px;    /* компактнее и “заголовочнее” */
-  font-weight: 400;     /* чуть жирнее */
-  color: #737375;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #ffffff;
 }
 
-.creator-giveaway-card-box {
+/* ===== Основная секция ===== */
+body.page-creator-giveaway-card .cgcc-screen {
   width: 100%;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  background: #2E2E2E;
-  border-radius: 5px;
-  overflow: hidden;
-  padding: 0 10px;
-  margin: 0 0;
-  box-sizing: border-box;
-}
-
-.creator-giveaway-card-text {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  line-height: 18px;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.creator-giveaway-card-media-box {
-  width: 100%;
-  height: auto;              /* адаптив */
-  min-height: 120px;         /* чтобы пустой блок не схлопывался */
-  max-height: 520px;         /* защита от огромных */
-  border-radius: 10px;
-  background: transparent;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-start;   /* выравнивание по верху */
-  justify-content: flex-start; /* по левому краю */
-}
-
-.creator-giveaway-card-media-el {
-  width: auto;
+  min-height: 0;
   height: auto;
-  max-width: 100%;
-  max-height: 520px;
-  object-fit: contain;       /* без обрезки */
-  display: block;
-  border-radius: 10px;   /* такой же радиус, как был у блока */
-   overflow: hidden;
-}
-
-.creator-giveaway-card-media-empty {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  color: #a9a9a9;
-}
-
-.creator-giveaway-card-channels {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  flex: 0 0 auto;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
 }
 
-.creator-giveaway-card-channel {
+/* ===== TOP: заголовок + бейджи ===== */
+body.page-creator-giveaway-card .cgcc-top {
+  padding: 48px 16px 0;
   width: 100%;
-  height: 52px;
+  box-sizing: border-box;
+}
+
+body.page-creator-giveaway-card .cgcc-title {
+  width: 100%;
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 22px;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+body.page-creator-giveaway-card .cgcc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+body.page-creator-giveaway-card .cgcc-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+body.page-creator-giveaway-card .cgcc-badge-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  min-height: 32px;
+  border-radius: 999px;
+  background-color: rgba(67, 121, 255, 1);
+  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 18px;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* ===== Карточка победителя (адаптация winner-card под pgc-frame) ===== */
+.cgcc-winner-card {
+  background: rgba(46, 46, 46, 1);
+  border-radius: 10px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #2E2E2E;
-  border-radius: 5px;
-  overflow: hidden;
-  padding: 0 10px;
-  margin: 0 0;
+  min-height: 58px;
   box-sizing: border-box;
 }
 
-.creator-giveaway-card-channel-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 40px;
-  overflow: hidden;
+.cgcc-winner-card .winner-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #ffffff;
   flex-shrink: 0;
-  background: #313133;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.creator-giveaway-card-channel-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.cgcc-winner-card .winner-medal {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
-.creator-giveaway-card-channel-title {
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 12px;
-  line-height: 18px;
-  color: #FAFAFA;
+.cgcc-winner-card .winner-position {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1c1c1c;
+}
+
+.cgcc-winner-card .winner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cgcc-winner-card .winner-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(250, 250, 250, 1);
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.creator-giveaway-card-edit {
-  margin: 8px auto 0;
-  display: flex;          /* чтобы max-width/центр работали стабильно */
+.cgcc-winner-card .winner-ticket {
+  font-size: 12px;
+  font-weight: 300;
+  color: rgba(115, 115, 117, 1);
 }
 
-/* Media fade-in */
+/* ===== Медиа fade-in (сохраняем из старого CSS) ===== */
 .creator-giveaway-card-media-el {
   opacity: 0;
   transition: opacity 220ms ease;
@@ -141,7 +206,7 @@
   opacity: 1;
 }
 
-/* Video overlay */
+/* ===== Video overlay (сохраняем из старого CSS) ===== */
 .creator-giveaway-card-media-wrap {
   position: relative;
   width: 100%;
@@ -153,26 +218,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-
   border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-
-  /* чуть затемним под иконкой */
   background: radial-gradient(
     circle at center,
     rgba(0,0,0,0.35) 0%,
     rgba(0,0,0,0.15) 40%,
     rgba(0,0,0,0.0) 70%
   );
+  cursor: pointer;
+  padding: 0;
 }
 
 .creator-giveaway-card-play.is-hidden {
   display: none;
 }
 
-/* Кнопка play "как iOS" */
 .creator-giveaway-card-play::before {
   content: "";
   width: 54px;
@@ -184,67 +244,13 @@
   display: block;
 }
 
-/* Треугольник play */
 .creator-giveaway-card-play::after {
   content: "";
   position: absolute;
   width: 0;
   height: 0;
-  margin-left: 4px; /* лёгкий сдвиг вправо как у play */
+  margin-left: 4px;
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
   border-left: 16px solid rgba(255,255,255,0.95);
-}
-
-/* В некоторых сборках переключалка может жить не в контейнере */
-.page-creator-giveaway-card .mode-switcher {
-  display: none !important;
-}
-
-.creator-giveaway-card-screen-title {
-  width: 100%;
-  text-align: center;
-  margin: 6px 0 10px;
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #737375;
-}
-
-/* ===== Header title instead of mode-switcher (ONLY on giveaway card page) ===== */
-
-/* Скрываем заголовок внутри контента, чтобы не было дубля */
-.page-creator-giveaway-card .creator-giveaway-card-screen-title {
-  display: none !important;
-}
-
-/* На странице деталей НЕ показываем переключалку, но контейнер оставляем */
-.page-creator-giveaway-card .mode-switcher {
-  display: none !important;
-}
-
-/* В контейнере переключалки рисуем заголовок по центру — на том же уровне */
-.page-creator-giveaway-card .mode-switcher-container {
-  position: absolute;          /* на всякий случай, как в header.css */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) !important;
-
-  width: 100% !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-
-  pointer-events: none; /* чтобы не мешать кликам по header */
-}
-
-/* Сам текст заголовка в шапке */
-.page-creator-giveaway-card .mode-switcher-container::after {
-  content: "Карточка розыгрыша";
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  color: #737375;
 }
