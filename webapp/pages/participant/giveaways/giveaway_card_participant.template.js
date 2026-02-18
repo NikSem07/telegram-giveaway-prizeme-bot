@@ -35,7 +35,7 @@ export default function giveawayCardParticipantTemplate() {
         <div class="pgc-tickets-list" id="pgc-tickets-list"></div>
       </div>
 
-      <!-- Bottom content frame с кнопкой внутри -->
+      <!-- Bottom content frame (серый блок) — высота по контенту, углы скруглены со всех сторон -->
       <div class="pgc-frame">
         <!-- Media + title -->
         <div class="pgc-media-block">
@@ -55,15 +55,17 @@ export default function giveawayCardParticipantTemplate() {
           <div class="pgc-channels-title">Подключенные каналы / группы к розыгрышу</div>
           <div class="pgc-channels-list" id="pgc-channels"></div>
         </div>
-
       </div>
 
-      <!-- CTA: кнопка вынесена ИЗ серого блока -->
-      <div class="pgc-cta">
-        <button class="big_bottom" type="button" id="pgc-open">
-          Перейти к розыгрышу
-        </button>
-      </div>
+      <!-- Отступ снизу, чтобы последний контент не уходил под фиксированную кнопку -->
+      <div class="pgc-scroll-spacer"></div>
     </section>
+
+    <!-- Фиксированная кнопка — аналог зоны навбара, единая для всех состояний -->
+    <div class="pgc-sticky-cta">
+      <button class="big_bottom" type="button" id="pgc-open">
+        Перейти к розыгрышу
+      </button>
+    </div>
   `;
 }

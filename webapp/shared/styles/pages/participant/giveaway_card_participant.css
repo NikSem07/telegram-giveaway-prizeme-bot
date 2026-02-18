@@ -236,61 +236,67 @@ body.page-participant-giveaway-card .pgc-screen {
   white-space: nowrap;
 }
 
-/* Bottom frame */
+/* Bottom frame — единый для всех состояний (active/win/lose) */
 .pgc-frame {
+  /* Отступы вокруг блока */
   margin-top: 18px;
   margin-bottom: 12px;
   margin-left: 0;
   margin-right: 0;
-  
-  /* ВАЖНО: Убираем хак с шириной, используем нормальный поток */
+
+  /* Занимает всю ширину, высота — только по контенту */
   width: 100%;
-  position: relative;
-  left: auto;
-  right: auto;
-  margin-left: 0;
-  margin-right: 0;
-  
+  box-sizing: border-box;
+
+  /* Скругление со ВСЕХ сторон — одинаково для синего/зелёного/красного фона */
   background: rgba(28, 28, 28, 1);
   border-radius: 20px;
 
-  /* Серый блок заканчивается на последнем канале + аккуратный отступ */
+  /* Внутренние отступы */
   padding: 18px 16px 18px;
-  
-  /* Растягиваем серый блок на всю оставшуюся высоту */
+
+  /* НЕ растягиваем на оставшуюся высоту — только по контенту */
   flex: 0 0 auto;
-  min-height: auto;
-  
-  box-sizing: border-box;
-  
+  align-self: stretch;
+
   display: flex;
   flex-direction: column;
   gap: 12px;
-  
-  /* Добавляем тень для плавного перехода */
-  box-shadow: 0 -2px 0 rgba(0, 0, 0, 0.05);
-  
-  /* Гарантируем, что фон полностью покрывает область */
+
+  /* Гарантируем что фон не вылезает за border-radius */
   background-clip: padding-box;
   -webkit-background-clip: padding-box;
-  
-  /* Убираем любые просветы */
+
   border: none;
   outline: none;
+  box-shadow: none;
 }
 
-/* CTA под серым блоком */
-.page-participant-giveaway-card .pgc-cta {
+/* Отступ снизу, чтобы контент не уходил под фиксированную кнопку */
+.page-participant-giveaway-card .pgc-scroll-spacer {
+  height: calc(var(--navbar-height) + env(safe-area-inset-bottom, 0px));
+  flex-shrink: 0;
+}
+
+/* Фиксированная кнопка — единая для всех состояний карточки */
+.pgc-sticky-cta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
   width: 100%;
+  z-index: 1000;
+
+  /* Полупрозрачный чёрный фон, как у навбара — те же свойства */
+  background: rgba(28, 28, 28, 0.6);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 0.33px solid rgba(60, 60, 67, 0.36);
+
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-
-  /* ВАЖНО: фон под кнопкой = основной цвет (blue/green/red), чтобы не было чёрной полосы */
-  background: var(--pgc-gradient-top);
-
-  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
-.page-participant-giveaway-card .pgc-cta .big_bottom {
+.pgc-sticky-cta .big_bottom {
   width: 100%;
 }
 
