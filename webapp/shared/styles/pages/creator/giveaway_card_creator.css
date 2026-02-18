@@ -98,7 +98,7 @@ body.page-creator-giveaway-card .wrap {
 
 /* ===== TOP: заголовок + бейджи ===== */
 body.page-creator-giveaway-card .cgcc-top {
-  padding: calc(var(--tg-top-pad) + 8px) 16px 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 0;
   width: 100%;
   box-sizing: border-box;
 }
