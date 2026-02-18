@@ -284,6 +284,56 @@ function openGiveawayPost(data) {
   window.open(url, '_blank');
 }
 
+// Рендер описания розыгрыша с поддержкой Telegram HTML-разметки
+function renderDescription(container, rawText) {
+  if (!rawText || rawText === '—') {
+    container.textContent = rawText || '';
+    return;
+  }
+
+  // Шаг 1: заменяем <tg-emoji emoji-id="...">ЭМОДЗИ</tg-emoji>
+  // Берём только текстовое содержимое внутри тега (обычный эмодзи-символ)
+  let html = rawText.replace(
+    /<tg-emoji[^>]*>([\s\S]*?)<\/tg-emoji>/gi,
+    (_, inner) => inner
+  );
+
+  // Шаг 2: разрешаем только безопасные теги форматирования.
+  // Все остальные теги экранируем.
+  // Сначала временно прячем разрешённые теги:
+  const ALLOWED = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre'];
+
+  // Маркируем разрешённые теги (открывающие и закрывающие)
+  const allowedPattern = new RegExp(
+    `<(/?)(?:${ALLOWED.join('|')})(\\s[^>]*)?>`,
+    'gi'
+  );
+
+  // Временная замена разрешённых тегов на плейсхолдеры
+  const placeholders = [];
+  html = html.replace(allowedPattern, (match) => {
+    const idx = placeholders.length;
+    placeholders.push(match);
+    return `\x00ALLOWED${idx}\x00`;
+  });
+
+  // Экранируем ВСЕ оставшиеся теги (потенциально опасные)
+  html = html
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Возвращаем разрешённые теги обратно
+  html = html.replace(/\x00ALLOWED(\d+)\x00/g, (_, idx) => placeholders[Number(idx)]);
+
+  // Шаг 3: переносы строк → <br>
+  // \n — явный перенос, также обрабатываем \r\n
+  html = html.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+
+  // Устанавливаем через innerHTML (безопасно — все посторонние теги экранированы)
+  container.innerHTML = html;
+}
+
 function renderGiveawayCardParticipantPage() {
   const main = document.getElementById('main-content');
   if (!main) return;
@@ -429,8 +479,8 @@ function renderGiveawayCardParticipantPage() {
         // title
         titleEl.textContent = data.title || '—';
 
-        // description
-        descEl.textContent = data.description || '—';
+        // description — рендерим с поддержкой Telegram HTML-форматирования
+        renderDescription(descEl, data.description || '—');
 
         // media (Figma: если медиа нет — блок не показываем)
         renderMedia(mediaEl, data.media, data);

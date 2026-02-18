@@ -478,19 +478,58 @@ body.page-participant-giveaway-card {
 }
 
 .pgc-desc-text {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
+  /* display: block вместо flex — flex ломает перенос строк и инлайн-теги */
+  display: block;
+  width: 100%;
 
   font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   font-weight: 400;
   color: #ffffff;
-  font-size: 10px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 20px;
 
-  /* В реале описание может быть многострочным */
   white-space: normal;
+  word-break: break-word;
+}
+
+/* Форматирование внутри описания — наследуется от родителя, только добавляем стили */
+.pgc-desc-text b,
+.pgc-desc-text strong {
+  font-weight: 700;
+}
+
+.pgc-desc-text i,
+.pgc-desc-text em {
+  font-style: italic;
+}
+
+.pgc-desc-text u,
+.pgc-desc-text ins {
+  text-decoration: underline;
+}
+
+.pgc-desc-text s,
+.pgc-desc-text strike,
+.pgc-desc-text del {
+  text-decoration: line-through;
+}
+
+.pgc-desc-text code {
+  font-family: 'Courier New', Courier, monospace;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 13px;
+}
+
+.pgc-desc-text pre {
+  font-family: 'Courier New', Courier, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
 }
 
 /* Channels block */
