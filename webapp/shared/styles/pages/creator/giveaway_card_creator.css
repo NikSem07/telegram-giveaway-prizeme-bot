@@ -69,12 +69,7 @@ body.page-creator-giveaway-card {
 }
 
 .page-creator-giveaway-card .mode-switcher-container::after {
-  content: "Карточка розыгрыша";
-  font-family: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  color: #ffffff;
+  content: none;
 }
 
 /* ===== Основная секция ===== */
@@ -93,9 +88,17 @@ body.page-creator-giveaway-card .cgcc-screen {
   z-index: 1;
 }
 
+/* Снимаем горизонтальный padding с контейнеров — блок тянется на всю ширину */
+body.page-creator-giveaway-card #main-content,
+body.page-creator-giveaway-card .main-content,
+body.page-creator-giveaway-card .wrap {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 /* ===== TOP: заголовок + бейджи ===== */
 body.page-creator-giveaway-card .cgcc-top {
-  padding: 48px 16px 0;
+  padding: 16px 16px 0;
   width: 100%;
   box-sizing: border-box;
 }
