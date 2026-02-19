@@ -1225,6 +1225,40 @@ app.post('/api/results', async (req, res) => {
   }
 });
 
+// --- POST /api/check_prime_status ---
+// Возвращает PRIME-статус пользователя из таблицы bot_users
+app.post('/api/check_prime_status', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+    }
+
+    const result = await pool.query(
+      `SELECT is_prime FROM bot_users WHERE user_id = $1`,
+      [userId]
+    );
+
+    // Если пользователя нет в bot_users — считаем не-PRIME (он ещё не открывал бота)
+    const isPrime = result.rows.length > 0 ? result.rows[0].is_prime : false;
+
+    console.log(`[API check_prime_status] user_id=${userId}, is_prime=${isPrime}`);
+
+    return res.json({ ok: true, is_prime: isPrime });
+
+  } catch (error) {
+    console.error('[API check_prime_status] error:', error);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
 // --- POST /api/participant_home_giveaways ---
 // Отдает списки розыгрышей для главной страницы участника:
 // top — "Топ розыгрыши", latest — "Все текущие розыгрыши"
@@ -1294,6 +1328,7 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
       ok: true,
       top: mapped.slice(0, limitTop),
       latest: mapped.slice(0, limitLatest),
+      total_latest_count: mapped.length,
     });
 
   } catch (error) {
