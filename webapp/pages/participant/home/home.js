@@ -140,7 +140,7 @@ function renderPrimeLock(container, totalCount) {
                 <span class="prime-lock-title">Доступ только для PRIME</span>
                 <span class="prime-lock-desc">Получите доступ к ${countText}</span>
             </div>
-            <button class="prime-lock-btn" type="button" onclick="window.Telegram?.WebApp?.openLink('https://t.me/tribute/app?startapp=sNMT')">
+            <button class="prime-lock-btn" type="button" onclick="(function(){ const tg = window.Telegram?.WebApp; if(tg && typeof tg.openTelegramLink === 'function'){ tg.openTelegramLink('https://t.me/tribute/app?startapp=sNMT'); } else if(tg && typeof tg.openLink === 'function'){ tg.openLink('https://t.me/tribute/app?startapp=sNMT'); } })()">
                 Получить доступ
             </button>
         </div>
