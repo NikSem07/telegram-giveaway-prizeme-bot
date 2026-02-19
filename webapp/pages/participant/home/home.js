@@ -350,19 +350,46 @@ function initCatalogFilterLocked() {
 
 // ====== Заглушка для Basic-пользователей ======
 function renderPrimeLock(container, totalCount) {
-    const countText = totalCount > 0 ? `${totalCount} розыгрышам` : 'эксклюзивным розыгрышам';
+    const countLabel = totalCount > 0 ? totalCount : '';
+    const titleText  = countLabel ? `Доступ к ${countLabel} розыгрышам для PRIME` : 'Доступ к розыгрышам для PRIME';
+
     container.innerHTML = `
         <div class="prime-lock-block">
-            <div class="prime-lock-icon">🔒</div>
-            <div class="prime-lock-text">
-                <span class="prime-lock-title">Доступ только для PRIME</span>
-                <span class="prime-lock-desc">Получите доступ к ${countText}</span>
+            <!-- Фоновое изображение с градиентом -->
+            <div class="prime-lock-hero">
+                <img
+                    class="prime-lock-hero-img"
+                    src="/miniapp-static/assets/images/giveaway-catalog.webp"
+                    alt=""
+                    draggable="false"
+                />
+                <div class="prime-lock-hero-gradient"></div>
             </div>
-            <button class="prime-lock-btn" type="button" onclick="(function(){ const tg = window.Telegram?.WebApp; if(tg && typeof tg.openTelegramLink === 'function'){ tg.openTelegramLink('https://t.me/tribute/app?startapp=sNMT'); } else if(tg && typeof tg.openLink === 'function'){ tg.openLink('https://t.me/tribute/app?startapp=sNMT'); } })()">
-                Получить доступ
-            </button>
+
+            <!-- Контент поверх изображения -->
+            <div class="prime-lock-content">
+                <div class="prime-lock-icon">🔒</div>
+                <div class="prime-lock-text">
+                    <span class="prime-lock-title">${titleText}</span>
+                    <span class="prime-lock-desc">Получите доступ ко всему каталогу розыгрышей PrizeMe</span>
+                </div>
+                <button class="prime-lock-btn" type="button" id="prime-lock-cta">
+                    <span class="prime-lock-btn-sheen"></span>
+                    Получить доступ
+                </button>
+            </div>
         </div>
     `;
+
+    // Обработчик кнопки — открываем Tribute
+    document.getElementById('prime-lock-cta')?.addEventListener('click', () => {
+        const tg = window.Telegram?.WebApp;
+        if (tg && typeof tg.openTelegramLink === 'function') {
+            tg.openTelegramLink('https://t.me/tribute/app?startapp=sNMT');
+        } else if (tg && typeof tg.openLink === 'function') {
+            tg.openLink('https://t.me/tribute/app?startapp=sNMT');
+        }
+    });
 }
 
 
