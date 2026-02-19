@@ -199,6 +199,130 @@
   color: var(--color-text);
 }
 
+/* ====== Каталог розыгрышей: заголовок + фильтр ====== */
+.catalog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.catalog-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text, #fff);
+    line-height: 1.2;
+}
+
+/* Фильтр-дропдаун */
+.catalog-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    background: var(--color-bg-secondary, #1c1c1e);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+    position: relative;
+}
+
+.catalog-filter:active {
+    opacity: 0.7;
+}
+
+.catalog-filter-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary, #8e8e93);
+    white-space: nowrap;
+}
+
+.catalog-filter-chevron {
+    color: var(--color-text-secondary, #8e8e93);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.catalog-filter.is-open .catalog-filter-chevron {
+    transform: rotate(180deg);
+}
+
+/* Неактивный фильтр (для Basic-пользователей) */
+.catalog-filter--locked {
+    cursor: default;
+}
+
+/* Анимация дёргания для Basic */
+@keyframes catalog-filter-shake {
+    0%   { transform: translateX(0); }
+    20%  { transform: translateX(-4px); }
+    40%  { transform: translateX(4px); }
+    60%  { transform: translateX(-3px); }
+    80%  { transform: translateX(3px); }
+    100% { transform: translateX(0); }
+}
+
+.catalog-filter--shaking {
+    animation: catalog-filter-shake 0.4s ease;
+}
+
+/* Выпадающее меню сортировки */
+.catalog-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    background: var(--color-bg-secondary, #2c2c2e);
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+    /* Начальное состояние — скрыт */
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.catalog-dropdown.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.catalog-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text, #fff);
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.1s ease;
+}
+
+.catalog-dropdown-item + .catalog-dropdown-item {
+    border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.catalog-dropdown-item:active,
+.catalog-dropdown-item.is-active {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.catalog-dropdown-item.is-active {
+    font-weight: 600;
+    color: var(--pgc-blue-chip, #4379ff);
+}
+
 /* ===== Плейсхолдер загрузки: прыгающие точки ===== */
 .loading-placeholder {
   display: flex;

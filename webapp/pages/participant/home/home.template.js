@@ -32,10 +32,15 @@ export default function homeTemplate(context = {}) {
             <div id="top-giveaways-list" class="top-list"></div>
         </div>
 
-        <div class="section-title section-title-row" style="margin-top:18px;">
-            <span>Все текущие розыгрыши</span>
-            <span class="section-title-arrow">&gt;</span>
+        <div class="catalog-header" style="margin-top:18px;">
+            <span class="catalog-title">Каталог розыгрышей</span>
+            <div class="catalog-filter" id="catalog-filter" aria-label="Сортировка">
+                <span class="catalog-filter-label" id="catalog-filter-label">Сначала новые</span>
+                <svg class="catalog-filter-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
         </div>
-        <div id="all-giveaways-list" style="margin-top:8px;"></div>
+        <div id="all-giveaways-list" style="margin-top:4px;"></div>
     `;
 }

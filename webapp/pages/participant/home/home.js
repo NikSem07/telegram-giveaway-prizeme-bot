@@ -118,9 +118,13 @@ async function loadGiveawaysLists() {
         renderGiveawayList(topContainer, data.top || [], 'top');
 
         if (isPrime) {
-            renderGiveawayList(allContainer, data.latest || [], 'all');
+            // Сохраняем данные для клиентской сортировки
+            _catalogData = data.latest || [];
+            renderGiveawayList(allContainer, sortCatalog(_catalogData, _catalogSort), 'all');
+            initCatalogFilter();
         } else {
             renderPrimeLock(allContainer, data.total_latest_count || 0);
+            initCatalogFilterLocked();
         }
 
     } catch (err) {
@@ -128,6 +132,148 @@ async function loadGiveawaysLists() {
         topContainer.innerHTML = '<div class="giveaway-card">Не удалось загрузить розыгрыши</div>';
         allContainer.innerHTML = '';
     }
+}
+
+// ====== Каталог: хранение данных и состояния сортировки ======
+
+/** Полный список розыгрышей «all», загруженный один раз. */
+let _catalogData = [];
+
+/** Текущий режим сортировки. */
+let _catalogSort = 'newest';
+
+const SORT_OPTIONS = [
+    { key: 'newest',      label: 'Сначала новые' },
+    { key: 'ending_soon', label: 'Скоро завершение' },
+    { key: 'popular',     label: 'Самые популярные' },
+    { key: 'least',       label: 'Менее популярные' },
+];
+
+/**
+ * Сортирует массив розыгрышей по выбранному критерию.
+ * Работает на клиенте — без повторных запросов к API.
+ */
+function sortCatalog(list, sortKey) {
+    const copy = [...list];
+    switch (sortKey) {
+        case 'newest':
+            // По дате публикации: новые сначала (id DESC — самый надёжный прокси)
+            return copy.sort((a, b) => (b.id || 0) - (a.id || 0));
+        case 'ending_soon':
+            // По времени окончания: раньше заканчивается — выше
+            return copy.sort((a, b) => {
+                const ta = a.end_at_utc ? new Date(a.end_at_utc).getTime() : Infinity;
+                const tb = b.end_at_utc ? new Date(b.end_at_utc).getTime() : Infinity;
+                return ta - tb;
+            });
+        case 'popular':
+            // По числу участников: больше — выше
+            return copy.sort((a, b) => (b.participants_count || 0) - (a.participants_count || 0));
+        case 'least':
+            // По числу участников: меньше — выше
+            return copy.sort((a, b) => (a.participants_count || 0) - (b.participants_count || 0));
+        default:
+            return copy;
+    }
+}
+
+/**
+ * Инициализирует фильтр-дропдаун для PRIME-пользователей.
+ * Вся логика локальная — перерисовывает список без запроса к API.
+ */
+function initCatalogFilter() {
+    const filterEl = document.getElementById('catalog-filter');
+    const labelEl  = document.getElementById('catalog-filter-label');
+    if (!filterEl || !labelEl) return;
+
+    // Создаём выпадающее меню
+    const dropdown = document.createElement('div');
+    dropdown.className = 'catalog-dropdown';
+    dropdown.innerHTML = SORT_OPTIONS.map(opt => `
+        <button
+            class="catalog-dropdown-item ${opt.key === _catalogSort ? 'is-active' : ''}"
+            data-sort="${opt.key}"
+            type="button"
+        >${opt.label}</button>
+    `).join('');
+    filterEl.appendChild(dropdown);
+
+    // Открыть / закрыть
+    filterEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = filterEl.classList.toggle('is-open');
+        dropdown.classList.toggle('is-visible', isOpen);
+    });
+
+    // Выбор пункта
+    dropdown.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-sort]');
+        if (!btn) return;
+
+        const newSort = btn.dataset.sort;
+        if (newSort === _catalogSort) {
+            filterEl.classList.remove('is-open');
+            dropdown.classList.remove('is-visible');
+            return;
+        }
+
+        _catalogSort = newSort;
+        labelEl.textContent = SORT_OPTIONS.find(o => o.key === newSort)?.label || '';
+
+        // Обновляем active-класс
+        dropdown.querySelectorAll('.catalog-dropdown-item').forEach(el => {
+            el.classList.toggle('is-active', el.dataset.sort === newSort);
+        });
+
+        filterEl.classList.remove('is-open');
+        dropdown.classList.remove('is-visible');
+
+        // Перерисовываем список без запроса к API
+        const allContainer = document.getElementById('all-giveaways-list');
+        if (allContainer && _catalogData.length) {
+            renderGiveawayList(allContainer, sortCatalog(_catalogData, _catalogSort), 'all');
+        }
+    });
+
+    // Закрыть при клике вне
+    document.addEventListener('click', () => {
+        filterEl.classList.remove('is-open');
+        dropdown.classList.remove('is-visible');
+    }, { capture: false });
+}
+
+/**
+ * Инициализирует заблокированный фильтр для Basic-пользователей.
+ * При нажатии — анимация дёргания + вибрация.
+ */
+function initCatalogFilterLocked() {
+    const filterEl = document.getElementById('catalog-filter');
+    if (!filterEl) return;
+
+    filterEl.classList.add('catalog-filter--locked');
+
+    filterEl.addEventListener('click', () => {
+        // Вибрация (только мобильные)
+        if (navigator.vibrate) navigator.vibrate(80);
+
+        // Анимация дёргания
+        filterEl.classList.remove('catalog-filter--shaking');
+        // Небольшой reflow чтобы анимация сработала повторно
+        void filterEl.offsetWidth;
+        filterEl.classList.add('catalog-filter--shaking');
+
+        // Пульс на кнопке «Получить доступ»
+        const btn = document.querySelector('.prime-lock-btn');
+        if (btn) {
+            btn.classList.remove('prime-lock-btn--pulse');
+            void btn.offsetWidth;
+            btn.classList.add('prime-lock-btn--pulse');
+        }
+    });
+
+    filterEl.addEventListener('animationend', () => {
+        filterEl.classList.remove('catalog-filter--shaking');
+    });
 }
 
 // ====== Заглушка для Basic-пользователей ======
