@@ -1,51 +1,122 @@
 /* webapp/shared/styles/pages/participant/home.css */
 /* Стили для главной страницы участника */
 
-/* Топ-блок с градиентом */
+/* ===== TOP-FRAME: двухчастный блок (герой + список) ===== */
 .top-frame {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
-  background: var(--gradient-primary);
   margin-bottom: var(--spacing-lg);
+  background: var(--color-bg-secondary);   /* серый фон для нижней части */
+}
+
+/* --- Верхняя часть: изображение-герой --- */
+.top-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;          /* пропорции как у референса */
+  overflow: hidden;
+}
+
+.top-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Liquid-glass подложка в нижней части изображения */
+.top-hero-glass {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 14px 14px;
+
+  /* Liquid glass эффект */
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.20) 60%,
+    rgba(0, 0, 0, 0.00) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Текстовый блок внутри glass */
+.top-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .top-label {
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: var(--spacing-xs);
-  color: rgba(250, 250, 250, 0.9);
-}
-
-.top-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--spacing-xs);
-}
-
-.top-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.top-title-emoji {
-  font-size: 18px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.2;
 }
 
 .top-title-text {
   font-size: 18px;
-  font-weight: 600;
-  line-height: 18px;
-  color: rgba(250, 250, 250, 1);
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 1);
 }
 
-/* Список в топ-блоке */
+/* Круглая кнопка со стрелкой */
+.top-arrow {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+
+  /* Полупрозрачный белый фон — как у референса */
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  border: none;
+  cursor: pointer;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast);
+}
+
+.top-arrow:active {
+  background: rgba(255, 255, 255, 0.40);
+}
+
+.top-arrow-img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  pointer-events: none;
+}
+
+/* --- Нижняя часть: список карточек --- */
 .top-list {
-  margin-top: var(--spacing-sm);
+  /* Нет padding — карточки идут встык */
 }
 
 /* Секция "Все текущие розыгрыши" */

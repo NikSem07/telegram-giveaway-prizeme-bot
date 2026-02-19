@@ -117,6 +117,8 @@ function renderGiveawayList(container, list, prefix) {
         card.className = isTop ? 'giveaway-card giveaway-card--top' : 'giveaway-card giveaway-card--all';
 
         if (isTop) {
+            // giveaway name (internal_title) — одна строка с fade-вправо
+            const giveawayName = escapeHtml(g.title || g.internal_title || '');
             card.innerHTML = `
                 <div class="giveaway-left">
                     <div class="giveaway-avatar giveaway-avatar--top">
@@ -131,7 +133,7 @@ function renderGiveawayList(container, list, prefix) {
 
                 <div class="giveaway-info">
                     <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
-                    <div class="giveaway-desc">${escapeHtml(stripTelegramMarkup(desc) || 'Описание розыгрыша')}</div>
+                    <div class="giveaway-name-fade">${giveawayName}</div>
                     <div class="giveaway-timer" id="${timerId}"></div>
                 </div>
             `;

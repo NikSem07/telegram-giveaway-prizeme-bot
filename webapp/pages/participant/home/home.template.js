@@ -4,18 +4,31 @@ export default function homeTemplate(context = {}) {
     
     return `
         <div class="top-frame">
-            <div class="top-label">Рекомендуем</div>
-
-            <div class="top-title-row">
-                <div class="top-title">
-                    <span class="top-title-emoji">🔥</span>
-                    <span class="top-title-text">Топ розыгрыши</span>
+            <!-- Верхняя часть: изображение-герой -->
+            <div class="top-hero">
+                <img
+                    class="top-hero-img"
+                    src="/miniapp-static/assets/images/top-gift.webp"
+                    alt="Топ розыгрыши"
+                    draggable="false"
+                />
+                <!-- Liquid-glass подложка поверх изображения -->
+                <div class="top-hero-glass">
+                    <div class="top-hero-text">
+                        <span class="top-label">РЕКОМЕНДУЕМ</span>
+                        <span class="top-title-text">🔥 Топ розыгрыши</span>
+                    </div>
+                    <button class="top-arrow" type="button" aria-label="Открыть топ">
+                        <img
+                            class="top-arrow-img"
+                            src="/miniapp-static/assets/icons/arrow-icon.svg"
+                            alt=""
+                            aria-hidden="true"
+                        />
+                    </button>
                 </div>
-                <button class="top-arrow" type="button" aria-label="Открыть топ">
-                    <span class="top-arrow-icon">&gt;</span>
-                </button>
             </div>
-
+            <!-- Нижняя часть: список розыгрышей -->
             <div id="top-giveaways-list" class="top-list"></div>
         </div>
 

@@ -144,19 +144,56 @@
   white-space: nowrap;
 }
 
-/* Особые стили для карточек в синем блоке */
+/* ===== Карточки внутри .top-frame (новый дизайн) ===== */
+
+/* Убираем отступы и скругления у карточек — они идут встык */
 .top-frame .giveaway-card--top {
-  background: rgba(255, 255, 255, 0.10);
+  background: transparent;
+  border-radius: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 12px 14px;
 }
 
+/* Разделитель между карточками — тонкая серая линия */
+.top-frame .giveaway-card--top + .giveaway-card--top {
+  border-top: 0.5px solid rgba(255, 255, 255, 0.10);
+}
+
+/* Текст и таймер — светлые на тёмном фоне */
 .top-frame .giveaway-info {
   color: rgba(250, 250, 250, 1);
-}
-
-.top-frame .giveaway-desc {
-  color: rgba(250, 250, 250, 0.85);
+  min-width: 0;      /* важно для fade-эффекта */
 }
 
 .top-frame .giveaway-timer {
-  color: rgba(250, 250, 250, 1);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(250, 250, 250, 0.85);
+}
+
+/* Название розыгрыша с fade-эффектом справа (одна строка) */
+.giveaway-name-fade {
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: rgba(250, 250, 250, 0.70);
+  margin-bottom: 2px;
+
+  /* Маска: fade к правому краю */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgba(0,0,0,1) 0%,
+    rgba(0,0,0,1) 70%,
+    rgba(0,0,0,0) 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    rgba(0,0,0,1) 0%,
+    rgba(0,0,0,1) 70%,
+    rgba(0,0,0,0) 100%
+  );
 }
