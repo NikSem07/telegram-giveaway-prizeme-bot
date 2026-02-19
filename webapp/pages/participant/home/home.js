@@ -355,20 +355,19 @@ function renderPrimeLock(container, totalCount) {
 
     container.innerHTML = `
         <div class="prime-lock-block">
-            <!-- Фоновое изображение с градиентом -->
-            <div class="prime-lock-hero">
-                <img
-                    class="prime-lock-hero-img"
-                    src="/miniapp-static/assets/images/giveaway-catalog.webp"
-                    alt=""
-                    draggable="false"
-                />
-                <div class="prime-lock-hero-gradient"></div>
-            </div>
+            <!-- Фоновое изображение -->
+            <img
+                class="prime-lock-hero-img"
+                src="/miniapp-static/assets/images/giveaway-catalog.webp"
+                alt=""
+                draggable="false"
+            />
+
+            <!-- Градиент поверх изображения -->
+            <div class="prime-lock-hero-gradient"></div>
 
             <!-- Контент поверх изображения -->
             <div class="prime-lock-content">
-                <div class="prime-lock-icon">🔒</div>
                 <div class="prime-lock-text">
                     <span class="prime-lock-title">${titleText}</span>
                     <span class="prime-lock-desc">Получите доступ ко всему каталогу розыгрышей PrizeMe</span>
