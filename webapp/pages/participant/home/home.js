@@ -49,19 +49,6 @@ function renderToContainer(container) {
 }
 
 /**
- * Возвращает HTML-заглушку с div-контейнером для Lottie-анимации.
- * После вставки в DOM вызвать initLoadingAnimations().
- */
-function createLoadingPlaceholder() {
-    const id = `lottie-${Math.random().toString(36).slice(2, 8)}`;
-    return `
-        <div class="loading-placeholder">
-            <div class="loading-lottie" id="${id}" data-lottie-pending></div>
-        </div>
-    `;
-}
-
-/**
  * Возвращает HTML трёх прыгающих точек (CSS-анимация).
  * Цвет совпадает с Loading-Dots-Blue: rgb(0, 98, 219).
  * Нулевые зависимости — работает всегда и везде.
