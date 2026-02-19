@@ -69,7 +69,7 @@ function createLoadingPlaceholder() {
 // ====== Загрузка розыгрышей с Node.js ======
 async function loadGiveawaysLists() {
     console.log('[HOME] loadGiveawaysLists called');
-    
+
     const topContainer = document.getElementById('top-giveaways-list');
     const allContainer = document.getElementById('all-giveaways-list');
 
@@ -83,25 +83,70 @@ async function loadGiveawaysLists() {
     allContainer.innerHTML = createLoadingPlaceholder();
 
     try {
-        const resp = await fetch('/api/participant_home_giveaways', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-        });
+        const initData = window.Telegram?.WebApp?.initData || '';
 
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
+        // Запрашиваем розыгрыши и PRIME-статус параллельно
+        const [giveawaysResp, primeResp] = await Promise.all([
+            fetch('/api/participant_home_giveaways', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            }),
+            fetch('/api/check_prime_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ init_data: initData })
+            })
+        ]);
+
+        const data = await giveawaysResp.json();
+        if (!giveawaysResp.ok || !data.ok) {
             throw new Error(data.reason || 'API error');
         }
 
+        // PRIME-статус: если запрос упал — считаем не-PRIME (не блокируем UI)
+        let isPrime = false;
+        try {
+            const primeData = await primeResp.json();
+            isPrime = primeData.ok && primeData.is_prime === true;
+        } catch (e) {
+            console.warn('[HOME] prime status check failed, defaulting to non-prime');
+        }
+
+        console.log(`[HOME] is_prime=${isPrime}`);
+
         renderGiveawayList(topContainer, data.top || [], 'top');
-        renderGiveawayList(allContainer, data.latest || [], 'all');
+
+        if (isPrime) {
+            renderGiveawayList(allContainer, data.latest || [], 'all');
+        } else {
+            renderPrimeLock(allContainer, data.total_latest_count || 0);
+        }
+
     } catch (err) {
         console.error('[HOME-PARTICIPANT] loadGiveawaysLists error:', err);
         topContainer.innerHTML = '<div class="giveaway-card">Не удалось загрузить розыгрыши</div>';
         allContainer.innerHTML = '';
     }
 }
+
+// ====== Заглушка для Basic-пользователей ======
+function renderPrimeLock(container, totalCount) {
+    const countText = totalCount > 0 ? `${totalCount} розыгрышам` : 'эксклюзивным розыгрышам';
+    container.innerHTML = `
+        <div class="prime-lock-block">
+            <div class="prime-lock-icon">🔒</div>
+            <div class="prime-lock-text">
+                <span class="prime-lock-title">Доступ только для PRIME</span>
+                <span class="prime-lock-desc">Получите доступ к ${countText}</span>
+            </div>
+            <button class="prime-lock-btn" type="button" onclick="window.Telegram?.WebApp?.openLink('https://t.me/+EsFLBqtCrkljZWQy')">
+                Получить доступ
+            </button>
+        </div>
+    `;
+}
+
 
 function renderGiveawayList(container, list, prefix) {
     container.innerHTML = '';

@@ -243,3 +243,55 @@
     opacity: 1;
   }
 }
+
+/* ====== PRIME Lock Block ====== */
+.prime-lock-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 16px 24px;
+    padding: 24px 20px;
+    background: var(--color-bg-secondary, #1c1c1e);
+    border-radius: 16px;
+    text-align: center;
+}
+
+.prime-lock-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.prime-lock-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.prime-lock-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary, #fff);
+}
+
+.prime-lock-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary, #8e8e93);
+}
+
+.prime-lock-btn {
+    margin-top: 4px;
+    padding: 12px 28px;
+    background: var(--pgc-blue-chip, #4379ff);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.prime-lock-btn:active {
+    opacity: 0.8;
+}
