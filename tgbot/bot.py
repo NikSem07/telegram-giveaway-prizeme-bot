@@ -1314,6 +1314,8 @@ class BotUser(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_group_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_prime: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_prime_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class OrganizerChannel(Base):
     __tablename__="organizer_channels"
@@ -1383,8 +1385,11 @@ class GiveawayMechanic(Base):
 
 # ---- DB INIT ----
 
-# ID закрытой группы
+# ID закрытой группы (Premium — для создателей)
 PREMIUM_GROUP_ID = -1003320639276
+
+# ID закрытого канала PRIME (для участников)
+PRIME_CHANNEL_ID = -1003741131684
 
 # 🔧 ПРИНУДИТЕЛЬНО УКАЗЫВАЕМ ASYNCPG ДРАЙВЕР
 DB_URL = "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod"
@@ -1576,6 +1581,64 @@ async def check_group_membership(user_id: int) -> bool:
         # Если пользователь не найден в группе или произошла ошибка
         logging.warning(f"⚠️ Ошибка проверки группы для {user_id}: {e}")
         return False
+
+# Функция обновления PRIME-статуса
+async def check_prime_channel_membership(user_id: int) -> bool:
+    """
+    Проверяет, состоит ли пользователь в закрытом канале PrizeMe PRIME
+    Возвращает True если состоит, False если нет
+    """
+    try:
+        logging.info(f"🔍 Проверка PRIME-канала для user_id={user_id}, канал={PRIME_CHANNEL_ID}")
+        chat_member = await bot.get_chat_member(
+            chat_id=PRIME_CHANNEL_ID,
+            user_id=user_id
+        )
+        status = chat_member.status.lower()
+        logging.info(f"🔍 Статус пользователя {user_id} в PRIME-канале: {status}")
+
+        is_member = status in ["member", "administrator", "creator"]
+        if status == "restricted":
+            is_member = getattr(chat_member, "is_member", False)
+
+        logging.info(f"🔍 PRIME-канал: user={user_id}, status={status}, is_member={is_member}")
+        return is_member
+
+    except Exception as e:
+        logging.warning(f"⚠️ Ошибка проверки PRIME-канала для {user_id}: {e}")
+        return False
+
+# Функция обновления PRIME-статуса_2
+async def check_and_update_prime_status(bot_user: BotUser, session) -> None:
+    """
+    Проверяет членство в PrizeMe PRIME и обновляет is_prime пользователя.
+    Независима от premium-логики — пользователь может быть одновременно premium и prime.
+    """
+    current_time = datetime.now(timezone.utc)
+    check_delay = 2  # секунд
+
+    if (bot_user.last_prime_check and
+            (current_time - bot_user.last_prime_check).total_seconds() < check_delay):
+        logging.info(f"⏰ Пропускаем PRIME-проверку для {bot_user.user_id} (слишком рано)")
+        return
+
+    try:
+        is_prime = await check_prime_channel_membership(bot_user.user_id)
+
+        old_prime = bot_user.is_prime
+        if old_prime != is_prime:
+            bot_user.is_prime = is_prime
+            logging.info(f"🔄 PRIME-статус пользователя {bot_user.user_id}: {old_prime} -> {is_prime}")
+        else:
+            logging.info(f"ℹ️ PRIME-статус пользователя {bot_user.user_id} не изменился: {is_prime}")
+
+        bot_user.last_prime_check = current_time
+        bot_user.updated_at = current_time
+
+        logging.info(f"✅ PRIME-проверка завершена для {bot_user.user_id}")
+
+    except Exception as e:
+        logging.error(f"❌ Ошибка обновления PRIME-статуса для {bot_user.user_id}: {e}")
 
 # Функция обновления премиум-статуса
 async def check_and_update_premium_status(bot_user: BotUser, session) -> None:
