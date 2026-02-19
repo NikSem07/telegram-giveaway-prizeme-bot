@@ -134,6 +134,77 @@ async function loadGiveawaysLists() {
     }
 }
 
+// ====== Pop-up: переход к розыгрышу ======
+
+/**
+ * Показывает полупрозрачный pop-up с подтверждением перехода к розыгрышу.
+ * При подтверждении открывает пост в PRIME-канале через Telegram API.
+ * Mini-app не закрывается — используем openTelegramLink.
+ */
+function showGiveawayNavigateModal(giveaway) {
+    // Удаляем предыдущий modal если есть
+    document.getElementById('giveaway-navigate-modal')?.remove();
+
+    const title = escapeHtml(giveaway.title || giveaway.internal_title || 'розыгрышу');
+
+    const modal = document.createElement('div');
+    modal.id = 'giveaway-navigate-modal';
+    modal.className = 'gnav-overlay';
+    modal.innerHTML = `
+        <div class="gnav-sheet">
+            <p class="gnav-question">Хотите перейти к розыгрышу?</p>
+            <p class="gnav-name">${title}</p>
+            <div class="gnav-actions">
+                <button class="gnav-btn gnav-btn--cancel" type="button">Отмена</button>
+                <button class="gnav-btn gnav-btn--confirm" type="button">Да</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Анимация появления
+    requestAnimationFrame(() => modal.classList.add('is-visible'));
+
+    const close = () => {
+        modal.classList.remove('is-visible');
+        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+    };
+
+    // Отмена
+    modal.querySelector('.gnav-btn--cancel').addEventListener('click', close);
+
+    // Закрытие по оверлею
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) close();
+    });
+
+    // Подтверждение — открываем пост в PRIME-канале
+    modal.querySelector('.gnav-btn--confirm').addEventListener('click', () => {
+        close();
+        openPrimeChannelPost(giveaway.id);
+    });
+}
+
+/**
+ * Открывает пост розыгрыша в PRIME-канале.
+ * Mini-app остаётся открытым (скрывается на фон).
+ */
+function openPrimeChannelPost(giveawayId) {
+    const tg = window.Telegram?.WebApp;
+
+    // Ссылка на PRIME-канал — при наличии поста бот туда публикует
+    // Формат: https://t.me/c/<internal_id>/<message_id>
+    // Пока используем ссылку на канал — после получения message_id можно уточнить
+    const primeChannelUrl = 'https://t.me/+EsFLBqtCrkljZWQy';
+
+    if (tg && typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(primeChannelUrl);
+    } else if (tg && typeof tg.openLink === 'function') {
+        tg.openLink(primeChannelUrl);
+    }
+}
+
 // ====== Каталог: хранение данных и состояния сортировки ======
 
 /** Полный список розыгрышей «all», загруженный один раз. */
@@ -207,6 +278,7 @@ function initCatalogFilter() {
 
     // Выбор пункта
     dropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
         const btn = e.target.closest('[data-sort]');
         if (!btn) return;
 
@@ -364,8 +436,18 @@ function renderGiveawayList(container, list, prefix) {
                     <div class="giveaway-desc">${escapeHtml(stripTelegramMarkup(desc) || 'Описание розыгрыша')}</div>
                     <div class="giveaway-timer" id="${timerId}"></div>
                 </div>
+
+                <div class="giveaway-card-arrow">
+                    <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                        <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
             `;
+
+            // Обработчик клика — показываем pop-up
+            card.addEventListener('click', () => showGiveawayNavigateModal(g));
         }
+
         container.appendChild(card);
 
         if (window.updateCountdown && g.end_at_utc) {

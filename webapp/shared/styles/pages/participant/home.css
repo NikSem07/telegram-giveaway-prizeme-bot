@@ -419,3 +419,82 @@
 .prime-lock-btn:active {
     opacity: 0.8;
 }
+
+/* ====== Pop-up: переход к розыгрышу ====== */
+.gnav-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    transition: background 0.25s ease;
+}
+
+.gnav-overlay.is-visible {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.gnav-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--color-bg-secondary, #1c1c1e);
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.gnav-overlay.is-visible .gnav-sheet {
+    transform: translateY(0);
+}
+
+.gnav-question {
+    margin: 0 0 6px;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--color-text, #fff);
+    text-align: center;
+}
+
+.gnav-name {
+    margin: 0 0 24px;
+    font-size: 13px;
+    color: var(--color-text-secondary, #8e8e93);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gnav-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.gnav-btn {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.gnav-btn:active {
+    opacity: 0.75;
+}
+
+.gnav-btn--cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.gnav-btn--confirm {
+    background: var(--pgc-blue-chip, #4379ff);
+    color: #fff;
+}
