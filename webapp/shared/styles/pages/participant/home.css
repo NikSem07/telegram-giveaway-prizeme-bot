@@ -198,3 +198,19 @@
   transform: translateY(1px);
   color: var(--color-text);
 }
+
+/* ===== Плейсхолдер загрузки с Lottie-анимацией ===== */
+.loading-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 24px 0;
+  box-sizing: border-box;
+}
+
+.loading-lottie {
+  width: 80px;
+  height: 80px;
+  display: block;
+}

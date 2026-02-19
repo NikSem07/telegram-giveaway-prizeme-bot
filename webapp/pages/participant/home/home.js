@@ -48,6 +48,23 @@ function renderToContainer(container) {
     }, 100);
 }
 
+/**
+ * Возвращает HTML-заглушку с Lottie-анимацией загрузки.
+ * Используется во всех списках до прихода данных с сервера.
+ */
+function createLoadingPlaceholder() {
+    return `
+        <div class="loading-placeholder">
+            <dotlottie-player
+                src="/miniapp-static/assets/gif/Loading-Dots-Blue.lottie"
+                autoplay
+                loop
+                class="loading-lottie"
+            ></dotlottie-player>
+        </div>
+    `;
+}
+
 // ====== Загрузка розыгрышей с Node.js ======
 async function loadGiveawaysLists() {
     console.log('[HOME] loadGiveawaysLists called');
@@ -61,8 +78,8 @@ async function loadGiveawaysLists() {
         return;
     }
 
-    topContainer.innerHTML = '<div class="giveaway-card">Загружаем топ розыгрышей…</div>';
-    allContainer.innerHTML = '<div class="giveaway-card">Загружаем текущие розыгрыши…</div>';
+    topContainer.innerHTML = createLoadingPlaceholder();
+    allContainer.innerHTML = createLoadingPlaceholder();
 
     try {
         const resp = await fetch('/api/participant_home_giveaways', {
