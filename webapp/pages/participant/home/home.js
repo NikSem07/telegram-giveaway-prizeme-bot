@@ -49,20 +49,39 @@ function renderToContainer(container) {
 }
 
 /**
- * Возвращает HTML-заглушку с Lottie-анимацией загрузки.
- * Используется во всех списках до прихода данных с сервера.
+ * Возвращает HTML-заглушку с div-контейнером для Lottie-анимации.
+ * После вставки в DOM вызвать initLoadingAnimations().
  */
 function createLoadingPlaceholder() {
+    const id = `lottie-${Math.random().toString(36).slice(2, 8)}`;
     return `
         <div class="loading-placeholder">
-            <dotlottie-player
-                src="/miniapp-static/assets/gif/Loading-Dots-Blue.lottie"
-                autoplay
-                loop
-                class="loading-lottie"
-            ></dotlottie-player>
+            <div class="loading-lottie" id="${id}" data-lottie-pending></div>
         </div>
     `;
+}
+
+/**
+ * Инициализирует все ожидающие Lottie-анимации в DOM.
+ * Безопасно вызывать многократно — повторная инициализация исключена.
+ */
+function initLoadingAnimations() {
+    if (typeof window.lottie === 'undefined') {
+        // Библиотека ещё не загрузилась — повторим через 100ms
+        setTimeout(initLoadingAnimations, 100);
+        return;
+    }
+
+    document.querySelectorAll('[data-lottie-pending]').forEach((el) => {
+        el.removeAttribute('data-lottie-pending');
+        window.lottie.loadAnimation({
+            container: el,
+            renderer:  'svg',
+            loop:      true,
+            autoplay:  true,
+            path:      '/miniapp-static/assets/gif/Loading-Dots-Blue.json',
+        });
+    });
 }
 
 // ====== Загрузка розыгрышей с Node.js ======
@@ -80,6 +99,7 @@ async function loadGiveawaysLists() {
 
     topContainer.innerHTML = createLoadingPlaceholder();
     allContainer.innerHTML = createLoadingPlaceholder();
+    initLoadingAnimations();
 
     try {
         const resp = await fetch('/api/participant_home_giveaways', {
