@@ -397,8 +397,9 @@
     inset: 0;
     background: linear-gradient(
         to bottom,
-        rgba(90, 90, 90, 0.75) 0%,
-        rgba(0,  0,  0,  0.85) 100%
+        rgba(60, 60, 60, 0.80) 0%,
+        rgba(60, 60, 60, 0.80) 30%,
+        rgba(0,  0,  0,  0.92) 100%
     );
 }
 
