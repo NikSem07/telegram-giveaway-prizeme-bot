@@ -1374,6 +1374,13 @@ class Winner(Base):
     rank: Mapped[int] = mapped_column(Integer)
     hash_used: Mapped[str] = mapped_column(String(128))
 
+class PrimeChannelPost(Base):
+    __tablename__ = "prime_channel_posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    giveaway_id: Mapped[int] = mapped_column(ForeignKey("giveaways.id"), unique=True, index=True)
+    message_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 class GiveawayMechanic(Base):
     __tablename__ = "giveaway_mechanics"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -5869,6 +5876,246 @@ async def cb_start_raffle(cq: CallbackQuery):
 
     await cq.answer()
 
+async def _publish_to_prime_channel(gid: int, gw: "Giveaway") -> int | None:
+    """
+    Публикует пост розыгрыша в PRIME-канал.
+    Идентично публикации в обычные каналы.
+    Возвращает message_id опубликованного поста или None при ошибке.
+    Результат сохраняется в таблице prime_channel_posts.
+    """
+    end_at_msk_dt = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    now_msk = datetime.now(MSK_TZ).date()
+    days_left = max(0, (end_at_msk_dt.date() - now_msk).days)
+
+    preview_text = _compose_post_text(
+        "",
+        gw.winners_count,
+        desc_html=(gw.public_description or ""),
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
+    )
+
+    kind, file_id = unpack_media(gw.photo_file_id)
+    sent_message_id: int | None = None
+
+    try:
+        if file_id:
+            if kind == "photo":
+                suggested = "image.jpg"
+            elif kind == "animation":
+                suggested = "animation.mp4"
+            elif kind == "video":
+                suggested = "video.mp4"
+            else:
+                suggested = "file.bin"
+
+            key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id, suggested)
+            preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+            hidden_link = f'<a href="{preview_url}"> </a>'
+            media_position = getattr(gw, "media_position", "bottom")
+
+            if media_position == "top":
+                full_text = hidden_link + "\n" + preview_text
+            else:
+                full_text = preview_text + "\n\n" + hidden_link
+
+            lp = LinkPreviewOptions(
+                is_disabled=False,
+                prefer_large_media=True,
+                prefer_small_media=False,
+                show_above_text=(media_position == "top"),
+                url=preview_url,
+            )
+
+            sent = await bot.send_message(
+                chat_id=PRIME_CHANNEL_ID,
+                text=full_text,
+                parse_mode="HTML",
+                link_preview_options=lp,
+                reply_markup=kb_public_participate(gid, for_channel=True),
+            )
+        else:
+            cleaned_html, disable_preview = text_preview_cleaner.clean_text_preview(preview_text, has_media=False)
+            send_kwargs = {
+                "chat_id": PRIME_CHANNEL_ID,
+                "text": cleaned_html,
+                "parse_mode": "HTML",
+                "reply_markup": kb_public_participate(gid, for_channel=True),
+            }
+            if disable_preview:
+                send_kwargs["disable_web_page_preview"] = True
+            sent = await bot.send_message(**send_kwargs)
+
+        sent_message_id = sent.message_id
+        logging.info("✅ [PRIME] Пост опубликован в PRIME-канале, gid=%s, msg_id=%s", gid, sent_message_id)
+
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка публикации в PRIME-канале, gid=%s: %s", gid, e)
+        return None
+
+    # Сохраняем message_id в БД
+    try:
+        async with session_scope() as s:
+            await s.execute(
+                stext("""
+                    INSERT INTO prime_channel_posts (giveaway_id, message_id)
+                    VALUES (:gid, :msg_id)
+                    ON CONFLICT (giveaway_id) DO UPDATE SET message_id = EXCLUDED.message_id
+                """),
+                {"gid": gid, "msg_id": sent_message_id},
+            )
+        logging.info("✅ [PRIME] message_id=%s сохранён для gid=%s", sent_message_id, gid)
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка сохранения message_id в БД, gid=%s: %s", gid, e)
+
+    return sent_message_id
+
+
+async def _edit_prime_channel_post(giveaway_id: int, bot_instance: Bot) -> bool:
+    """
+    Редактирует пост в PRIME-канале после завершения розыгрыша или перерозыгрыша.
+    Логика идентична edit_giveaway_post, но работает с prime_channel_posts.
+    """
+    try:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, giveaway_id)
+            if not gw:
+                logging.error("[PRIME] edit: розыгрыш %s не найден", giveaway_id)
+                return False
+
+            participants_res = await s.execute(
+                text("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
+                {"gid": giveaway_id},
+            )
+            participants_count = participants_res.scalar_one() or 0
+
+            winners_res = await s.execute(
+                stext("""
+                    SELECT w.rank, COALESCE(u.username, 'Участник') as username, e.ticket_code
+                    FROM winners w
+                    LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
+                    LEFT JOIN users u ON u.user_id = w.user_id
+                    WHERE w.giveaway_id = :gid
+                    ORDER BY w.rank
+                """),
+                {"gid": giveaway_id},
+            )
+            winners = winners_res.all()
+
+            post_res = await s.execute(
+                stext("SELECT message_id FROM prime_channel_posts WHERE giveaway_id = :gid"),
+                {"gid": giveaway_id},
+            )
+            post_row = post_res.first()
+
+        if not post_row:
+            logging.warning("[PRIME] edit: нет поста в PRIME-канале для gid=%s", giveaway_id)
+            return False
+
+        message_id = post_row[0]
+        new_text = _compose_finished_post_text(gw, winners, participants_count)
+        reply_markup = kb_finished_giveaway(giveaway_id, for_channel=True)
+
+        media_type, media_file_id = unpack_media(gw.photo_file_id)
+        has_media = bool(media_file_id)
+        cleaned_text, disable_preview = text_preview_cleaner.clean_text_preview(new_text, has_media)
+
+        if has_media and media_file_id:
+            try:
+                if media_type == "photo":
+                    suggested = "image.jpg"
+                elif media_type == "animation":
+                    suggested = "animation.mp4"
+                elif media_type == "video":
+                    suggested = "video.mp4"
+                else:
+                    suggested = "file.bin"
+
+                key, _ = await file_id_to_public_url_via_s3(bot_instance, media_file_id, suggested)
+                preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+                hidden_link = f'<a href="{preview_url}">&#8203;</a>'
+                media_position = getattr(gw, "media_position", "bottom")
+                full_html = (hidden_link + "\n" + cleaned_text) if media_position == "top" else (cleaned_text + "\n\n" + hidden_link)
+
+                lp = LinkPreviewOptions(
+                    is_disabled=False,
+                    prefer_large_media=True,
+                    prefer_small_media=False,
+                    show_above_text=(media_position == "top"),
+                    url=preview_url,
+                )
+                await bot_instance.edit_message_text(
+                    chat_id=PRIME_CHANNEL_ID,
+                    message_id=message_id,
+                    text=full_html,
+                    parse_mode="HTML",
+                    link_preview_options=lp,
+                    reply_markup=reply_markup,
+                )
+            except Exception:
+                await bot_instance.edit_message_caption(
+                    chat_id=PRIME_CHANNEL_ID,
+                    message_id=message_id,
+                    caption=cleaned_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                )
+        else:
+            send_kwargs = {
+                "chat_id": PRIME_CHANNEL_ID,
+                "message_id": message_id,
+                "text": cleaned_text,
+                "parse_mode": "HTML",
+                "reply_markup": reply_markup,
+            }
+            if disable_preview:
+                send_kwargs["disable_web_page_preview"] = True
+            await bot_instance.edit_message_text(**send_kwargs)
+
+        logging.info("✅ [PRIME] Пост отредактирован в PRIME-канале, gid=%s", giveaway_id)
+        return True
+
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка редактирования поста в PRIME-канале, gid=%s: %s", giveaway_id, e)
+        return False
+
+
+async def _cancel_prime_channel_post(giveaway_id: int, bot_instance: Bot) -> bool:
+    """
+    Редактирует пост в PRIME-канале при отмене розыгрыша —
+    убирает кнопку «Участвовать» и добавляет пометку об отмене.
+    """
+    try:
+        async with session_scope() as s:
+            gw = await s.get(Giveaway, giveaway_id)
+            post_res = await s.execute(
+                stext("SELECT message_id FROM prime_channel_posts WHERE giveaway_id = :gid"),
+                {"gid": giveaway_id},
+            )
+            post_row = post_res.first()
+
+        if not post_row or not gw:
+            return False
+
+        message_id = post_row[0]
+        cancelled_text = (gw.public_description or "") + "\n\n<b>❌ Розыгрыш отменён.</b>"
+        cleaned_text, _ = text_preview_cleaner.clean_text_preview(cancelled_text, has_media=False)
+
+        await bot_instance.edit_message_text(
+            chat_id=PRIME_CHANNEL_ID,
+            message_id=message_id,
+            text=cleaned_text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+        logging.info("✅ [PRIME] Пост помечен как отменённый в PRIME-канале, gid=%s", giveaway_id)
+        return True
+
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка обновления отменённого поста в PRIME-канале, gid=%s: %s", giveaway_id, e)
+        return False
+
 #--- Хелпер ---
 async def _launch_and_publish(gid: int, message: types.Message):
     """
@@ -6135,6 +6382,12 @@ async def _launch_and_publish(gid: int, message: types.Message):
         logging.info(f"💾 Сохранено {len(message_ids)} message_id в БД для розыгрыша {gid}")
     else:
         logging.warning(f"⚠️ Не удалось сохранить ни одного message_id для розыгрыша {gid}")
+
+    # Публикуем в PRIME-канал (системно, не зависит от каналов создателя)
+    try:
+        await _publish_to_prime_channel(gid, gw)
+    except Exception as e:
+        logging.error("❌ [PRIME] Не удалось опубликовать в PRIME-канале при запуске gid=%s: %s", gid, e)
 
     return gw
 
@@ -6777,6 +7030,11 @@ async def finalize_and_draw_job(giveaway_id: int):
     except Exception as e:
         print(f"❌ Ошибка обновления постов: {e}")
 
+    try:
+        await _edit_prime_channel_post(giveaway_id, bot)
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка обновления поста в PRIME-канале при финализации gid=%s: %s", giveaway_id, e)
+
     print(f"✅✅✅ FINALIZE_AND_DRAW_JOB ЗАВЕРШЕНА для розыгрыша {giveaway_id}")
 
 
@@ -6896,6 +7154,11 @@ async def redraw_winners(giveaway_id: int):
         print(f"✅ Посты в каналах обновлены с новыми победителями для розыгрыша {giveaway_id}")
     except Exception as e:
         print(f"❌ Ошибка обновления постов: {e}")
+
+    try:
+        await _edit_prime_channel_post(giveaway_id, bot)
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка обновления поста в PRIME-канале при перерозыгрыше gid=%s: %s", giveaway_id, e)
 
     try:
         await notify_redraw_organizer(giveaway_id, winners_tuples, len(eligible_entries), bot)
@@ -7281,6 +7544,11 @@ async def cancel_giveaway(gid:int, by_user_id:int, reason:str|None):
         scheduler.remove_job(f"final_{gid}")
     except Exception:
         pass
+
+    try:
+        await _cancel_prime_channel_post(gid, bot)
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка обновления поста при отмене gid=%s: %s", gid, e)
 
 
 # --- Функции для редактирования постов ---
