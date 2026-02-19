@@ -62,26 +62,21 @@ function createLoadingPlaceholder() {
 }
 
 /**
- * Инициализирует все ожидающие Lottie-анимации в DOM.
- * Безопасно вызывать многократно — повторная инициализация исключена.
+ * Возвращает HTML трёх прыгающих точек (CSS-анимация).
+ * Цвет совпадает с Loading-Dots-Blue: rgb(0, 98, 219).
+ * Нулевые зависимости — работает всегда и везде.
  */
-function initLoadingAnimations() {
-    if (typeof window.lottie === 'undefined') {
-        // Библиотека ещё не загрузилась — повторим через 100ms
-        setTimeout(initLoadingAnimations, 100);
-        return;
-    }
-
-    document.querySelectorAll('[data-lottie-pending]').forEach((el) => {
-        el.removeAttribute('data-lottie-pending');
-        window.lottie.loadAnimation({
-            container: el,
-            renderer:  'svg',
-            loop:      true,
-            autoplay:  true,
-            path:      '/miniapp-static/assets/gif/Loading-Dots-Blue.json',
-        });
-    });
+function createLoadingPlaceholder() {
+    return `
+        <div class="loading-placeholder">
+            <div class="loading-dots">
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+                <span class="loading-dot"></span>
+            </div>
+        </div>
+    `;
 }
 
 // ====== Загрузка розыгрышей с Node.js ======
@@ -99,7 +94,6 @@ async function loadGiveawaysLists() {
 
     topContainer.innerHTML = createLoadingPlaceholder();
     allContainer.innerHTML = createLoadingPlaceholder();
-    initLoadingAnimations();
 
     try {
         const resp = await fetch('/api/participant_home_giveaways', {
