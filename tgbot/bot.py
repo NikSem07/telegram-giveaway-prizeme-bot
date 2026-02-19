@@ -1543,10 +1543,10 @@ async def ensure_bot_user(user_id: int, username: str | None = None, first_name:
             bot_user.is_active = True
             logging.info(f"✅ Данные пользователя бота обновлены: {user_id}")
         
-        # Проверяем членство в премиум-группе
+        # Проверяем членство в премиум-группе и PRIME-канале
         await check_and_update_premium_status(bot_user, s)
+        await check_and_update_prime_status(bot_user, s)
         await s.commit()  # КОММИТ после обновлений
-        
         return bot_user
 
 # Функция проверки членства в группе
