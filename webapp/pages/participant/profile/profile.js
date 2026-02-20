@@ -2,77 +2,106 @@
 import profileTemplate from './profile.template.js';
 import TelegramData from '../../../shared/telegram-data.js';
 
-// Основная функция рендеринга страницы
-function renderProfilePage() {
+// ====== Вспомогательная функция открытия ссылок ======
+function openTelegramLink(url) {
+    const tg = window.Telegram?.WebApp;
+    if (tg && typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(url);
+    } else if (tg && typeof tg.openLink === 'function') {
+        tg.openLink(url);
+    }
+}
+
+function openExternalLink(url) {
+    const tg = window.Telegram?.WebApp;
+    if (tg && typeof tg.openLink === 'function') {
+        tg.openLink(url);
+    } else {
+        window.open(url, '_blank');
+    }
+}
+
+// ====== Навешивание обработчиков на кликабельные строки ======
+function attachProfileListeners() {
+    const items = document.querySelectorAll('[data-profile-action]');
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const action = item.dataset.profileAction;
+            switch (action) {
+                case 'support':
+                    openTelegramLink('https://t.me/prizeme_support');
+                    break;
+                case 'news':
+                    openTelegramLink('https://t.me/prizeme_official_news');
+                    break;
+                case 'website':
+                    openExternalLink('https://prizeme.ru/');
+                    break;
+                case 'prime':
+                    openTelegramLink('https://t.me/tribute/app?startapp=sNMT');
+                    break;
+                case 'premium':
+                    openTelegramLink('https://t.me/tribute/app?startapp=sHOW');
+                    break;
+                case 'donate':
+                    openTelegramLink('https://t.me/tribute/app?startapp=dA1o');
+                    break;
+            }
+        });
+    });
+}
+
+// ====== Основная функция рендеринга ======
+async function renderProfilePage() {
     const main = document.getElementById('main-content');
     if (!main) return;
 
-    // Загружаем данные из Telegram
     const user = TelegramData.getUserContext();
-    
-    // Подготавливаем контекст для шаблона
-    const context = {
+    const initData = window.Telegram?.WebApp?.initData || '';
+
+    // Запрашиваем PRIME-статус
+    let isPrime = false;
+    try {
+        const resp = await fetch('/api/check_prime_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_data: initData })
+        });
+        const data = await resp.json();
+        isPrime = data.ok && data.is_prime === true;
+    } catch (e) {
+        console.warn('[PROFILE] prime status check failed:', e);
+    }
+
+    main.innerHTML = profileTemplate({
         avatarUrl: user.photoUrl || '/miniapp-static/assets/icons/profile-icon.svg',
-        fullName: user.fullName || 'Пользователь',
-        username: user.username || ''
-    };
-    
-    // Рендерим через шаблон
-    main.innerHTML = profileTemplate(context);
+        fullName:  user.fullName  || 'Пользователь',
+        isPrime,
+    });
+
+    attachProfileListeners();
 }
 
-// Функция для заполнения профиля Telegram (используется в других местах)
+// ====== Обновление аватара в navbar ======
 function fillProfileFromTelegram() {
     try {
-        const tg = window.Telegram && Telegram.WebApp;
-        const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+        const tg = window.Telegram?.WebApp;
+        const user = tg?.initDataUnsafe?.user;
         if (!user) return null;
 
-        // Обновляем аватар в навбаре
         const navAvatarEl = document.getElementById('nav-profile-avatar');
         if (navAvatarEl && user.photo_url) {
             navAvatarEl.src = user.photo_url;
         }
-        
-        return user; // Возвращаем объект пользователя для возможного использования
+        return user;
     } catch (e) {
-        console.log('[PROFILE] fillProfileFromTelegram error:', e);
+        console.warn('[PROFILE] fillProfileFromTelegram error:', e);
         return null;
     }
 }
 
-// Устаревшая функция - оставляем для обратной совместимости
 function loadProfileFromTelegram() {
-    try {
-        const tg = window.Telegram && Telegram.WebApp;
-        const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-        if (!user) return;
-
-        // Обновляем аватар на странице
-        const avatarEl = document.getElementById('profile-page-avatar');
-        if (avatarEl && user.photo_url) {
-            avatarEl.src = user.photo_url;
-        }
-
-        // Обновляем имя
-        const nameEl = document.getElementById('profile-page-name');
-        if (nameEl && (user.first_name || user.last_name)) {
-            const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
-            nameEl.textContent = fullName;
-        }
-
-        // Обновляем username
-        const usernameEl = document.getElementById('profile-page-username');
-        if (usernameEl && user.username) {
-            usernameEl.textContent = `@${user.username}`;
-        }
-    } catch (e) {
-        console.log('[PROFILE] loadProfileFromTelegram error:', e);
-    }
+    fillProfileFromTelegram();
 }
 
-export {
-    renderProfilePage,
-    fillProfileFromTelegram,
-    loadProfileFromTelegram
-};
+export { renderProfilePage, fillProfileFromTelegram, loadProfileFromTelegram };
