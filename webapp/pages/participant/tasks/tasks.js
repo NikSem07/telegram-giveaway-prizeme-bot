@@ -6,13 +6,18 @@ function renderTasksPage() {
     const main = document.getElementById('main-content');
     if (!main) return;
 
-    const context = {
-        user: TelegramData.getUserContext()
-    };
+    main.innerHTML = tasksTemplate({ user: TelegramData.getUserContext() });
 
-    main.innerHTML = tasksTemplate(context);
+    // Запускаем Lottie-анимацию после вставки DOM
+    if (window.lottie) {
+        lottie.loadAnimation({
+            container: document.getElementById('wip-anim-tasks'),
+            renderer:  'svg',
+            loop:      true,
+            autoplay:  true,
+            path:      '/miniapp-static/assets/gif/Programming-Computer.json',
+        });
+    }
 }
 
-export {
-    renderTasksPage,
-};
+export { renderTasksPage };
