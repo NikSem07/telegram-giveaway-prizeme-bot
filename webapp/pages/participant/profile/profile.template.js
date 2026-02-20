@@ -13,10 +13,14 @@ export default function profileTemplate(context = {}) {
            </span>`
         : `<span class="profile-status-badge profile-status-badge--basic">Basic</span>`;
 
+    const avatarWrapClass = isPrime
+        ? 'profile-avatar-wrap profile-avatar-wrap--prime'
+        : 'profile-avatar-wrap profile-avatar-wrap--basic';
+
     return `
         <!-- Шапка профиля -->
         <div class="profile-header">
-            <div class="profile-avatar-wrap">
+            <div class="${avatarWrapClass}">
                 <img
                     id="profile-page-avatar"
                     src="${avatarUrl}"
