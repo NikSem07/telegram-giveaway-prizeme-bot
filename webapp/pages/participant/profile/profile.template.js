@@ -2,13 +2,11 @@
 
 // ====== Иконки для строк списка ======
 
-/** Стрелка вправо — для ссылок внутри Telegram */
 const ICON_ARROW = `
     <svg class="profile-list-arrow" width="8" height="14" viewBox="0 0 8 14" fill="none">
         <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
 
-/** Иконка внешней ссылки — для ссылок, открывающихся в браузере */
 const ICON_EXTERNAL = `
     <img
         class="profile-list-arrow"
@@ -17,6 +15,32 @@ const ICON_EXTERNAL = `
         aria-hidden="true"
         style="width:14px;height:14px;opacity:0.3;filter:invert(1);"
     />`;
+
+/**
+ * Строка списка с иконкой слева.
+ * @param {string} action   - data-profile-action
+ * @param {string} label    - текст строки
+ * @param {string} iconPath - путь к webp-иконке
+ * @param {string} iconEnd  - иконка справа (ICON_ARROW или ICON_EXTERNAL)
+ */
+function listItem(action, label, iconPath, iconEnd) {
+    return `
+        <button class="profile-list-item" type="button" data-profile-action="${action}">
+            <img
+                class="profile-list-icon"
+                src="${iconPath}"
+                alt=""
+                aria-hidden="true"
+                loading="eager"
+                decoding="sync"
+            />
+            <span class="profile-list-label">${label}</span>
+            ${iconEnd}
+        </button>`;
+}
+
+// ====== Базовый путь к иконкам профиля ======
+const ICONS = '/miniapp-static/assets/images';
 
 // ====== Шаблон профиля ======
 export default function profileTemplate(context = {}) {
@@ -46,6 +70,8 @@ export default function profileTemplate(context = {}) {
                     src="${avatarUrl}"
                     alt="Аватар"
                     class="profile-avatar"
+                    loading="eager"
+                    decoding="sync"
                 />
             </div>
             <div class="profile-info">
@@ -56,54 +82,24 @@ export default function profileTemplate(context = {}) {
 
         <!-- Блок 1: Поддержка и информация -->
         <div class="profile-list">
-            <button class="profile-list-item" type="button" data-profile-action="support">
-                <span class="profile-list-label">Поддержка</span>
-                ${ICON_ARROW}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="news">
-                <span class="profile-list-label">PrizeMe Новости</span>
-                ${ICON_ARROW}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="website">
-                <span class="profile-list-label">Сайт PrizeMe</span>
-                ${ICON_EXTERNAL}
-            </button>
+            ${listItem('support', 'Поддержка',      `${ICONS}/support-icon-profile.webp`, ICON_ARROW)}
+            ${listItem('news',    'PrizeMe Новости', `${ICONS}/news-icon-profile.webp`,    ICON_ARROW)}
+            ${listItem('website', 'Сайт PrizeMe',    `${ICONS}/web-icon-profile.webp`,     ICON_EXTERNAL)}
         </div>
 
         <!-- Блок 2: Подписки и донат -->
         <div class="profile-list" style="margin-top: 12px;">
-            <button class="profile-list-item" type="button" data-profile-action="prime">
-                <span class="profile-list-label">PRIME</span>
-                ${ICON_ARROW}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="premium">
-                <span class="profile-list-label">ПРЕМИУМ</span>
-                ${ICON_ARROW}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="donate">
-                <span class="profile-list-label">Донат проекту</span>
-                ${ICON_ARROW}
-            </button>
+            ${listItem('prime',   'PRIME',          `${ICONS}/prime-icon-profile.webp`,   ICON_ARROW)}
+            ${listItem('premium', 'ПРЕМИУМ',        `${ICONS}/premium-icon-profile.webp`, ICON_ARROW)}
+            ${listItem('donate',  'Донат проекту',  `${ICONS}/donate-icon-profile.webp`,  ICON_ARROW)}
         </div>
 
         <!-- Блок 3: Юридические документы -->
         <div class="profile-list" style="margin-top: 12px;">
-            <button class="profile-list-item" type="button" data-profile-action="privacy">
-                <span class="profile-list-label">Политика конфиденциальности</span>
-                ${ICON_EXTERNAL}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="terms">
-                <span class="profile-list-label">Пользовательское соглашение</span>
-                ${ICON_EXTERNAL}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="offer">
-                <span class="profile-list-label">Публичная оферта</span>
-                ${ICON_EXTERNAL}
-            </button>
-            <button class="profile-list-item" type="button" data-profile-action="subscription">
-                <span class="profile-list-label">Оферта регулярных платежей</span>
-                ${ICON_EXTERNAL}
-            </button>
+            ${listItem('privacy',      'Политика конфиденциальности',   `${ICONS}/document-icon-profile.webp`, ICON_EXTERNAL)}
+            ${listItem('terms',        'Пользовательское соглашение',   `${ICONS}/document-icon-profile.webp`, ICON_EXTERNAL)}
+            ${listItem('offer',        'Публичная оферта',              `${ICONS}/document-icon-profile.webp`, ICON_EXTERNAL)}
+            ${listItem('subscription', 'Оферта регулярных платежей',    `${ICONS}/document-icon-profile.webp`, ICON_EXTERNAL)}
         </div>
     `;
 }

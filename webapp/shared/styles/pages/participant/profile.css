@@ -137,6 +137,19 @@
     font-size: 15px;
     font-weight: 400;
     color: var(--color-text);
+    flex: 1; /* занимает всё пространство между иконкой и стрелкой */
+}
+
+/* Иконка слева в строке */
+.profile-list-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    margin-right: 12px;
+    /* Рендерим сразу — без lazy loading */
+    content-visibility: auto;
 }
 
 .profile-list-arrow {
