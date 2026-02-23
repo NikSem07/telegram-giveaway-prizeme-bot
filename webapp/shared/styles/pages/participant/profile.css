@@ -115,7 +115,7 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 16px var(--spacing-md);
+    padding: 11px var(--spacing-md);
     background: none;
     border: none;
     border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
@@ -142,13 +142,12 @@
 
 /* Иконка слева в строке */
 .profile-list-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
     object-fit: cover;
     flex-shrink: 0;
     margin-right: 12px;
-    /* Рендерим сразу — без lazy loading */
     content-visibility: auto;
 }
 
