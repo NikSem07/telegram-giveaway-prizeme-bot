@@ -46,6 +46,18 @@ function attachProfileListeners() {
                 case 'donate':
                     openTelegramLink('https://t.me/tribute/app?startapp=dA1o');
                     break;
+                case 'privacy':
+                    openExternalLink('https://prizeme.ru/legal.html?doc=privacy');
+                    break;
+                case 'terms':
+                    openExternalLink('https://prizeme.ru/legal.html?doc=terms');
+                    break;
+                case 'offer':
+                    openExternalLink('https://prizeme.ru/legal.html?doc=offer');
+                    break;
+                case 'subscription':
+                    openExternalLink('https://prizeme.ru/legal.html?doc=subscription');
+                    break;
             }
         });
     });
