@@ -15,7 +15,7 @@ function openTelegramLink(url) {
 function openExternalLink(url) {
     const tg = window.Telegram?.WebApp;
     if (tg && typeof tg.openLink === 'function') {
-        tg.openLink(url);
+        tg.openLink(url, { try_instant_view: true });
     } else {
         window.open(url, '_blank');
     }
