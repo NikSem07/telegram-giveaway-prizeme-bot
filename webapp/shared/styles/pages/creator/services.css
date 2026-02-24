@@ -1,0 +1,215 @@
+/* webapp/shared/styles/pages/creator/services.css */
+
+/* ====== Общий контейнер страницы ====== */
+.svc-screen {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 16px;
+}
+
+/* ====== Герой: анимация + заголовок ====== */
+.svc-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px 16px 20px;
+}
+
+.svc-hero-anim {
+    width: 160px;
+    height: 120px; /* соотношение 4:3 */
+    margin-bottom: 4px;
+}
+
+.svc-hero-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 6px;
+}
+
+.svc-hero-subtitle {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    max-width: 280px;
+}
+
+/* ====== Список сервисов ====== */
+.svc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 2px;
+}
+
+/* ====== Карточка сервиса ====== */
+.svc-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+
+    /* Плавный переход всех свойств */
+    transition:
+        border-color 0.2s ease,
+        background   0.2s ease,
+        box-shadow   0.2s ease,
+        transform    0.2s ease;
+}
+
+.svc-card:active {
+    transform: scale(0.985);
+}
+
+/* Заголовок карточки */
+.svc-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.svc-card-emoji {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.svc-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+}
+
+/* Описание карточки */
+.svc-card-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+    margin: 0;
+}
+
+/* ====== Активная карточка ====== */
+.svc-card--active {
+    border-color: var(--color-primary, #007AFF);
+    background: rgba(0, 122, 255, 0.07);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+
+.svc-card--active .svc-card-title {
+    color: var(--color-primary, #007AFF);
+}
+
+/* ====== Отступ снизу (под кнопку) ====== */
+.svc-bottom-spacer {
+    height: 80px;
+}
+
+/* ====== Фиксированная кнопка "Продолжить" ====== */
+.svc-footer {
+    position: fixed;
+    bottom: calc(var(--navbar-height, 80px) + 8px);
+    left: 0;
+    right: 0;
+    padding: 0 16px;
+    z-index: 50;
+
+    /* Скрыта по умолчанию */
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.svc-footer.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.svc-continue-btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    background: var(--color-primary, #007AFF);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.svc-continue-btn:active {
+    opacity: 0.8;
+}
+
+/* ====== Pop-up "В разработке" ====== */
+.svc-wip-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 1100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    transition: background 0.25s ease;
+}
+
+.svc-wip-overlay.is-visible {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.svc-wip-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--color-bg-secondary, #1c1c1e);
+    border-radius: 20px 20px 0 0;
+    padding: 28px 20px calc(28px + env(safe-area-inset-bottom, 0px));
+    text-align: center;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.svc-wip-overlay.is-visible .svc-wip-sheet {
+    transform: translateY(0);
+}
+
+.svc-wip-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 8px;
+}
+
+.svc-wip-text {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+
+.svc-wip-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--color-primary, #007AFF);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.svc-wip-btn:active {
+    opacity: 0.8;
+}
