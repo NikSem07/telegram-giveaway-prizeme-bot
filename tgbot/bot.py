@@ -3479,14 +3479,38 @@ async def dbg_gw(m: types.Message):
 # ADMIN: главная панель
 # ============================================================
 
-def kb_admin_panel() -> InlineKeyboardMarkup:
-    """Inline-клавиатура главной admin-панели."""
+# ── Уровень 1: главное меню ───────────────────────────────────────────────
+def kb_admin_main() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📋 Активные топ-размещения", callback_data="adm:top_list")
-    kb.button(text="➕ Добавить в топ",           callback_data="adm:top_add_start")
-    kb.button(text="➖ Убрать из топа",           callback_data="adm:top_remove_start")
+    kb.button(text="⚙️ Управление сервисами", callback_data="adm:services")
     kb.adjust(1)
     return kb.as_markup()
+
+# ── Уровень 2: управление сервисами ──────────────────────────────────────
+def kb_admin_services() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🏆 Топ-розыгрыши",  callback_data="adm:top_menu")
+    kb.button(text="◀️ Назад",           callback_data="adm:back_main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+# ── Уровень 3: меню топ-розыгрышей ───────────────────────────────────────
+def kb_admin_top_menu() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📋 Активные размещения", callback_data="adm:top_list")
+    kb.button(text="➕ Добавить в топ",      callback_data="adm:top_add_start")
+    kb.button(text="➖ Убрать из топа",      callback_data="adm:top_remove_start")
+    kb.button(text="◀️ Назад",               callback_data="adm:back_services")
+    kb.adjust(1)
+    return kb.as_markup()
+
+# ── Общий guard для всех admin-callback ──────────────────────────────────
+async def _admin_guard(cb: CallbackQuery) -> bool:
+    """Возвращает True если доступ разрешён, иначе отвечает и возвращает False."""
+    if cb.from_user and cb.from_user.id == BOT_OWNER_ID:
+        return True
+    await cb.answer("Нет доступа.", show_alert=True)
+    return False
 
 
 @dp.message(Command("admin"))
@@ -3495,17 +3519,81 @@ async def cmd_admin(m: Message):
     """Главная панель администратора."""
     await m.answer(
         "🔧 <b>Панель администратора PrizeMe</b>\n\n"
-        "Выберите действие:",
+        "Выберите раздел:",
         parse_mode="HTML",
-        reply_markup=kb_admin_panel()
+        reply_markup=kb_admin_main()
     )
 
 
-# ── Callback: список активных топ-размещений ──────────────────────────────
+# ── Уровень 2: переход в «Управление сервисами» ───────────────────────────
+@dp.callback_query(F.data == "adm:services")
+async def cb_admin_services(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "⚙️ <b>Управление сервисами</b>\n\n"
+        "Выберите сервис:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_services()
+    )
+    await cb.answer()
+
+
+# ── Уровень 3: меню топ-розыгрышей ───────────────────────────────────────
+@dp.callback_query(F.data == "adm:top_menu")
+async def cb_admin_top_menu(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "🏆 <b>Топ-розыгрыши</b>\n\n"
+        "Выберите действие:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_top_menu()
+    )
+    await cb.answer()
+
+
+# ── Назад: сервисы → главная ──────────────────────────────────────────────
+@dp.callback_query(F.data == "adm:back_main")
+async def cb_admin_back_main(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "🔧 <b>Панель администратора PrizeMe</b>\n\n"
+        "Выберите раздел:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_main()
+    )
+    await cb.answer()
+
+
+# ── Назад: топ → сервисы ─────────────────────────────────────────────────
+@dp.callback_query(F.data == "adm:back_services")
+async def cb_admin_back_services(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "⚙️ <b>Управление сервисами</b>\n\n"
+        "Выберите сервис:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_services()
+    )
+    await cb.answer()
+
+
+# ── Назад: карточка/выбор → меню топа ────────────────────────────────────
+@dp.callback_query(F.data == "adm:back_top_menu")
+async def cb_admin_back_top_menu(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "🏆 <b>Топ-розыгрыши</b>\n\n"
+        "Выберите действие:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_top_menu()
+    )
+    await cb.answer()
+
+
+# ── Активные топ-размещения ───────────────────────────────────────────────
 @dp.callback_query(F.data == "adm:top_list")
 async def cb_admin_top_list(cb: CallbackQuery):
-    if not cb.from_user or cb.from_user.id != BOT_OWNER_ID:
-        return await cb.answer("Нет доступа.", show_alert=True)
+    if not await _admin_guard(cb): return
 
     async with Session() as s:
         result = await s.execute(stext("""
@@ -3534,43 +3622,205 @@ async def cb_admin_top_list(cb: CallbackQuery):
         text,
         parse_mode="HTML",
         reply_markup=InlineKeyboardBuilder()
-            .button(text="◀️ Назад", callback_data="adm:back")
+            .button(text="◀️ Назад", callback_data="adm:back_top_menu")
             .as_markup()
     )
     await cb.answer()
 
 
-# ── Callback: начало добавления в топ ────────────────────────────────────
+# ── Добавить в топ: выбор розыгрыша ──────────────────────────────────────
 @dp.callback_query(F.data == "adm:top_add_start")
 async def cb_admin_top_add_start(cb: CallbackQuery):
-    if not cb.from_user or cb.from_user.id != BOT_OWNER_ID:
-        return await cb.answer("Нет доступа.", show_alert=True)
+    if not await _admin_guard(cb): return
+
+    # Берём все активные розыгрыши, которых ещё НЕТ в топе
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT g.id, g.internal_title
+            FROM giveaways g
+            WHERE g.status = 'active'
+              AND g.id NOT IN (
+                SELECT giveaway_id FROM top_placements
+                WHERE is_active = true AND ends_at > NOW()
+              )
+            ORDER BY g.id DESC
+        """))
+        rows = result.fetchall()
+
+    if not rows:
+        await cb.message.edit_text(
+            "ℹ️ Нет активных розыгрышей для добавления в топ\n"
+            "(все уже в топе или активных розыгрышей нет).",
+            reply_markup=InlineKeyboardBuilder()
+                .button(text="◀️ Назад", callback_data="adm:back_top_menu")
+                .as_markup()
+        )
+        await cb.answer()
+        return
+
+    kb = InlineKeyboardBuilder()
+    for row in rows:
+        kb.button(
+            text=f"🎁 #{row.id} {row.internal_title[:35]}",
+            callback_data=f"adm:top_add_info:{row.id}"
+        )
+    kb.button(text="◀️ Назад", callback_data="adm:back_top_menu")
+    kb.adjust(1)
 
     await cb.message.edit_text(
-        "➕ <b>Добавить розыгрыш в топ</b>\n\n"
-        "Отправьте команду в формате:\n"
-        "<code>/admin_top_add &lt;giveaway_id&gt; &lt;days&gt; &lt;type&gt;</code>\n\n"
-        "Примеры:\n"
-        "<code>/admin_top_add 42 7 week</code> — на 7 дней\n"
-        "<code>/admin_top_add 42 0 full_period</code> — до конца розыгрыша",
+        "➕ <b>Добавить в топ-розыгрыши</b>\n\n"
+        "Выберите розыгрыш:",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardBuilder()
-            .button(text="◀️ Назад", callback_data="adm:back")
-            .as_markup()
+        reply_markup=kb.as_markup()
     )
     await cb.answer()
 
 
-# ── Callback: начало удаления из топа ────────────────────────────────────
+# ── Добавить в топ: карточка розыгрыша ───────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:top_add_info:"))
+async def cb_admin_top_add_info(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+
+    giveaway_id = int(cb.data.split(":")[2])
+
+    async with Session() as s:
+        # Основные данные розыгрыша
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await cb.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        # Подключённые каналы
+        channels_result = await s.execute(stext("""
+            SELECT COALESCE(gc.title, oc.title, oc.username) AS title,
+                   oc.chat_id
+            FROM giveaway_channels gc
+            JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE gc.giveaway_id = :gid
+        """), {"gid": giveaway_id})
+        channels = channels_result.fetchall()
+
+        # Число участников
+        participants_result = await s.execute(stext("""
+            SELECT COUNT(DISTINCT user_id) AS cnt
+            FROM entries
+            WHERE giveaway_id = :gid
+        """), {"gid": giveaway_id})
+        participants = participants_result.scalar() or 0
+
+        # Статус подписки организатора
+        owner = await s.get(BotUser, gw.owner_user_id)
+        is_premium = getattr(owner, "user_status", "standard") == "premium"
+
+    # Форматируем даты
+    created = gw.created_at.strftime("%d.%m.%Y %H:%M") if gw.created_at else "—"
+    ends    = gw.end_at_utc.strftime("%d.%m.%Y %H:%M") if gw.end_at_utc else "—"
+
+    # Каналы в виде гиперссылок
+    if channels:
+        ch_lines = []
+        for ch in channels:
+            if ch.chat_id:
+                # Публичная ссылка: убираем минус и добавляем 100 для supergroup ID
+                abs_id = str(abs(ch.chat_id))
+                if abs_id.startswith("100"):
+                    abs_id = abs_id[3:]
+                ch_lines.append(f'<a href="https://t.me/c/{abs_id}/1">{ch.title or ch.chat_id}</a>')
+            else:
+                ch_lines.append(ch.title or "—")
+        channels_text = ", ".join(ch_lines)
+    else:
+        channels_text = "нет"
+
+    text = (
+        f"🎁 <b>{gw.internal_title}</b>\n\n"
+        f"📅 Запущен: <code>{created}</code>\n"
+        f"⏰ Завершится: <code>{ends} UTC</code>\n"
+        f"👥 Участников: <b>{participants}</b>\n"
+        f"💎 Premium у организатора: {'✅ Да' if is_premium else '❌ Нет'}\n"
+        f"📢 Каналы: {channels_text}"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Добавить в топ (7 дней)",        callback_data=f"adm:top_confirm:{giveaway_id}:7:week")
+    kb.button(text="♾️ Добавить в топ (до конца)",      callback_data=f"adm:top_confirm:{giveaway_id}:0:full_period")
+    kb.button(text="◀️ Назад",                           callback_data="adm:top_add_start")
+    kb.adjust(1)
+
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+# ── Добавить в топ: подтверждение ────────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:top_confirm:"))
+async def cb_admin_top_confirm(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+
+    parts          = cb.data.split(":")
+    giveaway_id    = int(parts[2])
+    days           = int(parts[3])
+    placement_type = parts[4]
+
+    async with Session() as s:
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await cb.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        now_utc = datetime.now(timezone.utc)
+        if placement_type == "full_period":
+            ends_at = gw.end_at_utc if gw.end_at_utc.tzinfo else gw.end_at_utc.replace(tzinfo=timezone.utc)
+        else:
+            ends_at = now_utc + timedelta(days=days)
+
+        # Деактивируем предыдущее размещение
+        await s.execute(
+            stext("UPDATE top_placements SET is_active = false WHERE giveaway_id = :gid"),
+            {"gid": giveaway_id}
+        )
+
+        # Создаём service_order
+        order_result = await s.execute(
+            stext("""
+                INSERT INTO service_orders
+                    (giveaway_id, owner_user_id, service_type, status, price_rub)
+                VALUES (:gid, :uid, 'top_placement', 'active', 0)
+                RETURNING id
+            """),
+            {"gid": giveaway_id, "uid": gw.owner_user_id}
+        )
+        order_id = order_result.scalar_one()
+
+        # Создаём top_placement
+        await s.execute(
+            stext("""
+                INSERT INTO top_placements
+                    (giveaway_id, order_id, starts_at, ends_at, placement_type, is_active)
+                VALUES (:gid, :oid, :starts, :ends, :ptype, true)
+            """),
+            {"gid": giveaway_id, "oid": order_id, "starts": now_utc,
+             "ends": ends_at, "ptype": placement_type}
+        )
+        await s.commit()
+
+    await cb.answer("✅ Добавлено в топ!", show_alert=True)
+    await cb.message.edit_text(
+        "🏆 <b>Топ-розыгрыши</b>\n\n"
+        "Выберите действие:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_top_menu()
+    )
+
+
+# ── Убрать из топа: выбор розыгрыша ──────────────────────────────────────
 @dp.callback_query(F.data == "adm:top_remove_start")
 async def cb_admin_top_remove_start(cb: CallbackQuery):
-    if not cb.from_user or cb.from_user.id != BOT_OWNER_ID:
-        return await cb.answer("Нет доступа.", show_alert=True)
+    if not await _admin_guard(cb): return
 
-    # Показываем список активных размещений с кнопками для удаления
     async with Session() as s:
         result = await s.execute(stext("""
-            SELECT tp.id AS placement_id, tp.giveaway_id, g.internal_title
+            SELECT tp.giveaway_id, g.internal_title,
+                   tp.placement_type, tp.ends_at
             FROM top_placements tp
             JOIN giveaways g ON g.id = tp.giveaway_id
             WHERE tp.is_active = true AND tp.ends_at > NOW()
@@ -3582,7 +3832,7 @@ async def cb_admin_top_remove_start(cb: CallbackQuery):
         await cb.message.edit_text(
             "ℹ️ Нет активных размещений для удаления.",
             reply_markup=InlineKeyboardBuilder()
-                .button(text="◀️ Назад", callback_data="adm:back")
+                .button(text="◀️ Назад", callback_data="adm:back_top_menu")
                 .as_markup()
         )
         await cb.answer()
@@ -3591,57 +3841,117 @@ async def cb_admin_top_remove_start(cb: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for row in rows:
         kb.button(
-            text=f"❌ #{row.giveaway_id} {row.internal_title[:25]}",
-            callback_data=f"adm:top_del:{row.giveaway_id}"
+            text=f"❌ #{row.giveaway_id} {row.internal_title[:35]}",
+            callback_data=f"adm:top_remove_info:{row.giveaway_id}"
         )
-    kb.button(text="◀️ Назад", callback_data="adm:back")
+    kb.button(text="◀️ Назад", callback_data="adm:back_top_menu")
     kb.adjust(1)
 
     await cb.message.edit_text(
-        "➖ <b>Выберите розыгрыш для удаления из топа:</b>",
+        "➖ <b>Убрать из топ-розыгрышей</b>\n\n"
+        "Выберите розыгрыш:",
         parse_mode="HTML",
         reply_markup=kb.as_markup()
     )
     await cb.answer()
 
 
-# ── Callback: подтверждение удаления ─────────────────────────────────────
-@dp.callback_query(F.data.startswith("adm:top_del:"))
-async def cb_admin_top_delete(cb: CallbackQuery):
-    if not cb.from_user or cb.from_user.id != BOT_OWNER_ID:
-        return await cb.answer("Нет доступа.", show_alert=True)
+# ── Убрать из топа: карточка розыгрыша ───────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:top_remove_info:"))
+async def cb_admin_top_remove_info(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
 
     giveaway_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
-        result = await s.execute(
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await cb.answer("Розыгрыш не найден.", show_alert=True)
+            return
+
+        channels_result = await s.execute(stext("""
+            SELECT COALESCE(gc.title, oc.title, oc.username) AS title,
+                   oc.chat_id
+            FROM giveaway_channels gc
+            JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE gc.giveaway_id = :gid
+        """), {"gid": giveaway_id})
+        channels = channels_result.fetchall()
+
+        participants_result = await s.execute(stext("""
+            SELECT COUNT(DISTINCT user_id) AS cnt
+            FROM entries WHERE giveaway_id = :gid
+        """), {"gid": giveaway_id})
+        participants = participants_result.scalar() or 0
+
+        placement_result = await s.execute(stext("""
+            SELECT placement_type, starts_at, ends_at
+            FROM top_placements
+            WHERE giveaway_id = :gid AND is_active = true
+            LIMIT 1
+        """), {"gid": giveaway_id})
+        placement = placement_result.fetchone()
+
+        owner = await s.get(BotUser, gw.owner_user_id)
+        is_premium = getattr(owner, "user_status", "standard") == "premium"
+
+    ends = gw.end_at_utc.strftime("%d.%m.%Y %H:%M") if gw.end_at_utc else "—"
+    p_ends = placement.ends_at.strftime("%d.%m.%Y %H:%M") if placement and placement.ends_at else "—"
+    p_type = placement.placement_type if placement else "—"
+
+    if channels:
+        ch_lines = []
+        for ch in channels:
+            if ch.chat_id:
+                abs_id = str(abs(ch.chat_id))
+                if abs_id.startswith("100"):
+                    abs_id = abs_id[3:]
+                ch_lines.append(f'<a href="https://t.me/c/{abs_id}/1">{ch.title or ch.chat_id}</a>')
+            else:
+                ch_lines.append(ch.title or "—")
+        channels_text = ", ".join(ch_lines)
+    else:
+        channels_text = "нет"
+
+    text = (
+        f"🎁 <b>{gw.internal_title}</b>\n\n"
+        f"⏰ Завершится: <code>{ends} UTC</code>\n"
+        f"👥 Участников: <b>{participants}</b>\n"
+        f"💎 Premium у организатора: {'✅ Да' if is_premium else '❌ Нет'}\n"
+        f"📢 Каналы: {channels_text}\n\n"
+        f"🏆 В топе: тип <code>{p_type}</code> | до <code>{p_ends} UTC</code>"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Убрать из топа",  callback_data=f"adm:top_del:{giveaway_id}")
+    kb.button(text="◀️ Отмена",          callback_data="adm:top_remove_start")
+    kb.adjust(1)
+
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+# ── Убрать из топа: подтверждение ────────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:top_del:"))
+async def cb_admin_top_delete(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+
+    giveaway_id = int(cb.data.split(":")[2])
+
+    async with Session() as s:
+        await s.execute(
             stext("UPDATE top_placements SET is_active = false WHERE giveaway_id = :gid AND is_active = true"),
             {"gid": giveaway_id}
         )
         await s.commit()
 
-    await cb.answer(f"✅ Розыгрыш #{giveaway_id} убран из топа", show_alert=True)
+    await cb.answer(f"✅ Розыгрыш #{giveaway_id} убран из топа.", show_alert=True)
     await cb.message.edit_text(
-        "🔧 <b>Панель администратора PrizeMe</b>\n\n"
+        "🏆 <b>Топ-розыгрыши</b>\n\n"
         "Выберите действие:",
         parse_mode="HTML",
-        reply_markup=kb_admin_panel()
+        reply_markup=kb_admin_top_menu()
     )
-
-
-# ── Callback: возврат на главную панель ──────────────────────────────────
-@dp.callback_query(F.data == "adm:back")
-async def cb_admin_back(cb: CallbackQuery):
-    if not cb.from_user or cb.from_user.id != BOT_OWNER_ID:
-        return await cb.answer("Нет доступа.", show_alert=True)
-
-    await cb.message.edit_text(
-        "🔧 <b>Панель администратора PrizeMe</b>\n\n"
-        "Выберите действие:",
-        parse_mode="HTML",
-        reply_markup=kb_admin_panel()
-    )
-    await cb.answer()
 
 # ============================================================
 # ADMIN: управление топ-размещениями
