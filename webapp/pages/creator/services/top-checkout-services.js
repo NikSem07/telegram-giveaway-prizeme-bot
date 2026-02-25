@@ -1,7 +1,26 @@
 // webapp/pages/creator/services/top-checkout-services.js
 import topCheckoutTemplate from './top-checkout-services.template.js';
 
-// ── Скрыть/показать шапку и навбар ───────────────────────────────────────
+// ── Системная кнопка Back Telegram ───────────────────────────────────────
+function showBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try {
+        tg.BackButton.show();
+        tg.BackButton.onClick(onBack);
+    } catch (e) {}
+}
+
+function hideBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try {
+        tg.BackButton.offClick(onBack);
+        tg.BackButton.hide();
+    } catch (e) {}
+}
+
+// ── Шапка и навбар ───────────────────────────────────────────────────────
 function setShellVisibility(visible) {
     const topHeader = document.querySelector('.top-header');
     const bottomNav = document.querySelector('.bottom-nav');
@@ -9,7 +28,7 @@ function setShellVisibility(visible) {
     if (bottomNav) bottomNav.style.display = visible ? '' : 'none';
 }
 
-// ── Загрузка розыгрышей создателя ────────────────────────────────────────
+// ── Загрузка розыгрышей ───────────────────────────────────────────────────
 async function loadGiveaways() {
     const listEl = document.getElementById('tc-giveaway-list');
     if (!listEl) return;
@@ -24,64 +43,88 @@ async function loadGiveaways() {
         const data = await resp.json();
 
         if (!data.ok || !data.items.length) {
-            listEl.innerHTML = `
-                <div class="tc-empty">
-                    <p class="tc-empty-text">Нет активных розыгрышей для продвижения</p>
-                </div>`;
+            listEl.innerHTML = `<div class="tc-empty"><p class="tc-empty-text">Нет активных розыгрышей для продвижения</p></div>`;
             return;
         }
 
-        listEl.innerHTML = data.items.map(g => `
-            <div class="tc-giveaway-card"
-                 data-giveaway-id="${g.id}"
-                 role="button"
-                 tabindex="0">
-                <span class="tc-giveaway-title">${g.title}</span>
-                <span class="tc-giveaway-channels">${(g.channels || []).join(', ') || '—'}</span>
-            </div>
-        `).join('');
+        // Рендерим карточки в стиле каталога с главной страницы
+        listEl.innerHTML = data.items.map(g => {
+            const channels = (g.channels || []).join(', ') || '—';
+            const avatarUrl = g.first_channel_avatar_url || null;
+            const endDate = g.end_at_utc
+                ? new Date(g.end_at_utc).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                : '—';
+
+            return `
+                <div class="tc-giveaway-card giveaway-card giveaway-card--all"
+                     data-giveaway-id="${g.id}"
+                     role="button" tabindex="0">
+                    <div class="giveaway-left">
+                        <div class="giveaway-avatar">
+                            ${avatarUrl ? `<img src="${avatarUrl}" alt="" loading="lazy">` : ''}
+                        </div>
+                    </div>
+                    <div class="giveaway-info">
+                        <div class="giveaway-title">${g.title}</div>
+                        <div class="giveaway-desc">${channels}</div>
+                        <div class="giveaway-timer">До ${endDate}</div>
+                    </div>
+                    <div class="tc-giveaway-check" id="tc-check-${g.id}">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
+                        </svg>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         listEl.querySelectorAll('.tc-giveaway-card').forEach(card => {
             card.addEventListener('click', () => onGiveawaySelected(card));
         });
 
     } catch (e) {
-        listEl.innerHTML = `
-            <div class="tc-empty">
-                <p class="tc-empty-text">Ошибка загрузки. Попробуйте ещё раз.</p>
-            </div>`;
+        listEl.innerHTML = `<div class="tc-empty"><p class="tc-empty-text">Ошибка загрузки. Попробуйте ещё раз.</p></div>`;
         console.error('[TOP_CHECKOUT] loadGiveaways error:', e);
     }
 }
 
 // ── Выбор розыгрыша ───────────────────────────────────────────────────────
 function onGiveawaySelected(card) {
-    // Снимаем выделение с остальных
     document.querySelectorAll('.tc-giveaway-card').forEach(c => {
         c.classList.remove('tc-giveaway-card--active');
+        // Сбрасываем иконку галочки
+        const checkEl = c.querySelector('.tc-giveaway-check');
+        if (checkEl) checkEl.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
+            </svg>`;
     });
 
     card.classList.add('tc-giveaway-card--active');
 
-    // Показываем секцию выбора периода
+    // Показываем галочку выбора
+    const checkEl = card.querySelector('.tc-giveaway-check');
+    if (checkEl) checkEl.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="9" fill="#007AFF"/>
+            <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+
+    // Показываем выбор периода
     const periodSection = document.getElementById('tc-period-section');
     periodSection.classList.remove('tc-section--hidden');
     periodSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-    // Сбрасываем выбор периода и скрываем итог
-    document.querySelectorAll('.tc-period-card').forEach(p => {
-        p.classList.remove('tc-period-card--active');
-    });
+    // Сбрасываем период и итог
+    document.querySelectorAll('.tc-period-card').forEach(p => p.classList.remove('tc-period-card--active'));
     document.getElementById('tc-summary-section').classList.add('tc-section--hidden');
     document.getElementById('tc-footer-pay').classList.add('tc-footer--hidden');
-    document.getElementById('tc-footer-pay').setAttribute('aria-hidden', 'true');
 }
 
 // ── Выбор периода ─────────────────────────────────────────────────────────
 function onPeriodSelected(card) {
-    document.querySelectorAll('.tc-period-card').forEach(c => {
-        c.classList.remove('tc-period-card--active');
-    });
+    document.querySelectorAll('.tc-period-card').forEach(c => c.classList.remove('tc-period-card--active'));
     card.classList.add('tc-period-card--active');
 
     const price     = Number(card.dataset.price);
@@ -90,23 +133,56 @@ function onPeriodSelected(card) {
     document.getElementById('tc-summary-price').textContent = priceText;
     document.getElementById('tc-summary-total').textContent = priceText;
 
-    // Показываем итог и кнопку оплаты
     document.getElementById('tc-summary-section').classList.remove('tc-section--hidden');
 
     const footerPay = document.getElementById('tc-footer-pay');
     footerPay.classList.remove('tc-footer--hidden');
-    footerPay.setAttribute('aria-hidden', 'false');
     footerPay.classList.add('is-visible');
 }
 
-// ── Открытие ссылки во встроенном браузере Telegram ───────────────────────
-function openTgLink(url) {
-    const tg = window.Telegram?.WebApp;
-    if (tg?.openLink) {
-        tg.openLink(url, { try_instant_view: true });
-    } else {
-        window.open(url, '_blank');
-    }
+// ── Согласие с офертой ────────────────────────────────────────────────────
+let _agreed = false;
+
+function initAgreeBlock() {
+    const block    = document.getElementById('tc-agree-block');
+    const checkbox = document.getElementById('tc-agree-checkbox');
+    const checkSvg = document.getElementById('tc-agree-check');
+    const payBtn   = document.getElementById('tc-pay-btn');
+
+    if (!block) return;
+
+    block.addEventListener('click', (e) => {
+        // Если клик по ссылке — не переключаем чекбокс
+        if (e.target.closest('[data-tg-link]')) return;
+
+        _agreed = !_agreed;
+
+        // Чекбокс
+        checkbox.classList.toggle('tc-agree-checkbox--checked', _agreed);
+        checkSvg.style.display = _agreed ? 'block' : 'none';
+
+        // Кнопка
+        payBtn.classList.toggle('tc-pay-btn--inactive', !_agreed);
+
+        // Убираем красную обводку если согласился
+        if (_agreed) block.classList.remove('tc-agree-block--error');
+    });
+}
+
+// ── Ссылки оферты ─────────────────────────────────────────────────────────
+function initLegalLinks() {
+    document.querySelectorAll('[data-tg-link]').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openLink) {
+                tg.openLink(link.href, { try_instant_view: true });
+            } else {
+                window.open(link.href, '_blank');
+            }
+        });
+    });
 }
 
 // ── Заглушка оплаты ───────────────────────────────────────────────────────
@@ -131,22 +207,20 @@ function showWipModal() {
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
 }
 
-// ── Публичный API: инициализация и разрушение ─────────────────────────────
-
-/**
- * Монтирует экран чекаута в переданный контейнер.
- * @param {HTMLElement} container — элемент куда рендерим
- * @param {Function}    onBack    — callback при нажатии «Назад»
- */
+// ── Публичный API ─────────────────────────────────────────────────────────
 function mountTopCheckout(container, onBack) {
+    _agreed = false;
+
     container.innerHTML = topCheckoutTemplate();
     setShellVisibility(false);
 
-    // Назад
-    document.getElementById('tc-back-btn').addEventListener('click', () => {
+    // Системная кнопка Back Telegram
+    const handleBack = () => {
+        hideBackButton(handleBack);
         setShellVisibility(true);
         onBack();
-    });
+    };
+    showBackButton(handleBack);
 
     // Периоды
     document.querySelectorAll('.tc-period-card').forEach(card => {
@@ -154,17 +228,31 @@ function mountTopCheckout(container, onBack) {
     });
 
     // Кнопка оплаты
-    document.getElementById('tc-pay-btn').addEventListener('click', showWipModal);
+    document.getElementById('tc-pay-btn').addEventListener('click', () => {
+        if (!_agreed) {
+            // Тряска кнопки + красная обводка блока согласия
+            const payBtn    = document.getElementById('tc-pay-btn');
+            const agreeBlock = document.getElementById('tc-agree-block');
 
-    // Ссылки оферты
-    document.querySelectorAll('[data-tg-link]').forEach(link => {
-        link.addEventListener('click', e => {
-            e.preventDefault();
-            openTgLink(link.href);
-        });
+            agreeBlock.classList.remove('tc-agree-block--error');
+            payBtn.classList.remove('tc-pay-btn--shake');
+            void payBtn.offsetWidth; // reflow
+            agreeBlock.classList.add('tc-agree-block--error');
+            payBtn.classList.add('tc-pay-btn--shake');
+
+            if (navigator.vibrate) navigator.vibrate(80);
+
+            payBtn.addEventListener('animationend', () => {
+                payBtn.classList.remove('tc-pay-btn--shake');
+            }, { once: true });
+
+            return;
+        }
+        showWipModal();
     });
 
-    // Загружаем розыгрыши
+    initAgreeBlock();
+    initLegalLinks();
     loadGiveaways();
 }
 

@@ -2,30 +2,20 @@
 
 /* ── Шапка ────────────────────────────────────────────────────────────── */
 .tc-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 4px 0 20px;
-}
-
-.tc-back-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    color: var(--color-primary);
-    font-size: 16px;
-    cursor: pointer;
-    padding: 4px 0;
-    -webkit-tap-highlight-color: transparent;
-    flex-shrink: 0;
+    padding: 0 0 20px;
 }
 
 .tc-title {
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     color: var(--color-text);
+    margin: 0 0 6px;
+}
+
+.tc-subtitle {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
     margin: 0;
 }
 
@@ -48,44 +38,25 @@
     padding-left: 4px;
 }
 
-/* ── Карточки розыгрышей ──────────────────────────────────────────────── */
-.tc-giveaway-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
+/* ── Карточки розыгрышей (переиспользуем giveaway-card из каталога) ───── */
 .tc-giveaway-card {
-    background: var(--card-bg);
-    border-radius: var(--radius-lg);
-    padding: 14px 16px;
     cursor: pointer;
     border: 1.5px solid transparent;
-    -webkit-tap-highlight-color: transparent;
-    transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
-}
-
-.tc-giveaway-card:active {
-    transform: scale(0.985);
+    transition: border-color 0.18s ease, background 0.18s ease;
+    position: relative;
 }
 
 .tc-giveaway-card--active {
-    border-color: var(--color-primary);
-    background: rgba(0, 122, 255, 0.07);
+    border-color: var(--color-primary, #007AFF);
+    background: rgba(0, 122, 255, 0.07) !important;
 }
 
-.tc-giveaway-title {
-    display: block;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--color-text);
-    margin-bottom: 3px;
-}
-
-.tc-giveaway-channels {
-    display: block;
-    font-size: 12px;
-    color: var(--color-text-secondary);
+/* Иконка выбора справа */
+.tc-giveaway-check {
+    flex-shrink: 0;
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
 }
 
 /* ── Карточки периодов ────────────────────────────────────────────────── */
@@ -109,7 +80,7 @@
 }
 
 .tc-period-card--active {
-    border-color: var(--color-primary);
+    border-color: var(--color-primary, #007AFF);
     background: rgba(0, 122, 255, 0.07);
 }
 
@@ -122,7 +93,7 @@
 .tc-period-price {
     font-size: 15px;
     font-weight: 600;
-    color: var(--color-primary);
+    color: var(--color-primary, #007AFF);
 }
 
 /* ── Итог оплаты ──────────────────────────────────────────────────────── */
@@ -162,23 +133,77 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* ── Оферта ───────────────────────────────────────────────────────────── */
-.tc-legal-text {
-    font-size: 12px;
+/* ── Блок согласия с офертой ──────────────────────────────────────────── */
+.tc-agree-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.2s ease;
+}
+
+.tc-agree-block--error {
+    border-color: var(--color-danger, #FF3B30);
+}
+
+.tc-agree-checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: transparent;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.tc-agree-checkbox--checked {
+    background: var(--color-primary, #007AFF);
+    border-color: var(--color-primary, #007AFF);
+}
+
+.tc-agree-text {
+    font-size: 13px;
     color: var(--color-text-secondary);
     line-height: 1.5;
-    text-align: center;
-    padding: 0 8px;
+    margin: 0;
+    padding-top: 1px;
 }
 
 .tc-legal-link {
-    color: var(--color-primary);
+    color: var(--color-primary, #007AFF);
     text-decoration: none;
 }
 
-/* ── Кнопка оплаты (скрыта по умолчанию) ─────────────────────────────── */
+/* ── Кнопка оплаты ────────────────────────────────────────────────────── */
 .tc-footer--hidden {
     display: none !important;
+}
+
+/* Неактивное состояние */
+.tc-pay-btn--inactive {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Анимация тряски */
+@keyframes tc-shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-6px); }
+    40%       { transform: translateX(6px); }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px); }
+}
+
+.tc-pay-btn--shake {
+    animation: tc-shake 0.35s ease;
 }
 
 /* ── Пустое состояние / загрузка ──────────────────────────────────────── */
