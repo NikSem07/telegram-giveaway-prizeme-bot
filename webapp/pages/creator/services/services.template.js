@@ -1,9 +1,5 @@
 // webapp/pages/creator/services/services.template.js
 
-/**
- * Данные о сервисах — единый источник истины.
- * При добавлении нового сервиса достаточно добавить объект в этот массив.
- */
 const SERVICES = [
     {
         id:          'top_placement',
@@ -39,23 +35,20 @@ export default function servicesTemplate(context = {}) {
     return `
         <div class="svc-screen">
 
-            <!-- Анимация и заголовок раздела -->
             <div class="svc-hero">
                 <div class="svc-hero-anim" id="svc-hero-anim"></div>
                 <h1 class="svc-hero-title">Сервисы для создателей</h1>
                 <p class="svc-hero-subtitle">Выберите один из сервисов ниже для вовлечения своей аудитории</p>
             </div>
 
-            <!-- Список сервисов -->
             <div class="svc-list">
                 ${serviceCards}
             </div>
 
-            <!-- Отступ снизу — чтобы контент не уходил под кнопку "Продолжить" -->
             <div class="svc-bottom-spacer"></div>
         </div>
 
-        <!-- Кнопка "Продолжить" — фиксированная, появляется только при выборе -->
+        <!-- Кнопка «Продолжить» -->
         <div class="svc-footer" id="svc-footer" aria-hidden="true">
             <button class="svc-continue-btn" id="svc-continue-btn" type="button">
                 Продолжить

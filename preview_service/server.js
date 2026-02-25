@@ -1592,6 +1592,62 @@ app.post('/api/creator_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/top_placement_checkout_data ---
+// Отдаёт активные розыгрыши создателя для экрана чекаута топ-размещения.
+// Исключает розыгрыши, которые уже в топе.
+app.post('/api/top_placement_checkout_data', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed) {
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    }
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.internal_title,
+        g.end_at_utc,
+        array_remove(
+          array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
+          NULL
+        ) AS channels
+      FROM giveaways g
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE g.owner_user_id = $1
+        AND g.status = 'active'
+        AND g.id NOT IN (
+          SELECT giveaway_id FROM top_placements
+          WHERE is_active = true AND ends_at > NOW()
+        )
+      GROUP BY g.id
+      ORDER BY g.id DESC
+    `, [userId]);
+
+    return res.json({
+      ok:    true,
+      items: (result.rows || []).map(row => ({
+        id:         row.id,
+        title:      row.internal_title,
+        end_at_utc: row.end_at_utc,
+        channels:   row.channels || [],
+      })),
+    });
+
+  } catch (error) {
+    console.error('[API top_placement_checkout_data] error:', error);
+    return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+  }
+});
+
+
 // --- POST /api/participant_giveaways ---
 // Отдает список розыгрышей участника по вкладке (active/finished/cancelled)
 app.post('/api/participant_giveaways', async (req, res) => {

@@ -1,8 +1,9 @@
 // webapp/pages/creator/services/services.js
 import servicesTemplate from './services.template.js';
+import { mountTopCheckout } from './top-checkout-services.js';
 import TelegramData from '../../../shared/telegram-data.js';
 
-// ====== Pop-up "В разработке" ======
+// ── Pop-up "В разработке" ─────────────────────────────────────────────────
 function showWipModal() {
     document.getElementById('svc-wip-modal')?.remove();
 
@@ -29,10 +30,10 @@ function showWipModal() {
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
 }
 
-// ====== Инициализация выбора сервиса ======
-function initServiceSelection() {
-    const cards    = document.querySelectorAll('.svc-card');
-    const footer   = document.getElementById('svc-footer');
+// ── Инициализация выбора сервиса ──────────────────────────────────────────
+function initServiceSelection(main) {
+    const cards       = document.querySelectorAll('.svc-card');
+    const footer      = document.getElementById('svc-footer');
     const continueBtn = document.getElementById('svc-continue-btn');
 
     let selectedId = null;
@@ -41,38 +42,43 @@ function initServiceSelection() {
         card.addEventListener('click', () => {
             const id = card.dataset.serviceId;
 
-            // Снимаем выделение с предыдущего
             if (selectedId && selectedId !== id) {
                 document.querySelector(`[data-service-id="${selectedId}"]`)
                     ?.classList.remove('svc-card--active');
             }
 
-            // Переключаем текущий
             const isAlreadySelected = card.classList.contains('svc-card--active');
             card.classList.toggle('svc-card--active', !isAlreadySelected);
             card.setAttribute('aria-pressed', String(!isAlreadySelected));
-
             selectedId = isAlreadySelected ? null : id;
 
-            // Показываем / скрываем кнопку "Продолжить"
             const hasSelection = selectedId !== null;
             footer.classList.toggle('is-visible', hasSelection);
             footer.setAttribute('aria-hidden', String(!hasSelection));
         });
     });
 
-    // Кнопка "Продолжить" — пока показываем заглушку
-    continueBtn.addEventListener('click', showWipModal);
+    // «Продолжить»
+    continueBtn.addEventListener('click', () => {
+        if (selectedId === 'top_placement') {
+            // Монтируем чекаут в тот же контейнер
+            mountTopCheckout(main, () => {
+                // onBack — возвращаемся на экран сервисов
+                renderServicesPage();
+            });
+        } else {
+            showWipModal();
+        }
+    });
 }
 
-// ====== Основной рендер ======
+// ── Основной рендер ───────────────────────────────────────────────────────
 function renderServicesPage() {
     const main = document.getElementById('main-content');
     if (!main) return;
 
     main.innerHTML = servicesTemplate({ user: TelegramData.getUserContext() });
 
-    // Lottie-анимация
     if (window.lottie) {
         lottie.loadAnimation({
             container: document.getElementById('svc-hero-anim'),
@@ -83,7 +89,7 @@ function renderServicesPage() {
         });
     }
 
-    initServiceSelection();
+    initServiceSelection(main);
 }
 
 export { renderServicesPage };

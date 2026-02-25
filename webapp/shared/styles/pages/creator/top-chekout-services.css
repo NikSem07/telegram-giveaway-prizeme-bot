@@ -1,0 +1,191 @@
+/* webapp/shared/styles/pages/creator/top-checkout-services.css */
+
+/* ── Шапка ────────────────────────────────────────────────────────────── */
+.tc-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0 20px;
+}
+
+.tc-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 0;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+}
+
+.tc-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+}
+
+/* ── Секции ───────────────────────────────────────────────────────────── */
+.tc-section {
+    margin-bottom: 20px;
+}
+
+.tc-section--hidden {
+    display: none;
+}
+
+.tc-section-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    padding-left: 4px;
+}
+
+/* ── Карточки розыгрышей ──────────────────────────────────────────────── */
+.tc-giveaway-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tc-giveaway-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+}
+
+.tc-giveaway-card:active {
+    transform: scale(0.985);
+}
+
+.tc-giveaway-card--active {
+    border-color: var(--color-primary);
+    background: rgba(0, 122, 255, 0.07);
+}
+
+.tc-giveaway-title {
+    display: block;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: 3px;
+}
+
+.tc-giveaway-channels {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+/* ── Карточки периодов ────────────────────────────────────────────────── */
+.tc-period-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tc-period-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.tc-period-card--active {
+    border-color: var(--color-primary);
+    background: rgba(0, 122, 255, 0.07);
+}
+
+.tc-period-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.tc-period-price {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* ── Итог оплаты ──────────────────────────────────────────────────────── */
+.tc-summary-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 4px 16px;
+    margin-bottom: 12px;
+}
+
+.tc-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+}
+
+.tc-summary-label {
+    font-size: 15px;
+    color: var(--color-text-secondary);
+}
+
+.tc-summary-price {
+    font-size: 15px;
+    color: var(--color-text-secondary);
+}
+
+.tc-summary-row--total .tc-summary-label,
+.tc-summary-row--total .tc-summary-price {
+    font-weight: 700;
+    color: var(--color-text);
+    font-size: 16px;
+}
+
+.tc-summary-divider {
+    height: 0.5px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Оферта ───────────────────────────────────────────────────────────── */
+.tc-legal-text {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    text-align: center;
+    padding: 0 8px;
+}
+
+.tc-legal-link {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* ── Кнопка оплаты (скрыта по умолчанию) ─────────────────────────────── */
+.tc-footer--hidden {
+    display: none !important;
+}
+
+/* ── Пустое состояние / загрузка ──────────────────────────────────────── */
+.tc-empty,
+.tc-loading {
+    text-align: center;
+    padding: 24px 16px;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+}
