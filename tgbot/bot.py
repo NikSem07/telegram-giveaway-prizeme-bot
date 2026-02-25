@@ -1428,11 +1428,14 @@ def owner_only(handler):
     Декоратор для admin-команд.
     Если команду вызвал не владелец — молча игнорируем.
     Это безопаснее, чем отвечать «нет доступа» — не раскрываем существование команды.
+    Используем functools.wraps чтобы aiogram видел оригинальную сигнатуру хендлера.
     """
-    async def wrapper(message: Message, *args, **kwargs):
+    import functools
+
+    @functools.wraps(handler)
+    async def wrapper(message: Message, **kwargs):
         if message.from_user and message.from_user.id == BOT_OWNER_ID:
-            return await handler(message, *args, **kwargs)
-        # Не владелец — игнорируем без ответа
+            return await handler(message, **kwargs)
         logging.warning(
             "[ADMIN] Попытка вызова %s от user_id=%s",
             handler.__name__,
