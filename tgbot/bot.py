@@ -1421,7 +1421,7 @@ class GiveawayMechanic(Base):
 # --- OWNER / ADMIN ---
 # Telegram user_id владельца бота — единственный, кто может
 # выполнять admin-команды. Замените на свой реальный user_id.
-BOT_OWNER_ID: int = 428883823
+BOT_OWNER_ID: int = int(os.getenv("BOT_OWNER_ID", "0"))
 
 def owner_only(handler):
     """
@@ -1445,13 +1445,14 @@ def owner_only(handler):
 
 
 # ID закрытой группы (Premium — для создателей)
-PREMIUM_GROUP_ID = -1003320639276
+PREMIUM_GROUP_ID = int(os.getenv("PREMIUM_GROUP_ID", "0"))
 
 # ID закрытого канала PRIME (для участников)
-PRIME_CHANNEL_ID = -1003741131684
+PRIME_CHANNEL_ID = int(os.getenv("PRIME_CHANNEL_ID", "0"))
 
-# 🔧 ПРИНУДИТЕЛЬНО УКАЗЫВАЕМ ASYNCPG ДРАЙВЕР
-DB_URL = "postgresql+asyncpg://prizeme_user:Akinneket19!@localhost/prizeme_prod"
+# Берём DATABASE_URL из .env и конвертируем в asyncpg-формат для SQLAlchemy
+_db_url = os.getenv("DATABASE_URL", "")
+DB_URL = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 # 🔧 ПРИНУДИТЕЛЬНО ЗАГРУЖАЕМ ASYNCPG ДРАЙВЕР ДЛЯ SQLALCHEMY
 import sqlalchemy.dialects.postgresql.asyncpg
