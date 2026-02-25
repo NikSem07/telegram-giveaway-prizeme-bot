@@ -1418,6 +1418,29 @@ class GiveawayMechanic(Base):
 
 # ---- DB INIT ----
 
+# --- OWNER / ADMIN ---
+# Telegram user_id владельца бота — единственный, кто может
+# выполнять admin-команды. Замените на свой реальный user_id.
+BOT_OWNER_ID: int = 428883823
+
+def owner_only(handler):
+    """
+    Декоратор для admin-команд.
+    Если команду вызвал не владелец — молча игнорируем.
+    Это безопаснее, чем отвечать «нет доступа» — не раскрываем существование команды.
+    """
+    async def wrapper(message: Message, *args, **kwargs):
+        if message.from_user and message.from_user.id == BOT_OWNER_ID:
+            return await handler(message, *args, **kwargs)
+        # Не владелец — игнорируем без ответа
+        logging.warning(
+            "[ADMIN] Попытка вызова %s от user_id=%s",
+            handler.__name__,
+            message.from_user.id if message.from_user else "unknown"
+        )
+    return wrapper
+
+
 # ID закрытой группы (Premium — для создателей)
 PREMIUM_GROUP_ID = -1003320639276
 
@@ -3436,7 +3459,184 @@ async def dbg_gw(m: types.Message):
         lines += [f"• {t} (chat_id={cid})" for cid, t in rows]
         await m.answer("\n".join(lines))
 
+# ============================================================
+# ADMIN: управление топ-размещениями
+# ============================================================
+
+@dp.message(Command("admin_top_add"))
+@owner_only
+async def cmd_admin_top_add(m: Message):
+    """
+    Добавить розыгрыш в топ вручную (для тестирования).
+    Использование:
+      /admin_top_add <giveaway_id> <days> <type>
+      type: week | full_period
+    Пример:
+      /admin_top_add 42 7 week
+      /admin_top_add 42 0 full_period   (0 = до конца розыгрыша)
+    """
+    parts = (m.text or "").split()
+    if len(parts) < 3:
+        await m.answer(
+            "Использование:\n"
+            "<code>/admin_top_add &lt;giveaway_id&gt; &lt;days&gt; &lt;type&gt;</code>\n\n"
+            "type: <code>week</code> | <code>full_period</code>\n"
+            "Если type=full_period, days игнорируется — срок до конца розыгрыша.",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        giveaway_id    = int(parts[1])
+        days           = int(parts[2])
+        placement_type = parts[3] if len(parts) > 3 else "week"
+    except ValueError:
+        await m.answer("❌ Некорректные параметры. giveaway_id и days должны быть числами.")
+        return
+
+    if placement_type not in ("week", "full_period"):
+        await m.answer("❌ type должен быть: week или full_period")
+        return
+
+    async with Session() as s:
+        # Проверяем что розыгрыш существует и активен
+        gw = await s.get(Giveaway, giveaway_id)
+        if not gw:
+            await m.answer(f"❌ Розыгрыш #{giveaway_id} не найден.")
+            return
+        if gw.status != "active":
+            await m.answer(f"❌ Розыгрыш #{giveaway_id} не активен (статус: {gw.status}).")
+            return
+
+        # Определяем ends_at
+        now_utc = datetime.now(timezone.utc)
+        if placement_type == "full_period":
+            # До конца розыгрыша
+            ends_at = gw.end_at_utc if gw.end_at_utc.tzinfo else gw.end_at_utc.replace(tzinfo=timezone.utc)
+        else:
+            ends_at = now_utc + timedelta(days=days if days > 0 else 7)
+
+        # Деактивируем предыдущее размещение для этого розыгрыша (если есть)
+        await s.execute(
+            stext("UPDATE top_placements SET is_active = false WHERE giveaway_id = :gid"),
+            {"gid": giveaway_id}
+        )
+
+        # Создаём service_order (ручное, без оплаты)
+        order_result = await s.execute(
+            stext("""
+                INSERT INTO service_orders
+                    (giveaway_id, owner_user_id, service_type, status, price_rub)
+                VALUES
+                    (:gid, :uid, 'top_placement', 'active', 0)
+                RETURNING id
+            """),
+            {"gid": giveaway_id, "uid": gw.owner_user_id}
+        )
+        order_id = order_result.scalar_one()
+
+        # Создаём top_placement
+        await s.execute(
+            stext("""
+                INSERT INTO top_placements
+                    (giveaway_id, order_id, starts_at, ends_at, placement_type, is_active)
+                VALUES
+                    (:gid, :oid, :starts, :ends, :ptype, true)
+            """),
+            {
+                "gid":    giveaway_id,
+                "oid":    order_id,
+                "starts": now_utc,
+                "ends":   ends_at,
+                "ptype":  placement_type,
+            }
+        )
+        await s.commit()
+
+    await m.answer(
+        f"✅ Розыгрыш <b>#{giveaway_id}</b> добавлен в топ.\n"
+        f"Тип: <code>{placement_type}</code>\n"
+        f"До: <code>{ends_at.strftime('%d.%m.%Y %H:%M')} UTC</code>",
+        parse_mode="HTML"
+    )
+    logging.info("[ADMIN] top_placement добавлен: giveaway_id=%s, ends_at=%s", giveaway_id, ends_at)
+
+
+@dp.message(Command("admin_top_remove"))
+@owner_only
+async def cmd_admin_top_remove(m: Message):
+    """
+    Убрать розыгрыш из топа вручную.
+    Использование: /admin_top_remove <giveaway_id>
+    """
+    parts = (m.text or "").split()
+    if len(parts) < 2:
+        await m.answer("Использование: <code>/admin_top_remove &lt;giveaway_id&gt;</code>", parse_mode="HTML")
+        return
+
+    try:
+        giveaway_id = int(parts[1])
+    except ValueError:
+        await m.answer("❌ giveaway_id должен быть числом.")
+        return
+
+    async with Session() as s:
+        result = await s.execute(
+            stext("""
+                UPDATE top_placements
+                SET is_active = false
+                WHERE giveaway_id = :gid AND is_active = true
+            """),
+            {"gid": giveaway_id}
+        )
+        await s.commit()
+        updated = result.rowcount
+
+    if updated:
+        await m.answer(f"✅ Розыгрыш #{giveaway_id} убран из топа.")
+    else:
+        await m.answer(f"ℹ️ Розыгрыш #{giveaway_id} не был в топе.")
+
+
+@dp.message(Command("admin_top_list"))
+@owner_only
+async def cmd_admin_top_list(m: Message):
+    """
+    Показать все активные топ-размещения.
+    Использование: /admin_top_list
+    """
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT
+                tp.giveaway_id,
+                g.internal_title,
+                tp.placement_type,
+                tp.starts_at,
+                tp.ends_at
+            FROM top_placements tp
+            JOIN giveaways g ON g.id = tp.giveaway_id
+            WHERE tp.is_active = true AND tp.ends_at > NOW()
+            ORDER BY tp.starts_at ASC
+        """))
+        rows = result.fetchall()
+
+    if not rows:
+        await m.answer("ℹ️ Активных топ-размещений нет.")
+        return
+
+    lines = ["<b>Активные топ-размещения:</b>\n"]
+    for row in rows:
+        ends = row.ends_at.strftime("%d.%m.%Y %H:%M") if row.ends_at else "—"
+        lines.append(
+            f"• <b>#{row.giveaway_id}</b> {row.internal_title}\n"
+            f"  Тип: <code>{row.placement_type}</code> | До: <code>{ends} UTC</code>"
+        )
+
+    await m.answer("\n".join(lines), parse_mode="HTML")
+
+
 @dp.message(Command("admin_draw"))
+@owner_only
 async def cmd_admin_draw(m: Message):
     """Ручной запуск определения победителей"""
     print(f"🔄 COMMAND /admin_draw получен: {m.text}")
