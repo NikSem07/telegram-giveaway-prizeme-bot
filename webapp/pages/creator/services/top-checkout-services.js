@@ -23,9 +23,16 @@ function hideBackButton(onBack) {
 // ── Шапка и навбар ───────────────────────────────────────────────────────
 function setShellVisibility(visible) {
     const topHeader = document.querySelector('.top-header');
-    const bottomNav = document.querySelector('.bottom-nav');
     if (topHeader) topHeader.style.display = visible ? '' : 'none';
-    if (bottomNav) bottomNav.style.display = visible ? '' : 'none';
+
+    // Используем класс на body — как для карточек розыгрышей.
+    // Это скрывает навбар через CSS-трансформ И обнуляет --navbar-height,
+    // чтобы фиксированные кнопки корректно прижимались к низу.
+    if (visible) {
+        document.body.classList.remove('page-checkout-services');
+    } else {
+        document.body.classList.add('page-checkout-services');
+    }
 }
 
 // ── Загрузка розыгрышей ───────────────────────────────────────────────────

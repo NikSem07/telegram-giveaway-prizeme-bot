@@ -139,6 +139,13 @@
   pointer-events: none;
 }
 
+/* Hide bottom navbar (Services checkout) */
+.page-checkout-services .bottom-nav {
+    transform: translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* Скрываем навбар на карточке розыгрыша (режим создателя) */
 .page-creator-giveaway-card .bottom-nav {
   transform: translateY(120%) !important;

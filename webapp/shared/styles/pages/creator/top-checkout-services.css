@@ -186,19 +186,20 @@
     display: none !important;
 }
 
-/* Кнопка оплаты — на уровне навбара, с размытым фоном */
+/* Кнопка оплаты — прижата к низу экрана.
+   Навбар скрыт через page-checkout-services, поэтому bottom: 0 + safe-area. */
 #tc-footer-pay {
     bottom: 0;
-    padding-bottom: calc(var(--navbar-height, 80px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
     padding-top: 12px;
     background: linear-gradient(
         to bottom,
         transparent 0%,
-        rgba(15, 17, 21, 0.85) 30%,
-        rgba(15, 17, 21, 0.97) 100%
+        rgba(15, 17, 21, 0.88) 28%,
+        rgba(15, 17, 21, 0.98) 100%
     );
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 /* Неактивное состояние */
