@@ -1617,7 +1617,8 @@ app.post('/api/top_placement_checkout_data', async (req, res) => {
         array_remove(
           array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
           NULL
-        ) AS channels
+        ) AS channels,
+        (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
       FROM giveaways g
       LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
       LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
@@ -1634,10 +1635,13 @@ app.post('/api/top_placement_checkout_data', async (req, res) => {
     return res.json({
       ok:    true,
       items: (result.rows || []).map(row => ({
-        id:         row.id,
-        title:      row.internal_title,
-        end_at_utc: row.end_at_utc,
-        channels:   row.channels || [],
+        id:                    row.id,
+        title:                 row.internal_title,
+        end_at_utc:            row.end_at_utc,
+        channels:              row.channels || [],
+        first_channel_avatar_url: row.first_channel_chat_id
+          ? `/api/chat_avatar/${row.first_channel_chat_id}`
+          : null,
       })),
     });
 

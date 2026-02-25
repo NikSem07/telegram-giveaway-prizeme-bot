@@ -51,9 +51,8 @@ async function loadGiveaways() {
         listEl.innerHTML = data.items.map(g => {
             const channels = (g.channels || []).join(', ') || '—';
             const avatarUrl = g.first_channel_avatar_url || null;
-            const endDate = g.end_at_utc
-                ? new Date(g.end_at_utc).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
-                : '—';
+            const timerId = `tc-timer-${g.id}`;
+            const endDate = g.end_at_utc || null;
 
             return `
                 <div class="tc-giveaway-card giveaway-card giveaway-card--all"
@@ -67,7 +66,7 @@ async function loadGiveaways() {
                     <div class="giveaway-info">
                         <div class="giveaway-title">${g.title}</div>
                         <div class="giveaway-desc">${channels}</div>
-                        <div class="giveaway-timer">До ${endDate}</div>
+                        <div class="giveaway-timer" id="${timerId}" data-end="${endDate}">—</div>
                     </div>
                     <div class="tc-giveaway-check" id="tc-check-${g.id}">
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -82,10 +81,49 @@ async function loadGiveaways() {
             card.addEventListener('click', () => onGiveawaySelected(card));
         });
 
+        // Запускаем таймеры
+        startCheckoutTimers();
+
     } catch (e) {
         listEl.innerHTML = `<div class="tc-empty"><p class="tc-empty-text">Ошибка загрузки. Попробуйте ещё раз.</p></div>`;
         console.error('[TOP_CHECKOUT] loadGiveaways error:', e);
     }
+}
+
+// ── Таймеры обратного отсчёта ─────────────────────────────────────────────
+let _checkoutTimerInterval = null;
+
+function formatCountdown(endUtc) {
+    const now  = Date.now();
+    const end  = new Date(endUtc).getTime();
+    let   diff = Math.max(0, Math.floor((end - now) / 1000));
+
+    const days = Math.floor(diff / 86400);
+    diff -= days * 86400;
+    const hours = Math.floor(diff / 3600);
+    diff -= hours * 3600;
+    const mins = Math.floor(diff / 60);
+    const secs = diff - mins * 60;
+
+    const pad = n => String(n).padStart(2, '0');
+    return days > 0
+        ? `${days} дн., ${pad(hours)}:${pad(mins)}:${pad(secs)}`
+        : `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+}
+
+function startCheckoutTimers() {
+    if (_checkoutTimerInterval) clearInterval(_checkoutTimerInterval);
+
+    const tick = () => {
+        document.querySelectorAll('.giveaway-timer[data-end]').forEach(el => {
+            const end = el.dataset.end;
+            if (!end) return;
+            el.textContent = formatCountdown(end);
+        });
+    };
+
+    tick();
+    _checkoutTimerInterval = setInterval(tick, 1000);
 }
 
 // ── Выбор розыгрыша ───────────────────────────────────────────────────────

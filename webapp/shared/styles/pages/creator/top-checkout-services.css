@@ -182,9 +182,13 @@
     text-decoration: none;
 }
 
-/* ── Кнопка оплаты ────────────────────────────────────────────────────── */
 .tc-footer--hidden {
     display: none !important;
+}
+
+/* Кнопка оплаты — прижата к навбару как в остальных экранах */
+#tc-footer-pay {
+    bottom: calc(var(--navbar-height, 80px) + 8px);
 }
 
 /* Неактивное состояние */
