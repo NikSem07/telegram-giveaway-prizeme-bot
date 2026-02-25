@@ -3619,7 +3619,7 @@ async def cb_admin_top_delete(cb: CallbackQuery):
         )
         await s.commit()
 
-    await cb.answer(f"✅ Розыгрыш #{giveaway_id} убран из топа.", show_alert=True)
+    await cb.answer(f"✅ Розыгрыш #{giveaway_id} убран из топа", show_alert=True)
     await cb.message.edit_text(
         "🔧 <b>Панель администратора PrizeMe</b>\n\n"
         "Выберите действие:",
