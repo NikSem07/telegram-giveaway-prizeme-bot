@@ -1261,85 +1261,98 @@ app.post('/api/check_prime_status', async (req, res) => {
 
 // --- POST /api/participant_home_giveaways ---
 // Отдает списки розыгрышей для главной страницы участника:
-// top — "Топ розыгрыши", latest — "Все текущие розыгрыши"
-// Пока логика одинаковая: последние активные розыгрыши.
+//   top    — розыгрыши с активным платным размещением в топе (top_placements)
+//            фоллбек: последние 5 активных, если платных размещений нет
+//   latest — все текущие активные розыгрыши (для PRIME-пользователей)
 app.post('/api/participant_home_giveaways', async (req, res) => {
   try {
-    const limitTop = 5;
-    const limitLatest = 5;
-    const limit = Math.max(limitTop, limitLatest);
+    const LIMIT_TOP    = 5;
+    const LIMIT_LATEST = 100;
 
-    const result = await pool.query(`
+    // ── Вспомогательный маппер строки БД → объект для фронта ──────────────
+    const mapRow = (row) => ({
+      id:                    row.id,
+      title:                 row.internal_title,
+      public_description:    row.public_description,
+      end_at_utc:            row.end_at_utc,
+      status:                row.status,
+      channels:              row.channels || [],
+      first_channel_avatar_url: row.first_channel_chat_id
+        ? `/api/chat_avatar/${row.first_channel_chat_id}`
+        : null,
+      participants_count: row.participants_count
+        ? Number(row.participants_count)
+        : 0,
+    });
+
+    // ── Общая SELECT-часть (переиспользуется в обоих запросах) ────────────
+    const SELECT_GIVEAWAY = `
       SELECT
         g.id,
         g.internal_title,
         g.public_description,
         g.end_at_utc,
         g.status,
-
-        -- список названий каналов как раньше
         array_remove(
           array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
           NULL
         ) AS channels,
-
-        -- первый канал по gc.id (важно: именно порядок привязки)
         (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id,
-
-        -- количество участников (как минимум уникальные user_id с final_ok=true)
         (
           SELECT COUNT(DISTINCT e.user_id)
           FROM entries e
           WHERE e.giveaway_id = g.id
         ) AS participants_count
-
       FROM giveaways g
       LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
       LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+    `;
 
+    // ── Запрос 1: платные топ-размещения ─────────────────────────────────
+    // Берём только те розыгрыши, у которых есть активная запись в top_placements
+    // (is_active = true И ends_at ещё не истёк)
+    const topPaidResult = await pool.query(`
+      ${SELECT_GIVEAWAY}
+      INNER JOIN top_placements tp
+        ON tp.giveaway_id = g.id
+        AND tp.is_active  = true
+        AND tp.ends_at    > NOW()
+      WHERE g.status = 'active'
+      GROUP BY g.id, tp.starts_at
+      ORDER BY tp.starts_at ASC
+      LIMIT $1
+    `, [LIMIT_TOP]);
+
+    // ── Запрос 2: все активные розыгрыши (для каталога PRIME) ────────────
+    const latestResult = await pool.query(`
+      ${SELECT_GIVEAWAY}
       WHERE g.status = 'active'
       GROUP BY g.id
       ORDER BY g.id DESC
       LIMIT $1
-    `, [limit]);
+    `, [LIMIT_LATEST]);
 
-    const rows = result.rows || [];
+    const topPaid  = (topPaidResult.rows  || []).map(mapRow);
+    const latest   = (latestResult.rows   || []).map(mapRow);
 
-    const mapped = rows.map(row => {
-      const firstChatId = row.first_channel_chat_id || null;
-      return {
-        id: row.id,
-        title: row.internal_title,
-        public_description: row.public_description,
-        end_at_utc: row.end_at_utc,
-        status: row.status,
-        channels: row.channels || [],
-
-        // фронту даем URL на наш прокси-роут
-        first_channel_avatar_url: firstChatId ? `/api/chat_avatar/${firstChatId}` : null,
-
-        participants_count: typeof row.participants_count === 'number'
-          ? row.participants_count
-          : (row.participants_count ? Number(row.participants_count) : 0),
-      };
-    });
+    // Топ — только платные размещения, без фоллбека
+    const top = topPaid;
 
     res.json({
-      ok: true,
-      top: mapped.slice(0, limitTop),
-      latest: mapped.slice(0, limitLatest),
-      total_latest_count: mapped.length,
+      ok:                 true,
+      top,
+      latest,
+      total_latest_count: latest.length,
     });
 
   } catch (error) {
-    console.log('[API participant_home_giveaways] error:', error);
+    console.error('[API participant_home_giveaways] error:', error);
     res.status(500).json({
-      ok: false,
-      reason: 'server_error: ' + error.message
+      ok:     false,
+      reason: 'server_error: ' + error.message,
     });
   }
 });
-
 
 // --- GET /api/chat_avatar/:chatId ---
 // Отдает ПРЯМУЮ ссылку на файл аватара Telegram-канала

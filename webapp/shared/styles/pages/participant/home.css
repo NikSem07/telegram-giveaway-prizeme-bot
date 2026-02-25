@@ -570,3 +570,17 @@
     background: var(--pgc-blue-chip, #4379ff);
     color: #fff;
 }
+
+/* ====== Топ: пустое состояние ====== */
+.top-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+}
+
+.top-empty-text {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+}

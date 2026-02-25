@@ -115,7 +115,15 @@ async function loadGiveawaysLists() {
 
         console.log(`[HOME] is_prime=${isPrime}`);
 
-        renderGiveawayList(topContainer, data.top || [], 'top');
+        if (data.top && data.top.length > 0) {
+            renderGiveawayList(topContainer, data.top, 'top');
+        } else {
+            topContainer.innerHTML = `
+                <div class="top-empty">
+                    <span class="top-empty-text">Пока пусто</span>
+                </div>
+            `;
+        }
 
         if (isPrime) {
             // Сохраняем данные для клиентской сортировки

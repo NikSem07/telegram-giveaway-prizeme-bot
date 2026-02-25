@@ -1374,6 +1374,32 @@ class Winner(Base):
     rank: Mapped[int] = mapped_column(Integer)
     hash_used: Mapped[str] = mapped_column(String(128))
 
+class ServiceOrder(Base):
+    """Заявка на сервис продвижения розыгрыша."""
+    __tablename__ = "service_orders"
+
+    id:            Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    giveaway_id:   Mapped[int]      = mapped_column(ForeignKey("giveaways.id", ondelete="CASCADE"), index=True)
+    owner_user_id: Mapped[int]      = mapped_column(BigInteger, index=True)
+    service_type:  Mapped[str]      = mapped_column(String(32))   # top_placement | bot_promotion | tasks
+    status:        Mapped[str]      = mapped_column(String(16), default="pending")  # pending | paid | active | cancelled | expired
+    price_rub:     Mapped[int|None] = mapped_column(Integer, nullable=True)
+    created_at:    Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at:    Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class TopPlacement(Base):
+    """Активное размещение розыгрыша в блоке Топ."""
+    __tablename__ = "top_placements"
+
+    id:             Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    giveaway_id:    Mapped[int]      = mapped_column(ForeignKey("giveaways.id", ondelete="CASCADE"), index=True)
+    order_id:       Mapped[int]      = mapped_column(ForeignKey("service_orders.id", ondelete="CASCADE"))
+    starts_at:      Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    ends_at:        Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    placement_type: Mapped[str]      = mapped_column(String(16), default="week")  # week | full_period
+    is_active:      Mapped[bool]     = mapped_column(Boolean, default=True)
+
 class PrimeChannelPost(Base):
     __tablename__ = "prime_channel_posts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
