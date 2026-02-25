@@ -186,9 +186,19 @@
     display: none !important;
 }
 
-/* Кнопка оплаты — прижата к навбару как в остальных экранах */
+/* Кнопка оплаты — на уровне навбара, с размытым фоном */
 #tc-footer-pay {
-    bottom: calc(var(--navbar-height, 80px) + 8px);
+    bottom: 0;
+    padding-bottom: calc(var(--navbar-height, 80px) + env(safe-area-inset-bottom, 0px));
+    padding-top: 12px;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(15, 17, 21, 0.85) 30%,
+        rgba(15, 17, 21, 0.97) 100%
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 /* Неактивное состояние */
