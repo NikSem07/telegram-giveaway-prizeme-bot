@@ -218,3 +218,62 @@
     font-size: 14px;
     color: var(--color-text-secondary);
 }
+
+/* ── Способ оплаты ────────────────────────────────────────────────────── */
+.tc-payment-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.tc-payment-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px 12px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.18s ease, background 0.18s ease;
+    position: relative;
+}
+
+.tc-payment-card--active {
+    border-color: var(--color-primary, #007AFF);
+    background: rgba(0, 122, 255, 0.07);
+}
+
+.tc-payment-icon {
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tc-payment-card--active .tc-payment-icon {
+    color: var(--color-primary, #007AFF);
+}
+
+.tc-payment-icon--wallet {
+    color: var(--color-text-secondary);
+}
+
+.tc-payment-card--active .tc-payment-icon--wallet {
+    color: var(--color-primary, #007AFF);
+}
+
+.tc-payment-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.tc-payment-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}

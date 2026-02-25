@@ -40,6 +40,50 @@ export default function topCheckoutTemplate() {
             </div>
         </div>
 
+        <!-- Способ оплаты -->
+        <div class="tc-section tc-section--hidden" id="tc-payment-section">
+            <p class="tc-section-label">Способ оплаты</p>
+            <div class="tc-payment-list">
+                <div class="tc-payment-card tc-payment-card--active"
+                     data-payment="card" role="button" tabindex="0">
+                    <div class="tc-payment-icon">
+                        <svg width="22" height="18" viewBox="0 0 22 18" fill="none">
+                            <rect x="1" y="1" width="20" height="16" rx="3"
+                                  stroke="currentColor" stroke-width="1.8"/>
+                            <path d="M1 6h20" stroke="currentColor" stroke-width="1.8"/>
+                            <rect x="4" y="10" width="4" height="2" rx="1" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <span class="tc-payment-label">Картой</span>
+                    <div class="tc-payment-check" id="tc-pay-check-card">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <circle cx="9" cy="9" r="9" fill="#007AFF"/>
+                            <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="tc-payment-card"
+                     data-payment="wallet" role="button" tabindex="0">
+                    <div class="tc-payment-icon tc-payment-icon--wallet">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <rect x="1" y="4" width="18" height="13" rx="3"
+                                  stroke="currentColor" stroke-width="1.8"/>
+                            <path d="M1 8h18" stroke="currentColor" stroke-width="1.8"/>
+                            <circle cx="14.5" cy="13" r="1.5" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <span class="tc-payment-label">Wallet Pay</span>
+                    <div class="tc-payment-check" id="tc-pay-check-wallet">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Итог оплаты -->
         <div class="tc-section tc-section--hidden" id="tc-summary-section">
             <div class="tc-summary-card">

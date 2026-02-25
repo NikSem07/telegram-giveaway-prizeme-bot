@@ -156,8 +156,26 @@ function onGiveawaySelected(card) {
 
     // Сбрасываем период и итог
     document.querySelectorAll('.tc-period-card').forEach(p => p.classList.remove('tc-period-card--active'));
+    document.getElementById('tc-payment-section').classList.add('tc-section--hidden');
     document.getElementById('tc-summary-section').classList.add('tc-section--hidden');
     document.getElementById('tc-footer-pay').classList.add('tc-footer--hidden');
+    _paymentMethod = 'card';
+    // Сбрасываем визуал карточек оплаты
+    document.querySelectorAll('.tc-payment-card').forEach(c => {
+        const isCard = c.dataset.payment === 'card';
+        c.classList.toggle('tc-payment-card--active', isCard);
+        const checkEl = c.querySelector('.tc-payment-check');
+        if (!checkEl) return;
+        checkEl.innerHTML = isCard
+            ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                   <circle cx="9" cy="9" r="9" fill="#007AFF"/>
+                   <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round"/>
+               </svg>`
+            : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                   <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
+               </svg>`;
+    });
 }
 
 // ── Выбор периода ─────────────────────────────────────────────────────────
@@ -171,6 +189,7 @@ function onPeriodSelected(card) {
     document.getElementById('tc-summary-price').textContent = priceText;
     document.getElementById('tc-summary-total').textContent = priceText;
 
+    document.getElementById('tc-payment-section').classList.remove('tc-section--hidden');
     document.getElementById('tc-summary-section').classList.remove('tc-section--hidden');
 
     const footerPay = document.getElementById('tc-footer-pay');
@@ -180,6 +199,32 @@ function onPeriodSelected(card) {
 
 // ── Согласие с офертой ────────────────────────────────────────────────────
 let _agreed = false;
+let _paymentMethod = 'card'; // card | wallet
+
+function initPaymentSelection() {
+    document.querySelectorAll('.tc-payment-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const method = card.dataset.payment;
+            _paymentMethod = method;
+
+            document.querySelectorAll('.tc-payment-card').forEach(c => {
+                const isActive = c.dataset.payment === method;
+                c.classList.toggle('tc-payment-card--active', isActive);
+                const checkEl = c.querySelector('.tc-payment-check');
+                if (!checkEl) return;
+                checkEl.innerHTML = isActive
+                    ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                           <circle cx="9" cy="9" r="9" fill="#007AFF"/>
+                           <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
+                                 stroke-linecap="round" stroke-linejoin="round"/>
+                       </svg>`
+                    : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                           <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
+                       </svg>`;
+            });
+        });
+    });
+}
 
 function initAgreeBlock() {
     const block    = document.getElementById('tc-agree-block');
@@ -289,6 +334,7 @@ function mountTopCheckout(container, onBack) {
         showWipModal();
     });
 
+    initPaymentSelection();
     initAgreeBlock();
     initLegalLinks();
     loadGiveaways();
