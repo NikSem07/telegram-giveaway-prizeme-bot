@@ -2729,6 +2729,27 @@ bot = Bot(BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 
+async def deactivate_expired_top_placements():
+    """
+    Периодическая задача: деактивирует топ-размещения у которых истёк ends_at.
+    Запускается каждые 30 минут через APScheduler.
+    """
+    async with Session() as s:
+        result = await s.execute(stext("""
+            UPDATE top_placements
+            SET is_active = false
+            WHERE is_active = true AND ends_at <= NOW()
+            RETURNING giveaway_id
+        """))
+        deactivated = result.fetchall()
+        await s.commit()
+
+    if deactivated:
+        ids = [str(r.giveaway_id) for r in deactivated]
+        logging.info(
+            "[TOP_PLACEMENTS] Деактивировано истёкших размещений: %d (giveaway_ids: %s)",
+            len(ids), ", ".join(ids)
+        )
 
 @dp.chat_join_request()
 async def on_join_request(ev: ChatJoinRequest, bot: Bot):
@@ -3742,7 +3763,7 @@ async def cb_admin_top_add_info(cb: CallbackQuery):
     )
 
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Добавить в топ (7 дней)",        callback_data=f"adm:top_confirm:{giveaway_id}:7:week")
+    kb.button(text="✅ Добавить в топ (24 часа)",       callback_data=f"adm:top_confirm:{giveaway_id}:1:week")
     kb.button(text="♾️ Добавить в топ (до конца)",      callback_data=f"adm:top_confirm:{giveaway_id}:0:full_period")
     kb.button(text="◀️ Назад",                           callback_data="adm:top_add_start")
     kb.adjust(1)
@@ -3966,7 +3987,7 @@ async def cmd_admin_top_add(m: Message):
       /admin_top_add <giveaway_id> <days> <type>
       type: week | full_period
     Пример:
-      /admin_top_add 42 7 week
+      /admin_top_add 42 1 week          (1 = 24 часа)
       /admin_top_add 42 0 full_period   (0 = до конца розыгрыша)
     """
     parts = (m.text or "").split()
@@ -9204,6 +9225,15 @@ async def main():
     await ensure_schema()
     logging.info("✅ База данных инициализирована")
     logging.info("✅ База данных PostgreSQL инициализирована")
+
+    # Автодеактивация истёкших топ-размещений — каждые 30 минут
+    scheduler.add_job(
+        deactivate_expired_top_placements,
+        trigger='interval',
+        minutes=30,
+        id='deactivate_top_placements',
+        replace_existing=True,
+    )
 
     # 2) запускаем планировщик
     scheduler.start()
