@@ -3763,8 +3763,8 @@ async def cb_admin_top_add_info(cb: CallbackQuery):
     )
 
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Добавить в топ (24 часа)",       callback_data=f"adm:top_confirm:{giveaway_id}:1:week")
-    kb.button(text="♾️ Добавить в топ (до конца)",      callback_data=f"adm:top_confirm:{giveaway_id}:0:full_period")
+    kb.button(text="✅ Добавить в топ (24 часа)",   callback_data=f"adm:top_confirm:{giveaway_id}:1:day")
+    kb.button(text="✅ Добавить в топ (1 неделя)",  callback_data=f"adm:top_confirm:{giveaway_id}:7:week")
     kb.button(text="◀️ Назад",                           callback_data="adm:top_add_start")
     kb.adjust(1)
 
@@ -3789,10 +3789,7 @@ async def cb_admin_top_confirm(cb: CallbackQuery):
             return
 
         now_utc = datetime.now(timezone.utc)
-        if placement_type == "full_period":
-            ends_at = gw.end_at_utc if gw.end_at_utc.tzinfo else gw.end_at_utc.replace(tzinfo=timezone.utc)
-        else:
-            ends_at = now_utc + timedelta(days=days)
+        ends_at = now_utc + timedelta(days=days)
 
         # Деактивируем предыдущее размещение
         await s.execute(
@@ -3987,8 +3984,8 @@ async def cmd_admin_top_add(m: Message):
       /admin_top_add <giveaway_id> <days> <type>
       type: week | full_period
     Пример:
-      /admin_top_add 42 1 week          (1 = 24 часа)
-      /admin_top_add 42 0 full_period   (0 = до конца розыгрыша)
+      /admin_top_add 42 1 day    (24 часа)
+      /admin_top_add 42 7 week   (1 неделя)
     """
     parts = (m.text or "").split()
     if len(parts) < 3:
@@ -4009,8 +4006,8 @@ async def cmd_admin_top_add(m: Message):
         await m.answer("❌ Некорректные параметры. giveaway_id и days должны быть числами.")
         return
 
-    if placement_type not in ("week", "full_period"):
-        await m.answer("❌ type должен быть: week или full_period")
+    if placement_type not in ("day", "week"):
+        await m.answer("❌ type должен быть: day или week")
         return
 
     async with Session() as s:
