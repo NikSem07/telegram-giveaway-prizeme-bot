@@ -2,6 +2,8 @@
 import servicesTemplate from './services.template.js';
 import { mountTopCheckout } from './top-checkout-services.js';
 import TelegramData from '../../../shared/telegram-data.js';
+import AppState from '../../shared/state.js';
+import Router   from '../../shared/router.js';
 
 // ── Pop-up "В разработке" ─────────────────────────────────────────────────
 function showWipModal() {
@@ -112,7 +114,15 @@ function initServiceSelection(main) {
                 showNoGiveawaysModal();
                 return;
             }
-            mountTopCheckout(main, () => renderServicesPage());
+            mountTopCheckout(
+                main,
+                () => renderServicesPage(),
+                () => {
+                    // После успешной оплаты — на главную в режим участника
+                    AppState.setMode('participant');
+                    Router.navigate('home');
+                }
+            );
         } else {
             showWipModal();
         }
