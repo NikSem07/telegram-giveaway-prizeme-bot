@@ -178,11 +178,11 @@ function onGiveawaySelected(card) {
     document.getElementById('tc-summary-section').classList.add('tc-section--hidden');
     document.getElementById('tc-disclaimer').classList.add('tc-section--hidden');
     document.getElementById('tc-footer-pay').classList.add('tc-footer--hidden');
-    _paymentMethod       = 'card';
-    _selectedGiveawayId  = null;
-    _selectedPeriodId    = null;
-    _selectedPriceRub    = null;
-    _selectedPriceStars  = null;
+    _paymentMethod      = 'card';
+    _selectedPeriodId   = null;
+    _selectedPriceRub   = null;
+    _selectedPriceStars = null;
+    // _selectedGiveawayId НЕ сбрасываем — он уже установлен выше
     // Сбрасываем визуал карточек оплаты
     document.querySelectorAll('.tc-payment-card').forEach(c => {
         const isCard = c.dataset.payment === 'card';
