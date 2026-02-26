@@ -413,10 +413,38 @@ function showPaymentSuccessModal() {
     `;
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('is-visible'));
+
     document.getElementById('tc-success-close').addEventListener('click', () => {
         modal.classList.remove('is-visible');
-        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+        modal.addEventListener('transitionend', () => {
+            modal.remove();
+            _navigateToParticipantHome();
+        }, { once: true });
     });
+}
+
+// ── Переход на главную участника после успешной оплаты ───────────────────
+function _navigateToParticipantHome() {
+    // Восстанавливаем шапку и навбар
+    setShellVisibility(true);
+
+    // Переключаем режим и страницу через AppState и Router
+    try {
+        const AppState = window.__AppState__;
+        const Router   = window.__Router__;
+
+        if (AppState && Router) {
+            AppState.setMode('participant');
+            Router.navigate('home');
+        } else {
+            // Фоллбек — перезагрузка с нужным хешем
+            window.location.hash = '';
+            window.location.reload();
+        }
+    } catch (e) {
+        console.error('[TOP_CHECKOUT] navigate error:', e);
+        window.location.reload();
+    }
 }
 
 // ── Экран ошибки оплаты ───────────────────────────────────────────────────
