@@ -1597,6 +1597,7 @@ app.post('/api/creator_giveaways', async (req, res) => {
 app.post('/api/create_stars_invoice', async (req, res) => {
     try {
         const { init_data, giveaway_id, period, stars } = req.body;
+        console.log('[API create_stars_invoice] body:', { giveaway_id, period, stars });
 
         const parsedInitData = _tgCheckMiniAppInitData(init_data);
         if (!parsedInitData || !parsedInitData.user_parsed) {
