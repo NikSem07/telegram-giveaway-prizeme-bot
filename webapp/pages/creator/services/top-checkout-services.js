@@ -1,6 +1,15 @@
 // webapp/pages/creator/services/top-checkout-services.js
 import topCheckoutTemplate from './top-checkout-services.template.js';
 
+// ── Состояние чекаута ─────────────────────────────────────────────────────
+let _agreed             = false;
+let _paymentMethod      = 'card';   // card | stars
+let _selectedGiveawayId = null;
+let _selectedPeriodId   = null;
+let _selectedPriceRub   = null;
+let _selectedPriceStars = null;
+let _checkoutTimerInterval = null;
+
 // ── Системная кнопка Back Telegram ───────────────────────────────────────
 function showBackButton(onBack) {
     const tg = window.Telegram?.WebApp;
@@ -98,8 +107,6 @@ async function loadGiveaways() {
 }
 
 // ── Таймеры обратного отсчёта ─────────────────────────────────────────────
-let _checkoutTimerInterval = null;
-
 function formatCountdown(endUtc) {
     const now  = Date.now();
     const end  = new Date(endUtc).getTime();
@@ -226,13 +233,6 @@ function onPeriodSelected(card) {
 }
 
 // ── Согласие с офертой ────────────────────────────────────────────────────
-let _agreed        = false;
-let _paymentMethod = 'card';   // card | stars
-let _selectedGiveawayId  = null;
-let _selectedPeriodId    = null;
-let _selectedPriceRub    = null;
-let _selectedPriceStars  = null;
-
 function initPaymentSelection() {
     document.querySelectorAll('.tc-payment-card').forEach(card => {
         card.addEventListener('click', () => {
