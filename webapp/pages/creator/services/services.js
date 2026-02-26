@@ -2,8 +2,8 @@
 import servicesTemplate from './services.template.js';
 import { mountTopCheckout } from './top-checkout-services.js';
 import TelegramData from '../../../shared/telegram-data.js';
-import AppState from '../../shared/state.js';
-import Router   from '../../shared/router.js';
+import AppState from '../../../shared/state.js';
+import Router   from '../../../shared/router.js';
 
 // ── Pop-up "В разработке" ─────────────────────────────────────────────────
 function showWipModal() {
