@@ -1592,6 +1592,80 @@ app.post('/api/creator_giveaways', async (req, res) => {
   }
 });
 
+// --- POST /api/create_stars_invoice ---
+// Создаёт Telegram Stars инвойс через бота и возвращает invoice_link.
+app.post('/api/create_stars_invoice', async (req, res) => {
+    try {
+        const { init_data, giveaway_id, period, stars } = req.body;
+
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData || !parsedInitData.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+
+        const userId = Number(parsedInitData.user_parsed.id);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+        }
+
+        // Валидация периода
+        const VALID_PERIODS = { day: 150, week: 450 };
+        if (!VALID_PERIODS[period]) {
+            return res.status(400).json({ ok: false, reason: 'invalid_period' });
+        }
+
+        // Проверяем что rosa принадлежит этому пользователю
+        const gw = await pool.query(
+            `SELECT id, internal_title FROM giveaways
+             WHERE id = $1 AND owner_user_id = $2 AND status = 'active'`,
+            [giveaway_id, userId]
+        );
+        if (!gw.rows.length) {
+            return res.status(400).json({ ok: false, reason: 'giveaway_not_found' });
+        }
+
+        const giveawayTitle = gw.rows[0].internal_title;
+        const starsAmount   = VALID_PERIODS[period];
+        const periodLabel   = period === 'day' ? '1 день' : '1 неделю';
+
+        // Создаём инвойс через Telegram Bot API
+        const botToken = process.env.BOT_TOKEN;
+        const invoiceResp = await fetch(
+            `https://api.telegram.org/bot${botToken}/createInvoiceLink`,
+            {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    title:           'Топ-розыгрыши',
+                    description:     `Размещение «${giveawayTitle}» на ${periodLabel}`,
+                    payload:         JSON.stringify({
+                        type:        'top_placement',
+                        giveaway_id: Number(giveaway_id),
+                        period,
+                        user_id:     userId,
+                    }),
+                    currency:        'XTR',
+                    prices:          [{ label: `Топ на ${periodLabel}`, amount: starsAmount }],
+                    provider_token:  '',
+                }),
+            }
+        );
+
+        const invoiceData = await invoiceResp.json();
+
+        if (!invoiceData.ok) {
+            console.error('[API create_stars_invoice] Telegram error:', invoiceData);
+            return res.status(500).json({ ok: false, reason: 'telegram_api_error' });
+        }
+
+        return res.json({ ok: true, invoice_link: invoiceData.result });
+
+    } catch (error) {
+        console.error('[API create_stars_invoice] error:', error);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+    }
+});
+
 // --- POST /api/top_placement_checkout_data ---
 // Отдаёт активные розыгрыши создателя для экрана чекаута топ-размещения.
 // Исключает розыгрыши, которые уже в топе.

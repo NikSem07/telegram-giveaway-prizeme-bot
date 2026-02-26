@@ -1,8 +1,9 @@
 // webapp/pages/creator/services/top-checkout-services.template.js
 
+// Цены в Stars и рублях по методу оплаты
 const TOP_PERIODS = [
-    { id: 'day',  label: '1 День (24 часа)', price: 149 },
-    { id: 'week', label: '1 Неделя',          price: 499 },
+    { id: 'day',  label: '1 День (24 часа)', priceRub: 149, priceStars: 150 },
+    { id: 'week', label: '1 Неделя',          priceRub: 499, priceStars: 450 },
 ];
 
 export default function topCheckoutTemplate() {
@@ -30,11 +31,12 @@ export default function topCheckoutTemplate() {
                 ${TOP_PERIODS.map(p => `
                     <div class="tc-period-card"
                          data-period-id="${p.id}"
-                         data-price="${p.price}"
+                         data-price-rub="${p.priceRub}"
+                         data-price-stars="${p.priceStars}"
                          role="button"
                          tabindex="0">
                         <span class="tc-period-label">${p.label}</span>
-                        <span class="tc-period-price">${p.price} ₽</span>
+                        <span class="tc-period-price" data-price-rub="${p.priceRub}" data-price-stars="${p.priceStars}">${p.priceRub} ₽</span>
                     </div>
                 `).join('')}
             </div>
@@ -65,17 +67,16 @@ export default function topCheckoutTemplate() {
                 </div>
 
                 <div class="tc-payment-card"
-                     data-payment="wallet" role="button" tabindex="0">
-                    <div class="tc-payment-icon tc-payment-icon--wallet">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <rect x="1" y="4" width="18" height="13" rx="3"
-                                  stroke="currentColor" stroke-width="1.8"/>
-                            <path d="M1 8h18" stroke="currentColor" stroke-width="1.8"/>
-                            <circle cx="14.5" cy="13" r="1.5" fill="currentColor"/>
+                     data-payment="stars" role="button" tabindex="0">
+                    <div class="tc-payment-icon">
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                            <path d="M11 2L13.5 8.5L20.5 9L15.5 13.5L17.5 20.5L11 16.5L4.5 20.5L6.5 13.5L1.5 9L8.5 8.5L11 2Z"
+                                  stroke="currentColor" stroke-width="1.8"
+                                  stroke-linejoin="round"/>
                         </svg>
                     </div>
-                    <span class="tc-payment-label">Wallet Pay</span>
-                    <div class="tc-payment-check" id="tc-pay-check-wallet">
+                    <span class="tc-payment-label">Stars</span>
+                    <div class="tc-payment-check" id="tc-pay-check-stars">
                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                             <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
                         </svg>

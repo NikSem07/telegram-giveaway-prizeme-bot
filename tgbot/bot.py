@@ -24,7 +24,8 @@ from aiogram import Bot, Dispatcher, F
 import aiogram.types as types
 from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup,
-                           InlineKeyboardButton, InputMediaPhoto)
+                           InlineKeyboardButton, InputMediaPhoto,
+                           PreCheckoutQuery)
 from aiogram.types import WebAppInfo
 from aiogram.types import BotCommand
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, KeyboardButtonRequestChat, ChatAdministratorRights
@@ -9211,6 +9212,100 @@ async def log_mechanics_operation(operation: str, giveaway_id: int, mechanic_typ
     }
     
     mechanics_logger.info(f"📋 АУДИТ: {json.dumps(audit_log, ensure_ascii=False)}")
+
+# ── Telegram Stars: pre-checkout ─────────────────────────────────────────
+@dp.pre_checkout_query()
+async def handle_pre_checkout(pcq: PreCheckoutQuery):
+    """
+    Telegram требует ответа в течение 10 секунд.
+    Всегда подтверждаем — финальная проверка будет в successful_payment.
+    """
+    await pcq.answer(ok=True)
+
+# ── Telegram Stars: successful_payment ───────────────────────────────────
+@dp.message(F.successful_payment)
+async def handle_successful_payment(message: Message):
+    """
+    Активирует топ-размещение после успешной оплаты Stars.
+    """
+    payment     = message.successful_payment
+    raw_payload = payment.invoice_payload
+
+    try:
+        payload = json.loads(raw_payload)
+    except Exception:
+        logging.error(f"[STARS] Невалидный payload: {raw_payload}")
+        return
+
+    if payload.get("type") != "top_placement":
+        return
+
+    giveaway_id = payload["giveaway_id"]
+    period      = payload["period"]   # 'day' | 'week'
+    user_id     = payload["user_id"]
+    charge_id   = payment.telegram_payment_charge_id
+
+    now_utc = datetime.now(timezone.utc)
+    days    = 1 if period == "day" else 7
+    ends_at = now_utc + timedelta(days=days)
+
+    async with Session() as s:
+        # Деактивируем предыдущее размещение если есть
+        await s.execute(
+            stext("UPDATE top_placements SET is_active = false WHERE giveaway_id = :gid"),
+            {"gid": giveaway_id}
+        )
+
+        # Создаём service_order
+        order_result = await s.execute(
+            stext("""
+                INSERT INTO service_orders
+                    (giveaway_id, owner_user_id, service_type, status, price_rub)
+                VALUES (:gid, :uid, 'top_placement', 'paid', 0)
+                RETURNING id
+            """),
+            {"gid": giveaway_id, "uid": user_id}
+        )
+        order_id = order_result.scalar_one()
+
+        # Создаём top_placement
+        await s.execute(
+            stext("""
+                INSERT INTO top_placements
+                    (giveaway_id, order_id, starts_at, ends_at, placement_type, is_active)
+                VALUES (:gid, :oid, :starts, :ends, :ptype, true)
+            """),
+            {
+                "gid":    giveaway_id,
+                "oid":    order_id,
+                "starts": now_utc,
+                "ends":   ends_at,
+                "ptype":  period,
+            }
+        )
+        await s.commit()
+
+    logging.info(
+        f"[STARS] Топ активирован: giveaway={giveaway_id}, period={period}, "
+        f"user={user_id}, charge_id={charge_id}"
+    )
+
+    # Уведомляем создателя в личку
+    period_label = "1 день" if period == "day" else "1 неделю"
+    ends_str     = ends_at.strftime("%d.%m.%Y %H:%M")
+    try:
+        await bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"✅ <b>Топ-размещение активировано!</b>\n\n"
+                f"Розыгрыш <b>#{giveaway_id}</b> добавлен в топ на {period_label}.\n"
+                f"Размещение действует до <b>{ends_str} UTC</b>.\n\n"
+                f"Участники увидят его в разделе «Главная»."
+            ),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.warning(f"[STARS] Не удалось уведомить пользователя {user_id}: {e}")
 
 # ---------------- ENTRYPOINT ----------------
 async def main():

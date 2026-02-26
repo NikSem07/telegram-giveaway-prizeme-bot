@@ -146,6 +146,7 @@ function onGiveawaySelected(card) {
     });
 
     card.classList.add('tc-giveaway-card--active');
+    _selectedGiveawayId = card.dataset.giveawayId;
 
     // Показываем галочку выбора
     const checkEl = card.querySelector('.tc-giveaway-check');
@@ -167,7 +168,11 @@ function onGiveawaySelected(card) {
     document.getElementById('tc-summary-section').classList.add('tc-section--hidden');
     document.getElementById('tc-disclaimer').classList.add('tc-section--hidden');
     document.getElementById('tc-footer-pay').classList.add('tc-footer--hidden');
-    _paymentMethod = 'card';
+    _paymentMethod       = 'card';
+    _selectedGiveawayId  = null;
+    _selectedPeriodId    = null;
+    _selectedPriceRub    = null;
+    _selectedPriceStars  = null;
     // Сбрасываем визуал карточек оплаты
     document.querySelectorAll('.tc-payment-card').forEach(c => {
         const isCard = c.dataset.payment === 'card';
@@ -186,16 +191,30 @@ function onGiveawaySelected(card) {
     });
 }
 
+// ── Обновление итога в зависимости от метода оплаты ──────────────────────
+function _updateSummaryDisplay() {
+    if (!_selectedPriceRub) return;
+
+    const isStars   = _paymentMethod === 'stars';
+    const priceText = isStars
+        ? `${_selectedPriceStars} ⭐`
+        : `${_selectedPriceRub} ₽`;
+
+    document.getElementById('tc-summary-price').textContent = priceText;
+    document.getElementById('tc-summary-total').textContent = priceText;
+}
+
 // ── Выбор периода ─────────────────────────────────────────────────────────
 function onPeriodSelected(card) {
     document.querySelectorAll('.tc-period-card').forEach(c => c.classList.remove('tc-period-card--active'));
     card.classList.add('tc-period-card--active');
 
-    const price     = Number(card.dataset.price);
-    const priceText = `${price} ₽`;
+    _selectedPeriodId   = card.dataset.periodId;
+    _selectedPriceRub   = Number(card.dataset.priceRub);
+    _selectedPriceStars = Number(card.dataset.priceStars);
 
-    document.getElementById('tc-summary-price').textContent = priceText;
-    document.getElementById('tc-summary-total').textContent = priceText;
+    // Обновляем отображение итога в зависимости от метода оплаты
+    _updateSummaryDisplay();
 
     document.getElementById('tc-payment-section').classList.remove('tc-section--hidden');
     document.getElementById('tc-summary-section').classList.remove('tc-section--hidden');
@@ -207,15 +226,20 @@ function onPeriodSelected(card) {
 }
 
 // ── Согласие с офертой ────────────────────────────────────────────────────
-let _agreed = false;
-let _paymentMethod = 'card'; // card | wallet
+let _agreed        = false;
+let _paymentMethod = 'card';   // card | stars
+let _selectedGiveawayId  = null;
+let _selectedPeriodId    = null;
+let _selectedPriceRub    = null;
+let _selectedPriceStars  = null;
 
 function initPaymentSelection() {
     document.querySelectorAll('.tc-payment-card').forEach(card => {
         card.addEventListener('click', () => {
-            const method = card.dataset.payment;
+            const method   = card.dataset.payment;
             _paymentMethod = method;
 
+            // Обновляем активный стиль карточек
             document.querySelectorAll('.tc-payment-card').forEach(c => {
                 const isActive = c.dataset.payment === method;
                 c.classList.toggle('tc-payment-card--active', isActive);
@@ -231,6 +255,19 @@ function initPaymentSelection() {
                            <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
                        </svg>`;
             });
+
+            // Обновляем цены на карточках периодов
+            const isStars = method === 'stars';
+            document.querySelectorAll('.tc-period-card').forEach(p => {
+                const priceEl = p.querySelector('.tc-period-price');
+                if (!priceEl) return;
+                const rub   = priceEl.dataset.priceRub;
+                const stars = priceEl.dataset.priceStars;
+                priceEl.textContent = isStars ? `${stars} ⭐` : `${rub} ₽`;
+            });
+
+            // Пересчитываем итог если период уже выбран
+            _updateSummaryDisplay();
         });
     });
 }
@@ -292,26 +329,110 @@ function initLegalLinks() {
     });
 }
 
-// ── Заглушка оплаты ───────────────────────────────────────────────────────
-function showWipModal() {
+// ── Оплата Stars — нативно через Telegram ────────────────────────────────
+async function initiateStarsPayment() {
+    const payBtn = document.getElementById('tc-pay-btn');
+    payBtn.disabled = true;
+    payBtn.textContent = 'Создаём счёт...';
+
+    try {
+        const initData = window.Telegram?.WebApp?.initData || '';
+        const resp = await fetch('/api/create_stars_invoice', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                init_data:   initData,
+                giveaway_id: _selectedGiveawayId,
+                period:      _selectedPeriodId,   // 'day' | 'week'
+                stars:       _selectedPriceStars,
+            }),
+        });
+
+        const data = await resp.json();
+
+        if (!data.ok || !data.invoice_link) {
+            throw new Error(data.reason || 'Не удалось создать счёт');
+        }
+
+        // Открываем нативный экран оплаты Telegram — mini-app остаётся открытым
+        window.Telegram.WebApp.openInvoice(data.invoice_link, (status) => {
+            if (status === 'paid') {
+                showPaymentSuccessModal();
+            } else if (status === 'cancelled') {
+                // Пользователь закрыл — просто возвращаем кнопку
+                payBtn.disabled = false;
+                payBtn.textContent = 'Перейти к оплате';
+            } else if (status === 'failed') {
+                showPaymentErrorModal();
+            }
+        });
+
+    } catch (e) {
+        console.error('[TOP_CHECKOUT] initiateStarsPayment error:', e);
+        showPaymentErrorModal(e.message);
+    } finally {
+        payBtn.disabled = false;
+        payBtn.textContent = 'Перейти к оплате';
+    }
+}
+
+// ── Оплата картой — заглушка (Robokassa, после активации) ────────────────
+function initiateCardPayment() {
     const modal = document.createElement('div');
     modal.className = 'svc-wip-overlay';
     modal.innerHTML = `
         <div class="svc-wip-sheet">
             <p class="svc-wip-title">🚧 В разработке</p>
-            <p class="svc-wip-text">Оплата скоро будет доступна. Следите за обновлениями!</p>
+            <p class="svc-wip-text">Оплата картой скоро будет доступна. Используйте Telegram Stars.</p>
             <button class="svc-wip-btn" type="button" id="svc-wip-close">Понятно</button>
         </div>
     `;
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('is-visible'));
-
     const close = () => {
         modal.classList.remove('is-visible');
         modal.addEventListener('transitionend', () => modal.remove(), { once: true });
     };
     document.getElementById('svc-wip-close').addEventListener('click', close);
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
+}
+
+// ── Экран успешной оплаты ─────────────────────────────────────────────────
+function showPaymentSuccessModal() {
+    const modal = document.createElement('div');
+    modal.className = 'svc-wip-overlay';
+    modal.innerHTML = `
+        <div class="svc-wip-sheet">
+            <p class="svc-wip-title">🎉 Оплата прошла!</p>
+            <p class="svc-wip-text">Ваш розыгрыш добавлен в топ. Размещение активировано.</p>
+            <button class="svc-wip-btn" type="button" id="tc-success-close">Отлично!</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('is-visible'));
+    document.getElementById('tc-success-close').addEventListener('click', () => {
+        modal.classList.remove('is-visible');
+        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+    });
+}
+
+// ── Экран ошибки оплаты ───────────────────────────────────────────────────
+function showPaymentErrorModal(reason) {
+    const modal = document.createElement('div');
+    modal.className = 'svc-wip-overlay';
+    modal.innerHTML = `
+        <div class="svc-wip-sheet">
+            <p class="svc-wip-title">❌ Ошибка оплаты</p>
+            <p class="svc-wip-text">${reason || 'Не удалось провести оплату. Попробуйте ещё раз.'}</p>
+            <button class="svc-wip-btn" type="button" id="tc-error-close">Понятно</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('is-visible'));
+    document.getElementById('tc-error-close').addEventListener('click', () => {
+        modal.classList.remove('is-visible');
+        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+    });
 }
 
 // ── Публичный API ─────────────────────────────────────────────────────────
@@ -337,25 +458,27 @@ function mountTopCheckout(container, onBack) {
     // Кнопка оплаты
     document.getElementById('tc-pay-btn').addEventListener('click', () => {
         if (!_agreed) {
-            // Тряска кнопки + красная обводка блока согласия
-            const payBtn    = document.getElementById('tc-pay-btn');
+            const payBtn     = document.getElementById('tc-pay-btn');
             const agreeBlock = document.getElementById('tc-agree-block');
 
             agreeBlock.classList.remove('tc-agree-block--error');
             payBtn.classList.remove('tc-pay-btn--shake');
-            void payBtn.offsetWidth; // reflow
+            void payBtn.offsetWidth;
             agreeBlock.classList.add('tc-agree-block--error');
             payBtn.classList.add('tc-pay-btn--shake');
 
             if (navigator.vibrate) navigator.vibrate(80);
-
             payBtn.addEventListener('animationend', () => {
                 payBtn.classList.remove('tc-pay-btn--shake');
             }, { once: true });
-
             return;
         }
-        showWipModal();
+
+        if (_paymentMethod === 'stars') {
+            initiateStarsPayment();
+        } else {
+            initiateCardPayment();
+        }
     });
 
     initPaymentSelection();
