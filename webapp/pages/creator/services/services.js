@@ -30,6 +30,51 @@ function showWipModal() {
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
 }
 
+// ── Проверка наличия активных розыгрышей ─────────────────────────────────
+async function checkHasActiveGiveaways() {
+    try {
+        const initData = window.Telegram?.WebApp?.initData || '';
+        const resp = await fetch('/api/top_placement_checkout_data', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ init_data: initData }),
+        });
+        const data = await resp.json();
+        return data.ok && data.items && data.items.length > 0;
+    } catch (e) {
+        console.error('[SVC] checkHasActiveGiveaways error:', e);
+        // При ошибке пускаем дальше — не блокируем пользователя
+        return true;
+    }
+}
+
+// ── Pop-up «Нет активных розыгрышей» ─────────────────────────────────────
+function showNoGiveawaysModal() {
+    document.getElementById('svc-no-giveaways-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'svc-no-giveaways-modal';
+    modal.className = 'svc-wip-overlay';
+    modal.innerHTML = `
+        <div class="svc-wip-sheet">
+            <p class="svc-wip-title">🎟️ Нет активных розыгрышей</p>
+            <p class="svc-wip-text">Необходимо запустить минимум 1 розыгрыш, чтобы воспользоваться сервисом.</p>
+            <button class="svc-wip-btn" type="button" id="svc-no-giveaways-close">Понятно</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => modal.classList.add('is-visible'));
+
+    const close = () => {
+        modal.classList.remove('is-visible');
+        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+    };
+
+    document.getElementById('svc-no-giveaways-close').addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+}
+
 // ── Инициализация выбора сервиса ──────────────────────────────────────────
 function initServiceSelection(main) {
     const cards       = document.querySelectorAll('.svc-card');
@@ -59,13 +104,15 @@ function initServiceSelection(main) {
     });
 
     // «Продолжить»
-    continueBtn.addEventListener('click', () => {
+    continueBtn.addEventListener('click', async () => {
         if (selectedId === 'top_placement') {
-            // Монтируем чекаут в тот же контейнер
-            mountTopCheckout(main, () => {
-                // onBack — возвращаемся на экран сервисов
-                renderServicesPage();
-            });
+            // Проверяем наличие активных розыгрышей перед переходом
+            const hasActive = await checkHasActiveGiveaways();
+            if (!hasActive) {
+                showNoGiveawaysModal();
+                return;
+            }
+            mountTopCheckout(main, () => renderServicesPage());
         } else {
             showWipModal();
         }
