@@ -93,8 +93,10 @@ async function loadGiveaways() {
             `;
         }).join('');
 
-        listEl.querySelectorAll('.tc-giveaway-card').forEach(card => {
-            card.addEventListener('click', () => onGiveawaySelected(card));
+        listEl.addEventListener('click', (e) => {
+            const card = e.target.closest('.tc-giveaway-card');
+            if (!card) return;
+            onGiveawaySelected(card);
         });
 
         // Запускаем таймеры
@@ -153,9 +155,8 @@ function onGiveawaySelected(card) {
     });
 
     card.classList.add('tc-giveaway-card--active');
-    _selectedGiveawayId = card.dataset.giveawayId;
-    
-    console.log('[CHECKOUT] giveaway selected:', _selectedGiveawayId, 'raw dataset:', card.dataset);
+    _selectedGiveawayId = card.dataset.giveawayId || null;
+    console.log('[CHECKOUT] giveaway selected, id =', _selectedGiveawayId);
 
     // Показываем галочку выбора
     const checkEl = card.querySelector('.tc-giveaway-check');
