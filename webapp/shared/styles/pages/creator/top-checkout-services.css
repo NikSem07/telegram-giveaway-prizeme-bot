@@ -288,3 +288,23 @@
     top: 8px;
     right: 8px;
 }
+
+/* ── Правовой дисклеймер ──────────────────────────────────────────────── */
+.tc-disclaimer {
+    margin-bottom: 20px;
+}
+
+.tc-disclaimer-text {
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+    opacity: 0.65;
+    margin: 0;
+}
+
+.tc-disclaimer-link {
+    color: var(--color-text-secondary);
+    opacity: 0.65;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}

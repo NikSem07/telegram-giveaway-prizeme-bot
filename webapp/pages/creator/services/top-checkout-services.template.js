@@ -115,6 +115,20 @@ export default function topCheckoutTemplate() {
                 </p>
             </div>
         </div>
+        
+        <!-- Правовой дисклеймер -->
+        <div class="tc-disclaimer" id="tc-disclaimer">
+            <p class="tc-disclaimer-text">
+                Услуга «Включение в топ-розыгрыши» производится по единоразовой оплате.
+                В зависимости от выбранного периода Ваш розыгрыш будет размещён в mini-app PrizeMe
+                в разделе «Главная» режима «Участник». По истечению оплаченного периода услуга будет
+                деактивирована, возобновить её можно при повторном оформлении. При оплате услуги вы
+                подтверждаете, что ознакомились с
+                <a class="tc-disclaimer-link" href="https://prizeme.ru/legal.html?doc=privacy" data-tg-link>политикой конфиденциальности</a>,
+                где также указана контактная информация. В случае возникновения проблем или по вопросам
+                возврата обращаться <a class="tc-disclaimer-link" href="https://t.me/prizeme_support" data-tg-support>@prizeme_support</a>.
+            </p>
+        </div>
 
         <div class="svc-bottom-spacer"></div>
 

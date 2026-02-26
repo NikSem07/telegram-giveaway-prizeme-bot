@@ -261,6 +261,7 @@ function initAgreeBlock() {
 
 // ── Ссылки оферты ─────────────────────────────────────────────────────────
 function initLegalLinks() {
+    // Ссылки на документы — открываем в instant view, mini-app не закрывается
     document.querySelectorAll('[data-tg-link]').forEach(link => {
         link.addEventListener('click', e => {
             e.preventDefault();
@@ -268,6 +269,20 @@ function initLegalLinks() {
             const tg = window.Telegram?.WebApp;
             if (tg?.openLink) {
                 tg.openLink(link.href, { try_instant_view: true });
+            } else {
+                window.open(link.href, '_blank');
+            }
+        });
+    });
+
+    // Ссылки на Telegram-аккаунты/боты — openTelegramLink, mini-app уходит в фон
+    document.querySelectorAll('[data-tg-support]').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openTelegramLink) {
+                tg.openTelegramLink(link.href);
             } else {
                 window.open(link.href, '_blank');
             }
