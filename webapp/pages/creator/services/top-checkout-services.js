@@ -165,6 +165,7 @@ function onGiveawaySelected(card) {
     document.querySelectorAll('.tc-period-card').forEach(p => p.classList.remove('tc-period-card--active'));
     document.getElementById('tc-payment-section').classList.add('tc-section--hidden');
     document.getElementById('tc-summary-section').classList.add('tc-section--hidden');
+    document.getElementById('tc-disclaimer').classList.add('tc-section--hidden');
     document.getElementById('tc-footer-pay').classList.add('tc-footer--hidden');
     _paymentMethod = 'card';
     // Сбрасываем визуал карточек оплаты
@@ -198,6 +199,7 @@ function onPeriodSelected(card) {
 
     document.getElementById('tc-payment-section').classList.remove('tc-section--hidden');
     document.getElementById('tc-summary-section').classList.remove('tc-section--hidden');
+    document.getElementById('tc-disclaimer').classList.remove('tc-section--hidden');
 
     const footerPay = document.getElementById('tc-footer-pay');
     footerPay.classList.remove('tc-footer--hidden');

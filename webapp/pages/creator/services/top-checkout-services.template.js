@@ -116,8 +116,8 @@ export default function topCheckoutTemplate() {
             </div>
         </div>
         
-        <!-- Правовой дисклеймер -->
-        <div class="tc-disclaimer" id="tc-disclaimer">
+        <!-- Правовой дисклеймер (показывается после выбора периода) -->
+        <div class="tc-disclaimer tc-section--hidden" id="tc-disclaimer">
             <p class="tc-disclaimer-text">
                 Услуга «Включение в топ-розыгрыши» производится по единоразовой оплате.
                 В зависимости от выбранного периода Ваш розыгрыш будет размещён в mini-app PrizeMe
