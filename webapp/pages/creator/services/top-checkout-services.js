@@ -154,6 +154,8 @@ function onGiveawaySelected(card) {
 
     card.classList.add('tc-giveaway-card--active');
     _selectedGiveawayId = card.dataset.giveawayId;
+    
+    console.log('[CHECKOUT] giveaway selected:', _selectedGiveawayId, 'raw dataset:', card.dataset);
 
     // Показываем галочку выбора
     const checkEl = card.querySelector('.tc-giveaway-check');

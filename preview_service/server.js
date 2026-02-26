@@ -509,7 +509,15 @@ app.get('/api/bot_username', async (req, res) => {
 
 
 // Serve static files from webapp directory
-app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp')));
+app.use('/miniapp-static', express.static(path.join(__dirname, '../webapp'), {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-store');
+        }
+    }
+}));
 
 // HTML endpoints for Mini App
 app.get('/miniapp/', (req, res) => {
