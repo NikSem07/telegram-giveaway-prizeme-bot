@@ -117,6 +117,24 @@ async function loadGiveawaysLists() {
 
         if (data.top && data.top.length > 0) {
             renderGiveawayList(topContainer, data.top, 'top');
+            // Активируем кнопку перехода в полный список топа
+            const arrowBtn = document.querySelector('.top-arrow');
+            if (arrowBtn) {
+                arrowBtn.disabled = false;
+                arrowBtn.style.cursor = 'pointer';
+                arrowBtn.addEventListener('click', () => {
+                    import('./home-top.js').then(({ mountHomeTop }) => {
+                        const main = document.getElementById('main-content');
+                        if (!main) return;
+                        mountHomeTop(main, () => {
+                            // onBack — перерисовываем главную
+                            import('./home.js').then(({ renderHomePage }) => {
+                                renderHomePage();
+                            });
+                        });
+                    });
+                }, { once: true });
+            }
         } else {
             topContainer.innerHTML = `
                 <div class="top-empty">
