@@ -549,6 +549,10 @@ app.get('/miniapp/', (req, res) => {
               if (tg && tg.initData) {
                 sessionStorage.setItem('prizeme_init_data', tg.initData);
               }
+              if (tg) {
+                try { tg.requestFullscreen(); } catch (e) {}
+                try { tg.expand(); } catch (e) {}
+              }
             } catch (e) {}
             try {
               sessionStorage.setItem('prizeme_page_param', '${pageParam}');
