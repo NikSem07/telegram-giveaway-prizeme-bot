@@ -1278,20 +1278,48 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
     const LIMIT_LATEST = 100;
 
     // ── Вспомогательный маппер строки БД → объект для фронта ──────────────
-    const mapRow = (row) => ({
-      id:                    row.id,
-      title:                 row.internal_title,
-      public_description:    row.public_description,
-      end_at_utc:            row.end_at_utc,
-      status:                row.status,
-      channels:              row.channels || [],
-      first_channel_avatar_url: row.first_channel_chat_id
-        ? `/api/chat_avatar/${row.first_channel_chat_id}`
-        : null,
-      participants_count: row.participants_count
-        ? Number(row.participants_count)
-        : 0,
-    });
+    const mapRow = (row) => {
+      // Строим channels_meta: [{title, avatar_url, post_url}] для каждого канала
+      const channelsMeta = (row.channels_raw || [])
+        .filter(ch => ch && ch.title)
+        .map(ch => {
+          const messageId = ch.message_id ? Number(ch.message_id) : null;
+          let postUrl = null;
+
+          if (messageId) {
+            if (ch.username) {
+              // Публичный канал: t.me/username/message_id
+              postUrl = `https://t.me/${ch.username}/${messageId}`;
+            } else if (ch.chat_id) {
+              // Приватный канал: t.me/c/<internal_id>/<message_id>
+              const internal = String(ch.chat_id).replace(/^-100/, '');
+              postUrl = `https://t.me/c/${internal}/${messageId}`;
+            }
+          }
+
+          return {
+            title:      ch.title || ch.username || 'Канал',
+            avatar_url: ch.chat_id ? `/api/chat_avatar/${ch.chat_id}` : null,
+            post_url:   postUrl,
+          };
+        });
+
+      return {
+        id:                      row.id,
+        title:                   row.internal_title,
+        public_description:      row.public_description,
+        end_at_utc:              row.end_at_utc,
+        status:                  row.status,
+        channels:                row.channels || [],
+        channels_meta:           channelsMeta,
+        first_channel_avatar_url: row.first_channel_chat_id
+          ? `/api/chat_avatar/${row.first_channel_chat_id}`
+          : null,
+        participants_count: row.participants_count
+          ? Number(row.participants_count)
+          : 0,
+      };
+    };
 
     // ── Общая SELECT-часть (переиспользуется в обоих запросах) ────────────
     const SELECT_GIVEAWAY = `
@@ -1310,7 +1338,17 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
           SELECT COUNT(DISTINCT e.user_id)
           FROM entries e
           WHERE e.giveaway_id = g.id
-        ) AS participants_count
+        ) AS participants_count,
+        json_agg(
+          json_build_object(
+            'title',      COALESCE(gc.title, oc.title, oc.username),
+            'username',   oc.username,
+            'chat_id',    gc.chat_id,
+            'message_id', gc.message_id,
+            'is_private', CASE WHEN oc.username IS NULL THEN true ELSE false END
+          )
+          ORDER BY gc.id
+        ) AS channels_raw
       FROM giveaways g
       LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
       LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id

@@ -145,71 +145,132 @@ async function loadGiveawaysLists() {
 // ====== Pop-up: переход к розыгрышу ======
 
 /**
- * Показывает полупрозрачный pop-up с подтверждением перехода к розыгрышу.
- * При подтверждении открывает пост в PRIME-канале через Telegram API.
- * Mini-app не закрывается — используем openTelegramLink.
+ * Открывает ссылку на пост розыгрыша в Telegram.
  */
-function showGiveawayNavigateModal(giveaway) {
-    // Удаляем предыдущий modal если есть
-    document.getElementById('giveaway-navigate-modal')?.remove();
-
-    const title = escapeHtml(giveaway.title || giveaway.internal_title || 'розыгрышу');
-
-    const modal = document.createElement('div');
-    modal.id = 'giveaway-navigate-modal';
-    modal.className = 'gnav-overlay';
-    modal.innerHTML = `
-        <div class="gnav-sheet">
-            <p class="gnav-question">Хотите перейти к розыгрышу?</p>
-            <p class="gnav-name">${title}</p>
-            <div class="gnav-actions">
-                <button class="gnav-btn gnav-btn--cancel" type="button">Отмена</button>
-                <button class="gnav-btn gnav-btn--confirm" type="button">Да</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Анимация появления
-    requestAnimationFrame(() => modal.classList.add('is-visible'));
-
-    const close = () => {
-        modal.classList.remove('is-visible');
-        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
-    };
-
-    // Отмена
-    modal.querySelector('.gnav-btn--cancel').addEventListener('click', close);
-
-    // Закрытие по оверлею
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) close();
-    });
-
-    // Подтверждение — открываем пост в PRIME-канале
-    modal.querySelector('.gnav-btn--confirm').addEventListener('click', () => {
-        close();
-        openPrimeChannelPost(giveaway.id);
-    });
+function openGiveawayPost(postUrl) {
+    const tg = window.Telegram?.WebApp;
+    if (!postUrl) return;
+    if (tg?.openTelegramLink) {
+        tg.openTelegramLink(postUrl);
+    } else {
+        window.open(postUrl, '_blank');
+    }
 }
 
 /**
- * Открывает пост розыгрыша в PRIME-канале.
- * Mini-app остаётся открытым (скрывается на фон).
+ * Показывает pop-up перехода к розыгрышу.
+ * Один канал → кнопки "Отмена" / "Да".
+ * Несколько каналов → список с выбором канала.
  */
-function openPrimeChannelPost(giveawayId) {
-    const tg = window.Telegram?.WebApp;
+function showGiveawayNavigateModal(giveaway) {
+    document.getElementById('giveaway-navigate-modal')?.remove();
 
-    // Ссылка на PRIME-канал — при наличии поста бот туда публикует
-    // Формат: https://t.me/c/<internal_id>/<message_id>
-    // Пока используем ссылку на канал — после получения message_id можно уточнить
-    const primeChannelUrl = 'https://t.me/+EsFLBqtCrkljZWQy';
+    const title      = escapeHtml(giveaway.title || giveaway.internal_title || 'Розыгрыш');
+    const channels   = Array.isArray(giveaway.channels_meta) ? giveaway.channels_meta : [];
+    const isSingle   = channels.length <= 1;
 
-    if (tg && typeof tg.openTelegramLink === 'function') {
-        tg.openTelegramLink(primeChannelUrl);
-    } else if (tg && typeof tg.openLink === 'function') {
-        tg.openLink(primeChannelUrl);
+    const modal = document.createElement('div');
+    modal.id        = 'giveaway-navigate-modal';
+    modal.className = 'gnav-overlay';
+
+    if (isSingle) {
+        // ── Один канал / нет мета — простой pop-up ──────────────────────
+        const postUrl = channels[0]?.post_url || null;
+        modal.innerHTML = `
+            <div class="gnav-sheet">
+                <p class="gnav-question">Хотите перейти к розыгрышу?</p>
+                <p class="gnav-name">${title}</p>
+                <div class="gnav-actions">
+                    <button class="gnav-btn gnav-btn--cancel" type="button">Отмена</button>
+                    <button class="gnav-btn gnav-btn--confirm ${!postUrl ? 'gnav-btn--disabled' : ''}"
+                            type="button">${postUrl ? 'Да' : 'Нет ссылки'}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => modal.classList.add('is-visible'));
+
+        const close = () => {
+            modal.classList.remove('is-visible');
+            modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+        };
+
+        modal.querySelector('.gnav-btn--cancel').addEventListener('click', close);
+        modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+        if (postUrl) {
+            modal.querySelector('.gnav-btn--confirm').addEventListener('click', () => {
+                close();
+                openGiveawayPost(postUrl);
+            });
+        }
+
+    } else {
+        // ── Несколько каналов — список с выбором ────────────────────────
+        const channelListHtml = channels.map((ch, i) => `
+            <div class="gnav-channel-card" data-index="${i}" data-post-url="${escapeHtml(ch.post_url || '')}">
+                <div class="gnav-channel-avatar">
+                    ${ch.avatar_url
+                        ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" loading="lazy">`
+                        : `<div class="gnav-channel-avatar-placeholder"></div>`}
+                </div>
+                <span class="gnav-channel-name">${escapeHtml(ch.title || ch.username || 'Канал')}</span>
+            </div>
+        `).join('');
+
+        modal.innerHTML = `
+            <div class="gnav-sheet">
+                <p class="gnav-question">Хотите перейти к розыгрышу?</p>
+                <p class="gnav-name">${title}</p>
+                <div class="gnav-channel-list">${channelListHtml}</div>
+                <div class="gnav-actions gnav-actions--multi">
+                    <button class="gnav-btn gnav-btn--cancel gnav-btn--cancel-narrow" type="button">Отмена</button>
+                    <button class="gnav-btn gnav-btn--go gnav-btn--go-inactive" type="button" disabled>Выберите канал</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => modal.classList.add('is-visible'));
+
+        const close = () => {
+            modal.classList.remove('is-visible');
+            modal.addEventListener('transitionend', () => modal.remove(), { once: true });
+        };
+
+        const cancelBtn = modal.querySelector('.gnav-btn--cancel');
+        const goBtn     = modal.querySelector('.gnav-btn--go');
+        let selectedUrl = null;
+
+        // Выбор канала
+        modal.querySelector('.gnav-channel-list').addEventListener('click', e => {
+            const card = e.target.closest('.gnav-channel-card');
+            if (!card) return;
+
+            modal.querySelectorAll('.gnav-channel-card').forEach(c => c.classList.remove('gnav-channel-card--active'));
+            card.classList.add('gnav-channel-card--active');
+
+            selectedUrl = card.dataset.postUrl || null;
+
+            // Активируем кнопку с анимацией
+            if (selectedUrl) {
+                goBtn.disabled = false;
+                goBtn.classList.remove('gnav-btn--go-inactive');
+                goBtn.classList.add('gnav-btn--go-active');
+                goBtn.textContent = 'Перейти';
+
+                // Анимируем кнопку "Отмена" — расширяется до равного размера
+                cancelBtn.classList.add('gnav-btn--cancel-wide');
+            }
+        });
+
+        cancelBtn.addEventListener('click', close);
+        modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+        goBtn.addEventListener('click', () => {
+            if (!selectedUrl) return;
+            close();
+            openGiveawayPost(selectedUrl);
+        });
     }
 }
 
@@ -432,26 +493,30 @@ function renderGiveawayList(container, list, prefix) {
         card.className = isTop ? 'giveaway-card giveaway-card--top' : 'giveaway-card giveaway-card--all';
 
         if (isTop) {
-            // giveaway name (internal_title) — одна строка с fade-вправо
             const giveawayName = escapeHtml(g.title || g.internal_title || '');
             card.innerHTML = `
                 <div class="giveaway-left">
                     <div class="giveaway-avatar giveaway-avatar--top">
                         ${firstChannelAvatarUrl ? `<img src="${escapeHtml(firstChannelAvatarUrl)}" alt="">` : ``}
                     </div>
-
                     <div class="giveaway-badge ${participantsCount == null ? 'giveaway-badge--hidden' : ''}">
                         <span class="giveaway-badge-icon"></span>
                         <span class="giveaway-badge-text">${participantsCount == null ? '' : formatParticipants(participantsCount)}</span>
                     </div>
                 </div>
-
                 <div class="giveaway-info">
                     <div class="giveaway-title">${escapeHtml(channelsStr)}</div>
                     <div class="giveaway-name-fade">${giveawayName}</div>
                     <div class="giveaway-timer" id="${timerId}"></div>
                 </div>
+                <div class="giveaway-card-arrow">
+                    <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                        <path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
             `;
+            // Клик по топ-карточке — тот же pop-up
+            card.addEventListener('click', () => showGiveawayNavigateModal(g));
         } else {
             card.innerHTML = `
                 <div class="giveaway-left">

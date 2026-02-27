@@ -571,6 +571,116 @@
     color: #fff;
 }
 
+/* ====== Pop-up: список каналов ====== */
+.gnav-channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.gnav-channel-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.gnav-channel-card:active {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.gnav-channel-card--active {
+    background: rgba(67, 121, 255, 0.12);
+    border-color: #4379ff;
+}
+
+.gnav-channel-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.gnav-channel-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gnav-channel-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.gnav-channel-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text, #fff);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Кнопки мультиканального pop-up ── */
+.gnav-actions--multi {
+    gap: 10px;
+    align-items: stretch;
+}
+
+/* "Отмена" — узкая по умолчанию, расширяется при выборе */
+.gnav-btn--cancel-narrow {
+    flex: 0 0 auto;
+    width: 90px;
+    transition: width 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+                flex 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+                opacity 0.15s ease;
+}
+
+.gnav-btn--cancel-wide {
+    flex: 1 1 0 !important;
+    width: auto !important;
+}
+
+/* Кнопка "Перейти" / "Выберите канал" */
+.gnav-btn--go {
+    flex: 1;
+    transition: background 0.22s ease, color 0.22s ease, opacity 0.15s ease;
+}
+
+.gnav-btn--go-inactive {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.35);
+    cursor: default;
+}
+
+.gnav-btn--go-active {
+    background: var(--pgc-blue-chip, #4379ff);
+    color: #fff;
+    cursor: pointer;
+}
+
+.gnav-btn--go-active:active {
+    opacity: 0.8;
+}
+
+.gnav-btn--disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
 /* ====== Топ: пустое состояние ====== */
 .top-empty {
     display: flex;
