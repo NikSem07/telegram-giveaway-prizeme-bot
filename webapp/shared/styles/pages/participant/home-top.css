@@ -10,10 +10,12 @@
 /* ── Герой-блок ── */
 .ht-hero {
     position: relative;
-    width: 100%;
+    width: calc(100% + 32px);
+    margin-left: -16px;
+    margin-right: -16px;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border-radius: 0 0 var(--radius-lg, 16px) var(--radius-lg, 16px);
+    border-radius: 0;
     margin-bottom: 16px;
 }
 
