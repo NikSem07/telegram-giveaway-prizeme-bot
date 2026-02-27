@@ -298,6 +298,21 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
     console.warn('[RESULTS->CARD] Failed:', e);
     }
+    
+    // ── Обработка startapp=page_services → открыть Сервисы в режиме Создатель ──
+    try {
+        const tg = window.Telegram?.WebApp;
+        const sp = tg?.initDataUnsafe?.start_param
+            || new URL(location.href).searchParams.get('tgWebAppStartParam');
+
+        if (sp === 'page_services') {
+            console.log('[STARTPARAM] → creator/services');
+            AppState.setMode('creator');
+            AppState.setPage('services');
+        }
+    } catch (e) {
+        console.warn('[STARTPARAM] page_services handling failed:', e);
+    }
 
     // 2.1 Синхронизируем UI переключалки режимов сразу после старта
     syncModeSwitcherUI(AppState.getMode());

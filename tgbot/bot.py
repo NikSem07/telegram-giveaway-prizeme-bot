@@ -4488,8 +4488,7 @@ async def cb_boost_prime(cq: CallbackQuery):
 async def cb_boost_services(cq: CallbackQuery):
     """🚀Сервисы — механики продвижения"""
     await cq.answer()
-    BOT_USERNAME = (await cq.bot.get_me()).username
-    miniapp_url  = f"https://t.me/{BOT_USERNAME}/app"
+    miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
     text = (
         "<b>🚀Сервисы</b> — уникальные механики продвижения и вовлечения для создателей розыгрыша:\n\n"
         "🏆 <b>Включение в Топ-розыгрыши:</b> розыгрыш будет опубликован в блоке «Топ-розыгрыши» "
@@ -4502,7 +4501,7 @@ async def cb_boost_services(cq: CallbackQuery):
         "для получения подробной информации ознакомьтесь с публичной офертой.</i>"
     )
     kb = InlineKeyboardBuilder()
-    kb.button(text="🚀 К сервисам", url=miniapp_url)
+    kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
     kb.button(text="📄 Оферта",     url="https://prizeme.ru/legal.html?doc=offer")
     kb.button(text="⬅️ Назад",      callback_data="boost:back")
     kb.adjust(1)
