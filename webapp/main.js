@@ -299,19 +299,18 @@ document.addEventListener('DOMContentLoaded', () => {
     console.warn('[RESULTS->CARD] Failed:', e);
     }
     
-    // ── Обработка startapp=page_services → открыть Сервисы в режиме Создатель ──
+    // ── Обработка page_* навигации (параметр перехвачен в getStartParam до participation flow) ──
     try {
-        const tg = window.Telegram?.WebApp;
-        const sp = tg?.initDataUnsafe?.start_param
-            || new URL(location.href).searchParams.get('tgWebAppStartParam');
-
-        if (sp === 'page_services') {
-            console.log('[STARTPARAM] → creator/services');
+        const pageParam = sessionStorage.getItem('prizeme_page_param');
+        if (pageParam) {
+            sessionStorage.removeItem('prizeme_page_param');
+            const pageName = pageParam.replace('page_', '');
+            console.log('[STARTPARAM] → creator/' + pageName);
             AppState.setMode('creator');
-            AppState.setPage('services');
+            AppState.setPage(pageName);
         }
     } catch (e) {
-        console.warn('[STARTPARAM] page_services handling failed:', e);
+        console.warn('[STARTPARAM] page_* handling failed:', e);
     }
 
     // 2.1 Синхронизируем UI переключалки режимов сразу после старта

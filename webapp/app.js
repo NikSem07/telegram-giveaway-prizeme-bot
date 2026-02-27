@@ -114,6 +114,19 @@ function initializeTelegramWebApp() {
 // Получаем start_param из URL или initData
 function getStartParam() {
   console.log('🎯 [getStartParam] Starting parameter search...');
+  
+  // PAGE REDIRECT: параметры вида page_* — это навигация в SPA, не gid розыгрыша.
+  // Сохраняем в sessionStorage и возвращаем null — participation flow не запустится.
+  const _checkPageParam = (p) => {
+    if (p && typeof p === 'string' && p.startsWith('page_')) {
+      sessionStorage.setItem('prizeme_page_param', p);
+      console.log('🎯 [getStartParam] 🗺️ Page redirect param stored:', p);
+      return true;
+    }
+    return false;
+  };
+  try { if (_checkPageParam(new URL(location.href).searchParams.get('tgWebAppStartParam'))) return null; } catch (e) {}
+  try { if (_checkPageParam(window.Telegram?.WebApp?.initDataUnsafe?.start_param)) return null; } catch (e) {}
 
   // ONE-SHOT: игнорируем results_<gid> start_param, когда пользователь нажал "В приложение"
   // иначе /miniapp/ снова стартует results/participation flow
