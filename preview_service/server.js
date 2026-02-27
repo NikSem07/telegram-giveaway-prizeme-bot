@@ -530,6 +530,38 @@ app.get('/miniapp/', (req, res) => {
     return res.sendFile(path.join(__dirname, '../webapp/index.html'));
   }
 
+  // PAGE REDIRECT: параметры page_* — навигация в SPA, не gid розыгрыша.
+  // Сохраняем в sessionStorage и отдаём index.html напрямую.
+  if (String(tgWebAppStartParam).startsWith('page_')) {
+    console.log('🗺️ [ROOT] Page navigation param detected, serving index.html directly:', tgWebAppStartParam);
+    const pageParam = String(tgWebAppStartParam).replace(/'/g, "\\'");
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>PrizeMe</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <script>
+          (function () {
+            try {
+              var tg = window.Telegram && Telegram.WebApp;
+              if (tg && tg.initData) {
+                sessionStorage.setItem('prizeme_init_data', tg.initData);
+              }
+            } catch (e) {}
+            try {
+              sessionStorage.setItem('prizeme_page_param', '${pageParam}');
+            } catch (e) {}
+            window.location.replace('/miniapp/index');
+          })();
+        </script>
+      </head>
+      <body></body>
+      </html>
+    `);
+  }
+
   const gid = String(tgWebAppStartParam).replace(/'/g, "\\'");
 
   // Если параметр есть — отдаем маленькую страницу, которая сохраняет initData+gid
