@@ -508,11 +508,28 @@ function attachChannelItemListeners(container) {
 }
 
 function attachChannelBlockListeners(container) {
-  // Обновить все
+  // Обновить все — рефрешим каждый канал через API, потом перерисовываем
   container.querySelector('#ch-refresh-all')?.addEventListener('click', async () => {
     const btn = container.querySelector('#ch-refresh-all');
     btn.classList.add('ch-header-btn--spinning');
     btn.disabled = true;
+
+    try {
+      const init_data = getInitDataSafe();
+      const data = await api('/api/creator_channels', { init_data });
+      if (data.ok && data.channels.length) {
+        // Рефрешим все каналы параллельно
+        await Promise.allSettled(
+          data.channels.map(ch =>
+            api('/api/creator_channel_refresh', { init_data, channel_id: ch.id })
+          )
+        );
+      }
+    } catch (e) {
+      console.error('[Channels] refresh-all error:', e);
+    }
+
+    // Перерисовываем список с обновлёнными данными из БД
     await renderChannelsList(container);
     btn.classList.remove('ch-header-btn--spinning');
     btn.disabled = false;
