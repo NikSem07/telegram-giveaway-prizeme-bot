@@ -3146,8 +3146,26 @@ async def cmd_start(m: Message, state: FSMContext):
         except Exception:
             await m.answer("Не удалось открыть розыгрыш для редактирования.")
             return
-
         await show_event_card(m.chat.id, gid)
+        return
+
+    if start_param == "add_channel":
+        await ensure_user(m.from_user.id, m.from_user.username)
+        await state.update_data(add_channel_from_miniapp=True)
+
+        help_text = (
+            "<b>✚ Добавьте канал / группу для проведения розыгрышей</b>\n\n"
+            "При добавлении бота @prizeme_official_bot в канал / группу Вы даёте право на следующие действия "
+            "(не переживайте, это минимальный набор прав без возможности реального управления каналом / группой):\n\n"
+            "• Публикация сообщений\n"
+            "• Редактирование сообщений\n"
+            "• Добавление подписчиков\n"
+            "• Создание пригласительных ссылок\n\n"
+            "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту</b>"
+        )
+        await m.answer(help_text, parse_mode="HTML", reply_markup=kb_add_cancel())
+        INVISIBLE = "\u2060"
+        await m.answer(INVISIBLE, reply_markup=chooser_reply_kb())
         return
 
     await ensure_user(m.from_user.id, m.from_user.username)
