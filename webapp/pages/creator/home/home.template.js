@@ -55,18 +55,18 @@ export default function creatorHomeTemplate(context = {}) {
       </div>
       
       <!-- Блок "Мои каналы" -->
-      <div class="ch-block">
-        <div class="ch-block-header">
-          <span class="ch-block-title">Мои каналы</span>
-          <div class="ch-block-actions">
-            <button class="ch-header-btn" type="button" id="ch-refresh-all" title="Обновить все">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            </button>
-            <button class="ch-header-btn ch-header-btn--add" type="button" id="ch-add" title="Добавить канал">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-          </div>
+      <div class="ch-section-header">
+        <span class="ch-section-title">Мои каналы</span>
+        <div class="ch-block-actions">
+          <button class="ch-header-btn" type="button" id="ch-refresh-all" title="Обновить все">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <button class="ch-header-btn ch-header-btn--add" type="button" id="ch-add" title="Добавить канал">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
+      </div>
+      <div class="ch-block">
         <div class="ch-list" id="ch-list">
           <div class="ch-loading">Загрузка...</div>
         </div>

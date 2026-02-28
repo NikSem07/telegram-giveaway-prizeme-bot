@@ -484,6 +484,7 @@ function attachChannelItemListeners(container) {
         title: `Удалить ${entityWord}?`,
         subtitle: `Вы сможете вернуть ${entityWordFrom} «${title}» в любое время`,
         confirmText: 'Удалить',
+        isDanger: true,
         onConfirm: async () => {
           try {
             const init_data = getInitDataSafe();
@@ -530,7 +531,7 @@ function attachChannelBlockListeners(container) {
   });
 }
 
-function showChannelPopup({ title, subtitle, confirmText = 'Да', onConfirm }) {
+function showChannelPopup({ title, subtitle, confirmText = 'Да', isDanger = false, onConfirm }) {
   const existing = document.getElementById('ch-popup');
   if (existing) existing.remove();
 
@@ -541,7 +542,7 @@ function showChannelPopup({ title, subtitle, confirmText = 'Да', onConfirm }) 
         <p class="ch-popup-subtitle">${subtitle}</p>
         <div class="ch-popup-actions">
           <button class="ch-popup-btn ch-popup-btn--cancel" type="button">Отмена</button>
-          <button class="ch-popup-btn ch-popup-btn--confirm" type="button">${confirmText}</button>
+          <button class="ch-popup-btn ch-popup-btn--confirm ${isDanger ? 'ch-popup-btn--confirm-danger' : ''}" type="button">${confirmText}</button>
         </div>
       </div>
     </div>
