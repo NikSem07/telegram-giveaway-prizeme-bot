@@ -2272,6 +2272,126 @@ app.get('/miniapp/captcha', (req, res) => {
     res.sendFile(path.join(__dirname, '../webapp/captcha.html'));
 });
 
+// ── GET /api/creator_channels — каналы/группы пользователя ──────────────────
+app.post('/api/creator_channels', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+
+    const userId = parsed.user_parsed.id;
+
+    const result = await pool.query(
+      `SELECT
+         oc.id,
+         oc.chat_id,
+         oc.username,
+         oc.title,
+         oc.is_private,
+         oc.member_count,
+         oc.channel_type
+       FROM organizer_channels oc
+       WHERE oc.owner_user_id = $1
+       ORDER BY oc.id ASC`,
+      [userId]
+    );
+
+    const channels = result.rows.map(r => ({
+      id: r.id,
+      chat_id: String(r.chat_id),
+      username: r.username || null,
+      title: r.title,
+      member_count: r.member_count !== null ? Number(r.member_count) : null,
+      channel_type: r.channel_type || 'channel',
+      avatar_url: r.chat_id ? `/api/chat_avatar/${r.chat_id}` : null,
+    }));
+
+    return res.json({ ok: true, channels });
+  } catch (e) {
+    console.error('[creator_channels] error:', e);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
+// ── POST /api/creator_channel_refresh — обновить число подписчиков ─────────
+app.post('/api/creator_channel_refresh', async (req, res) => {
+  try {
+    const { init_data, channel_id } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+
+    const userId = parsed.user_parsed.id;
+    const channelId = parseInt(channel_id, 10);
+    if (!channelId) return res.status(400).json({ ok: false, reason: 'bad_channel_id' });
+
+    const ownerCheck = await pool.query(
+      'SELECT id, chat_id FROM organizer_channels WHERE id = $1 AND owner_user_id = $2',
+      [channelId, userId]
+    );
+    if (!ownerCheck.rows.length) return res.status(403).json({ ok: false, reason: 'forbidden' });
+
+    const chatId = ownerCheck.rows[0].chat_id;
+
+    // Получаем число участников и тип чата через Telegram API
+    let memberCount = null;
+    let channelType = 'channel';
+    try {
+      const [countResp, chatResp] = await Promise.all([
+        fetch(`${TELEGRAM_API}/getChatMemberCount?chat_id=${chatId}`),
+        fetch(`${TELEGRAM_API}/getChat?chat_id=${chatId}`)
+      ]);
+      const countData = await countResp.json();
+      const chatData = await chatResp.json();
+
+      if (countData.ok) memberCount = countData.result;
+      if (chatData.ok) {
+        const t = chatData.result.type;
+        channelType = (t === 'group' || t === 'supergroup') ? 'group' : 'channel';
+      }
+    } catch (e) {
+      console.warn('[creator_channel_refresh] Telegram API error:', e.message);
+    }
+
+    await pool.query(
+      'UPDATE organizer_channels SET member_count = COALESCE($1, member_count), channel_type = $2 WHERE id = $3',
+      [memberCount, channelType, channelId]
+    );
+
+    return res.json({ ok: true, member_count: memberCount, channel_type: channelType });
+  } catch (e) {
+    console.error('[creator_channel_refresh] error:', e);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
+// ── POST /api/creator_channel_delete — удалить канал ────────────────────────
+app.post('/api/creator_channel_delete', async (req, res) => {
+  try {
+    const { init_data, channel_id } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+
+    const userId = parsed.user_parsed.id;
+    const channelId = parseInt(channel_id, 10);
+    if (!channelId) return res.status(400).json({ ok: false, reason: 'bad_channel_id' });
+
+    // Проверяем владельца
+    const ownerCheck = await pool.query(
+      'SELECT id FROM organizer_channels WHERE id = $1 AND owner_user_id = $2',
+      [channelId, userId]
+    );
+    if (!ownerCheck.rows.length) return res.status(403).json({ ok: false, reason: 'forbidden' });
+
+    // Удаляем (каскад в giveaway_channels настроен на уровне БД)
+    await pool.query('DELETE FROM organizer_channels WHERE id = $1', [channelId]);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[creator_channel_delete] error:', e);
+    return res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
