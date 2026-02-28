@@ -2657,21 +2657,20 @@ async def save_channel_for_user(
         added_at_aware = datetime.now(timezone.utc)
         
         async with session_scope() as s:
-            # 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем UPSERT (INSERT ... ON CONFLICT DO UPDATE)
-            # Правильный SQL для PostgreSQL
             result = await s.execute(
                 text("""
                     INSERT INTO organizer_channels
-                        (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at)
-                    VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at)
+                        (owner_user_id, chat_id, title, username, is_private, bot_role, status, added_at, channel_type)
+                    VALUES (:user_id, :chat_id, :title, :username, :is_private, :role, 'ok', :added_at, :channel_type)
                     ON CONFLICT (owner_user_id, chat_id)
                     DO UPDATE SET
-                        title      = EXCLUDED.title,
-                        username   = EXCLUDED.username,
-                        is_private = EXCLUDED.is_private,
-                        bot_role   = EXCLUDED.bot_role,
-                        status     = EXCLUDED.status,
-                        added_at   = EXCLUDED.added_at
+                        title        = EXCLUDED.title,
+                        username     = EXCLUDED.username,
+                        is_private   = EXCLUDED.is_private,
+                        bot_role     = EXCLUDED.bot_role,
+                        status       = EXCLUDED.status,
+                        added_at     = EXCLUDED.added_at,
+                        channel_type = EXCLUDED.channel_type
                     RETURNING id, (xmax = 0) as is_new
                 """),
                 {
@@ -2681,7 +2680,8 @@ async def save_channel_for_user(
                     "username": username,
                     "is_private": is_private,
                     "role": bot_role,
-                    "added_at": added_at_aware
+                    "added_at": added_at_aware,
+                    "channel_type": chat_type,
                 }
             )
 
@@ -2924,7 +2924,13 @@ async def on_chat_shared(m: Message, state: FSMContext):
             chat_type = "group"
         else:
             chat_type = chat.type
-        
+
+        # Получаем число участников
+        try:
+            member_count = await bot.get_chat_member_count(chat.id)
+        except Exception:
+            member_count = None
+
         # Сохраняем канал с использованием единой функции
         is_new = await save_channel_for_user(
             user_id=user_id,
@@ -2934,6 +2940,17 @@ async def on_chat_shared(m: Message, state: FSMContext):
             chat_type=chat_type,
             bot_role=role
         )
+
+        # Сохраняем member_count отдельным запросом
+        if member_count is not None:
+            try:
+                async with session_scope() as s:
+                    await s.execute(
+                        text("UPDATE organizer_channels SET member_count = :mc WHERE owner_user_id = :u AND chat_id = :c"),
+                        {"mc": member_count, "u": user_id, "c": chat.id}
+                    )
+            except Exception as e:
+                logging.warning(f"member_count update failed: {e}")
 
         kind = "канал" if chat.type == "channel" else "группа"
         action_text = "подключён" if is_new else "обновлён"
@@ -2971,13 +2988,42 @@ async def on_chat_shared(m: Message, state: FSMContext):
             await state.update_data(chooser_event_id=None)
         
         # 2. Если это добавление из главного меню или кнопок "Добавить канал/группу"
-        elif shared.request_id in [1, 2, 101, 102]:  # ID из reply-кнопок
-            # Возвращаемся в главное меню
-            await m.answer(
-                f"{kind.capitalize()} успешно добавлен!",
-                reply_markup=reply_main_kb(),
-                parse_mode="HTML"
+        elif shared.request_id in [1, 2, 101, 102]:
+            data = await state.get_data()
+            from_miniapp = data.get("add_channel_from_miniapp", False)
+
+            member_label = "Участников" if chat_type == "group" else "Подписчиков"
+            count_str = f"{member_count:,}".replace(",", " ") if member_count else "—"
+            entity_str = "Группа" if chat_type == "group" else "Канал"
+            her_his = "её" if chat_type == "group" else "его"
+
+            success_text = (
+                f"🎯 <b>{entity_str} {title} успешно добавлен к боту</b>\n\n"
+                f"🎉 Теперь вы можете подключать {her_his} к розыгрышам. "
+                f"Если хотите добавить новый канал или группу — нажмите на соответствующую кнопку под строкой поиска.\n\n"
+                f"{member_label}: {count_str}"
             )
+
+            if from_miniapp:
+                await state.update_data(add_channel_from_miniapp=False)
+                miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+                kb = InlineKeyboardBuilder()
+                kb.button(text="📲 Вернуться в mini-app", web_app=WebAppInfo(url=miniapp_url))
+                kb.adjust(1)
+                await m.answer(
+                    success_text,
+                    parse_mode="HTML",
+                    reply_markup=kb.as_markup()
+                )
+                # Восстанавливаем обычную клавиатуру
+                INVISIBLE = "\u2060"
+                await m.answer(INVISIBLE, reply_markup=reply_main_kb())
+            else:
+                await m.answer(
+                    success_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_main_kb()
+                )
             
             # Показываем обновленный список каналов
             rows = await get_user_org_channels(user_id)
