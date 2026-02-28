@@ -171,9 +171,12 @@ export async function renderCreatorHomePage() {
     const el = main.querySelector('#creator-total-giveaways');
     if (el && total !== null) el.textContent = String(total);
   } catch (e) {
-    // молча: оставим "--"
     console.log('[CreatorHome] total giveaways load failed:', e);
   }
+
+  // 3) Загружаем каналы
+  attachChannelBlockListeners(main);
+  renderChannelsList(main);
 }
 
 function attachEventListeners(container) {
@@ -358,3 +361,206 @@ function openTMAStartApp(startappParam) {
   return openTelegramLink(url);
 }
 
+// ================================================================
+// БЛОК "МОИ КАНАЛЫ"
+// ================================================================
+
+async function loadChannels() {
+  const init_data = getInitDataSafe();
+  if (!init_data) return [];
+  const data = await api('/api/creator_channels', { init_data });
+  return data.ok ? data.channels : [];
+}
+
+function getMemberLabel(channel) {
+  const type = channel.channel_type;
+  const isGroup = type === 'group' || type === 'supergroup';
+  const label = isGroup ? 'Участников' : 'Подписчиков';
+  const count = channel.member_count !== null ? channel.member_count.toLocaleString('ru-RU') : '—';
+  return `${label}: ${count}`;
+}
+
+function renderChannelAvatar(channel) {
+  const letter = (channel.title || '?')[0].toUpperCase();
+  return `
+    <div class="ch-item-avatar">
+      <img
+        src="${channel.avatar_url}"
+        alt=""
+        onerror="this.parentNode.innerHTML='<div class=\\'ch-item-avatar-placeholder\\'>${letter}</div>'"
+      />
+    </div>
+  `;
+}
+
+function renderChannelItem(channel) {
+  return `
+    <div class="ch-item" data-channel-id="${channel.id}">
+      ${renderChannelAvatar(channel)}
+      <div class="ch-item-info">
+        <div class="ch-item-name">${channel.title}</div>
+        <div class="ch-item-meta" id="ch-meta-${channel.id}">${getMemberLabel(channel)}</div>
+      </div>
+      <div class="ch-item-btns">
+        <button class="ch-item-btn ch-item-btn--refresh" type="button"
+          data-channel-id="${channel.id}" title="Обновить">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="ch-item-btn ch-item-btn--delete" type="button"
+          data-channel-id="${channel.id}"
+          data-channel-title="${channel.title}"
+          data-channel-type="${channel.channel_type}"
+          title="Удалить">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function renderChannelsList(container) {
+  const list = container.querySelector('#ch-list');
+  if (!list) return;
+
+  list.innerHTML = '<div class="ch-loading">Загрузка...</div>';
+
+  try {
+    const channels = await loadChannels();
+
+    if (!channels.length) {
+      list.innerHTML = '<div class="ch-empty">Нет подключённых каналов</div>';
+      return;
+    }
+
+    list.innerHTML = channels.map(renderChannelItem).join('');
+    attachChannelItemListeners(container);
+  } catch (e) {
+    list.innerHTML = '<div class="ch-empty">Ошибка загрузки</div>';
+    console.error('[Channels] load error:', e);
+  }
+}
+
+function attachChannelItemListeners(container) {
+  // Обновить конкретный канал
+  container.querySelectorAll('.ch-item-btn--refresh').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const channelId = btn.dataset.channelId;
+      btn.classList.add('ch-item-btn--spinning');
+      btn.disabled = true;
+
+      try {
+        const init_data = getInitDataSafe();
+        const data = await api('/api/creator_channel_refresh', { init_data, channel_id: channelId });
+
+        if (data.ok) {
+          const meta = container.querySelector(`#ch-meta-${channelId}`);
+          if (meta) {
+            const isGroup = data.channel_type === 'group' || data.channel_type === 'supergroup';
+            const label = isGroup ? 'Участников' : 'Подписчиков';
+            const count = data.member_count !== null ? Number(data.member_count).toLocaleString('ru-RU') : '—';
+            meta.textContent = `${label}: ${count}`;
+          }
+        }
+      } catch (e) {
+        console.error('[Channels] refresh error:', e);
+      } finally {
+        btn.classList.remove('ch-item-btn--spinning');
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // Удалить канал
+  container.querySelectorAll('.ch-item-btn--delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const channelId = btn.dataset.channelId;
+      const title = btn.dataset.channelTitle;
+      const type = btn.dataset.channelType;
+      const isGroup = type === 'group' || type === 'supergroup';
+      const entityWord = isGroup ? 'группу' : 'канал';
+      const entityWordFrom = isGroup ? 'группы' : 'канала';
+
+      showChannelPopup({
+        title: `Удалить ${entityWord}?`,
+        subtitle: `Вы сможете вернуть ${entityWordFrom} «${title}» в любое время`,
+        confirmText: 'Удалить',
+        onConfirm: async () => {
+          try {
+            const init_data = getInitDataSafe();
+            const data = await api('/api/creator_channel_delete', { init_data, channel_id: channelId });
+            if (data.ok) {
+              const item = container.querySelector(`.ch-item[data-channel-id="${channelId}"]`);
+              item?.remove();
+
+              const list = container.querySelector('#ch-list');
+              if (list && !list.querySelector('.ch-item')) {
+                list.innerHTML = '<div class="ch-empty">Нет подключённых каналов</div>';
+              }
+            }
+          } catch (e) {
+            console.error('[Channels] delete error:', e);
+          }
+        }
+      });
+    });
+  });
+}
+
+function attachChannelBlockListeners(container) {
+  // Обновить все
+  container.querySelector('#ch-refresh-all')?.addEventListener('click', async () => {
+    const btn = container.querySelector('#ch-refresh-all');
+    btn.classList.add('ch-header-btn--spinning');
+    btn.disabled = true;
+    await renderChannelsList(container);
+    btn.classList.remove('ch-header-btn--spinning');
+    btn.disabled = false;
+  });
+
+  // Добавить канал/группу
+  container.querySelector('#ch-add')?.addEventListener('click', () => {
+    showChannelPopup({
+      title: 'Добавить канал / группу?',
+      subtitle: 'Вас перекинет в бот, после чего вы сможете вернуться обратно в mini-app',
+      confirmText: 'Да',
+      onConfirm: () => {
+        openBotWithStart('add_channel');
+      }
+    });
+  });
+}
+
+function showChannelPopup({ title, subtitle, confirmText = 'Да', onConfirm }) {
+  const existing = document.getElementById('ch-popup');
+  if (existing) existing.remove();
+
+  const html = `
+    <div class="ch-popup-overlay" id="ch-popup">
+      <div class="ch-popup-sheet">
+        <p class="ch-popup-title">${title}</p>
+        <p class="ch-popup-subtitle">${subtitle}</p>
+        <div class="ch-popup-actions">
+          <button class="ch-popup-btn ch-popup-btn--cancel" type="button">Отмена</button>
+          <button class="ch-popup-btn ch-popup-btn--confirm" type="button">${confirmText}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const overlay = document.getElementById('ch-popup');
+
+  const close = () => {
+    overlay.classList.remove('is-visible');
+    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+  };
+
+  requestAnimationFrame(() => overlay.classList.add('is-visible'));
+
+  overlay.querySelector('.ch-popup-btn--cancel').addEventListener('click', close);
+  overlay.querySelector('.ch-popup-btn--confirm').addEventListener('click', () => {
+    close();
+    onConfirm?.();
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
