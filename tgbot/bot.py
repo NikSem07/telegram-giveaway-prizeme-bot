@@ -2954,13 +2954,15 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
         kind = "канал" if chat.type == "channel" else "группа"
         action_text = "подключён" if is_new else "обновлён"
-        
-        # Отправляем подтверждение
-        await m.answer(
-            f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
-            parse_mode="HTML",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        # Отправляем подтверждение только если это НЕ сценарий mini-app
+        # (в mini-app сценарии своё сообщение об успехе отправляется ниже)
+        data_pre = await state.get_data()
+        if not data_pre.get("add_channel_from_miniapp", False):
+            await m.answer(
+                f"{kind.capitalize()} <b>{title}</b> {action_text} к боту.",
+                parse_mode="HTML",
+                reply_markup=ReplyKeyboardRemove(),
+            )
 
         # 🔄 УЛУЧШЕННАЯ ЛОГИКА: возвращаемся в правильный контекст
         data = await state.get_data()
@@ -3001,7 +3003,6 @@ async def on_chat_shared(m: Message, state: FSMContext):
                 f"🎯 <b>{entity_str} {title} успешно добавлен к боту</b>\n\n"
                 f"🎉 Теперь вы можете подключать {her_his} к розыгрышам. "
                 f"Если хотите добавить новый канал или группу — нажмите на соответствующую кнопку под строкой поиска.\n\n"
-                f"{member_label}: {count_str}"
             )
 
             if from_miniapp:
@@ -3015,22 +3016,11 @@ async def on_chat_shared(m: Message, state: FSMContext):
                     parse_mode="HTML",
                     reply_markup=kb.as_markup()
                 )
-                # Восстанавливаем обычную клавиатуру
-                INVISIBLE = "\u2060"
-                await m.answer(INVISIBLE, reply_markup=reply_main_kb())
             else:
                 await m.answer(
                     success_text,
                     parse_mode="HTML",
                     reply_markup=reply_main_kb()
-                )
-            
-            # Показываем обновленный список каналов
-            rows = await get_user_org_channels(user_id)
-            if rows:
-                await m.answer(
-                    "📋 Ваши каналы/группы обновлены:",
-                    reply_markup=kb_my_channels(rows)
                 )
         
         # 3. Если это добавление из меню "Мои каналы"
@@ -3163,9 +3153,7 @@ async def cmd_start(m: Message, state: FSMContext):
             "• Создание пригласительных ссылок\n\n"
             "<b>Нажмите на соответствующую кнопку под строкой поиска для подключения канала / группы к боту</b>"
         )
-        await m.answer(help_text, parse_mode="HTML", reply_markup=kb_add_cancel())
-        INVISIBLE = "\u2060"
-        await m.answer(INVISIBLE, reply_markup=chooser_reply_kb())
+        await m.answer(help_text, parse_mode="HTML", reply_markup=chooser_reply_kb())
         return
 
     await ensure_user(m.from_user.id, m.from_user.username)
