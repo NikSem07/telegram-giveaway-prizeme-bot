@@ -4019,7 +4019,7 @@ async def cb_admin_promo_manual(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_manual_info:"))
 async def cb_admin_promo_manual_info(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    giveaway_id = int(cb.data.split(":")[3])
+    giveaway_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
         result = await s.execute(stext("""
@@ -4060,7 +4060,7 @@ async def cb_admin_promo_manual_info(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_manual_confirm:"))
 async def cb_admin_promo_manual_confirm(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    giveaway_id = int(cb.data.split(":")[3])
+    giveaway_id = int(cb.data.split(":")[2])
 
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Да, опубликовать", callback_data=f"adm:promo_manual_pub:{giveaway_id}")
@@ -4080,7 +4080,7 @@ async def cb_admin_promo_manual_confirm(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_manual_pub:"))
 async def cb_admin_promo_manual_pub(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    giveaway_id = int(cb.data.split(":")[3])
+    giveaway_id = int(cb.data.split(":")[2])
 
     await _publish_giveaway_to_bot(giveaway_id)
 
