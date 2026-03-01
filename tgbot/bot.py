@@ -4150,36 +4150,34 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
 
 # ── Планировщик запланированных публикаций ────────────────────────────────
 async def check_scheduled_promotions():
-    """Запускается каждую минуту — публикует розыгрыши по расписанию."""
-    while True:
-        try:
-            await asyncio.sleep(60)
-            now_utc = datetime.now(timezone.utc)
-            async with Session() as s:
-                result = await s.execute(stext("""
-                    SELECT id, giveaway_id
-                    FROM bot_promotions
-                    WHERE status = 'approved'
-                      AND publish_type = 'scheduled'
-                      AND scheduled_at <= :now
-                """), {"now": now_utc})
-                due = result.fetchall()
-
-                for row in due:
-                    await s.execute(stext("""
-                        UPDATE bot_promotions
-                        SET status = 'published', published_at = :now
-                        WHERE id = :pid
-                    """), {"now": now_utc, "pid": row.id})
-                await s.commit()
+    """Запускается планировщиком каждую минуту — публикует розыгрыши по расписанию."""
+    try:
+        now_utc = datetime.now(timezone.utc)
+        async with Session() as s:
+            result = await s.execute(stext("""
+                SELECT id, giveaway_id
+                FROM bot_promotions
+                WHERE status = 'approved'
+                  AND publish_type = 'scheduled'
+                  AND scheduled_at <= :now
+            """), {"now": now_utc})
+            due = result.fetchall()
 
             for row in due:
-                await _publish_giveaway_to_bot(row.giveaway_id)
-                logging.info(f"[PROMO_SCHED] Опубликован #{row.giveaway_id}")
+                await s.execute(stext("""
+                    UPDATE bot_promotions
+                    SET status = 'published', published_at = :now
+                    WHERE id = :pid
+                """), {"now": now_utc, "pid": row.id})
+            await s.commit()
 
-        except Exception as e:
-            logging.error(f"[PROMO_SCHED] Ошибка: {e}")
-            
+        for row in due:
+            await _publish_giveaway_to_bot(row.giveaway_id)
+            logging.info(f"[PROMO_SCHED] Опубликован #{row.giveaway_id}")
+
+    except Exception as e:
+        logging.error(f"[PROMO_SCHED] Ошибка: {e}")
+
 
 # ── Уровень 3: меню топ-розыгрышей ───────────────────────────────────────
 def kb_admin_top_menu() -> InlineKeyboardMarkup:
@@ -10055,6 +10053,14 @@ async def main():
         trigger='interval',
         minutes=30,
         id='deactivate_top_placements',
+        replace_existing=True,
+    )
+    # Публикация запланированных продвижений — каждую минуту
+    scheduler.add_job(
+        check_scheduled_promotions,
+        trigger='interval',
+        minutes=1,
+        id='check_scheduled_promotions',
         replace_existing=True,
     )
 
