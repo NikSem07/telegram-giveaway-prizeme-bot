@@ -267,6 +267,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Background manager (SPA only): бесшовный root фон + sync Telegram colors
     BackgroundManager.init(AppState);
 
+    // ── Обработка page_* навигации ДО Router.init() чтобы роутер сразу рендерил нужную страницу ──
+    try {
+        const pageParam = sessionStorage.getItem('prizeme_page_param');
+        if (pageParam) {
+            sessionStorage.removeItem('prizeme_page_param');
+            const pageName = pageParam.replace('page_', '');
+            console.log('[STARTPARAM] pre-router → creator/' + pageName);
+            AppState.setMode('creator');
+            AppState.setPage(pageName);
+        }
+    } catch (e) {
+        console.warn('[STARTPARAM] pre-router page_* handling failed:', e);
+    }
+
     // 3. Инициализируем роутер
     Router.init();
 
@@ -297,20 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     } catch (e) {
     console.warn('[RESULTS->CARD] Failed:', e);
-    }
-    
-    // ── Обработка page_* навигации (параметр перехвачен в getStartParam до participation flow) ──
-    try {
-        const pageParam = sessionStorage.getItem('prizeme_page_param');
-        if (pageParam) {
-            sessionStorage.removeItem('prizeme_page_param');
-            const pageName = pageParam.replace('page_', '');
-            console.log('[STARTPARAM] → creator/' + pageName);
-            AppState.setMode('creator');
-            AppState.setPage(pageName);
-        }
-    } catch (e) {
-        console.warn('[STARTPARAM] page_* handling failed:', e);
     }
 
     // 2.1 Синхронизируем UI переключалки режимов сразу после старта
