@@ -1861,7 +1861,7 @@ app.post('/api/promotion_checkout_data', async (req, res) => {
 // --- POST /api/create_promotion_stars_invoice ---
 // Создаёт Stars инвойс для сервиса "Продвижение в боте"
 // ЦЕНА: константа, меняется в одном месте
-const PROMOTION_PRICE_STARS = 500; // ← меняй здесь
+const PROMOTION_PRICE_STARS = 9990; // ← меняй здесь
 
 app.post('/api/create_promotion_stars_invoice', async (req, res) => {
   try {

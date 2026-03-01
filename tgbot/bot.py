@@ -3735,6 +3735,21 @@ async def cb_admin_promo_approve(cb: CallbackQuery):
             """), {"now": now_utc, "pid": promo_id})
             await s.commit()
             await _publish_giveaway_to_bot(row.giveaway_id)
+
+            # Уведомляем создателя розыгрыша
+            try:
+                await bot.send_message(
+                    chat_id=row.owner_user_id,
+                    text=(
+                        f"✅ <b>Ваша заявка на продвижение розыгрыша в боте одобрена!</b>\n\n"
+                        f"Розыгрыш <b>#{row.giveaway_id}</b> опубликован в боте — "
+                        f"пользователи уже видят его и могут принять участие."
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.warning(f"[PROMO] Не удалось уведомить создателя {row.owner_user_id}: {e}")
+
             await cb.message.edit_text(
                 f"✅ Розыгрыш <b>#{row.giveaway_id}</b> опубликован в боте!",
                 parse_mode="HTML",
@@ -3751,6 +3766,22 @@ async def cb_admin_promo_approve(cb: CallbackQuery):
             """), {"now": now_utc, "pid": promo_id})
             await s.commit()
             sched_str = row.scheduled_at.strftime("%d.%m.%Y %H:%M")
+
+            # Уведомляем создателя об одобрении
+            try:
+                sched_str_notify = row.scheduled_at.strftime("%d.%m.%Y %H:%M") if row.scheduled_at else "—"
+                await bot.send_message(
+                    chat_id=row.owner_user_id,
+                    text=(
+                        f"✅ <b>Ваша заявка на продвижение розыгрыша в боте одобрена!</b>\n\n"
+                        f"Розыгрыш <b>#{row.giveaway_id}</b> будет опубликован "
+                        f"<b>{sched_str_notify} (МСК)</b>."
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.warning(f"[PROMO] Не удалось уведомить создателя {row.owner_user_id}: {e}")
+
             await cb.message.edit_text(
                 f"✅ Заявка утверждена!\n\nРозыгрыш <b>#{row.giveaway_id}</b> "
                 f"будет опубликован <b>{sched_str} (МСК)</b>.",
@@ -9474,6 +9505,29 @@ async def handle_successful_payment(message: Message):
                 }
             )
             await s.commit()
+
+        # Уведомляем владельца бота о новой заявке
+        try:
+            time_label_owner = (
+                "сразу после утверждения"
+                if publish_type == "immediate"
+                else f"в {scheduled_dt.strftime('%d.%m.%Y %H:%M')} (МСК)"
+                if scheduled_dt else "сразу после утверждения"
+            )
+            await bot.send_message(
+                chat_id=BOT_OWNER_ID,
+                text=(
+                    f"📣 <b>Новая заявка на продвижение!</b>\n\n"
+                    f"Розыгрыш: <b>#{giveaway_id}</b>\n"
+                    f"От пользователя: <b>{user_id}</b>\n"
+                    f"Оплата: Stars ⭐ ({stars_amount})\n"
+                    f"Время публикации: {time_label_owner}\n\n"
+                    f"Перейди в /admin → Управление сервисами → 📣 Продвижение в боте → Заявки на продвижение"
+                ),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"[STARS] Не удалось уведомить владельца: {e}")
 
         logging.info(
             f"[STARS] bot_promotion создан: giveaway={giveaway_id}, "
