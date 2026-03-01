@@ -1,6 +1,7 @@
 // webapp/pages/creator/services/services.js
 import servicesTemplate from './services.template.js';
-import { mountTopCheckout } from './top-checkout-services.js';
+import { mountTopCheckout }       from './top-checkout-services.js';
+import { mountPromotionCheckout } from './promotion-services.js';
 import TelegramData from '../../../shared/telegram-data.js';
 import AppState from '../../../shared/state.js';
 import Router   from '../../../shared/router.js';
@@ -122,6 +123,14 @@ function initServiceSelection(main) {
                     AppState.setMode('participant');
                     Router.navigate('home');
                 }
+            );
+        } else if (selectedId === 'bot_promotion') {
+            const hasActive = await checkHasActiveGiveaways();
+            if (!hasActive) { showNoGiveawaysModal(); return; }
+            mountPromotionCheckout(
+                main,
+                () => renderServicesPage(),
+                () => { AppState.setMode('creator'); }
             );
         } else {
             showWipModal();
