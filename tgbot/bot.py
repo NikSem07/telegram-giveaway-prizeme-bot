@@ -8827,7 +8827,70 @@ async def handle_successful_payment(message: Message):
         logging.error(f"[STARS] Невалидный payload: {raw_payload}")
         return
 
-    if payload.get("type") != "top_placement":
+    payload_type = payload.get("type")
+
+    # ── bot_promotion ─────────────────────────────────────────────────────
+    if payload_type == "bot_promotion":
+        giveaway_id  = payload["giveaway_id"]
+        publish_type = payload.get("publish_type", "immediate")
+        scheduled_at = payload.get("scheduled_at")  # ISO string или None
+        user_id      = payload["user_id"]
+        charge_id    = payment.telegram_payment_charge_id
+        stars_amount = payment.total_amount
+
+        scheduled_dt = None
+        if publish_type == "scheduled" and scheduled_at:
+            try:
+                scheduled_dt = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+            except Exception:
+                scheduled_dt = None
+
+        async with Session() as s:
+            await s.execute(
+                stext("""
+                    INSERT INTO bot_promotions
+                        (giveaway_id, owner_user_id, status, payment_method,
+                         payment_status, price_stars, publish_type, scheduled_at)
+                    VALUES (:gid, :uid, 'pending', 'stars', 'paid', :stars, :ptype, :sched)
+                """),
+                {
+                    "gid":   giveaway_id,
+                    "uid":   user_id,
+                    "stars": stars_amount,
+                    "ptype": publish_type,
+                    "sched": scheduled_dt,
+                }
+            )
+            await s.commit()
+
+        logging.info(
+            f"[STARS] bot_promotion создан: giveaway={giveaway_id}, "
+            f"publish_type={publish_type}, scheduled_at={scheduled_at}, "
+            f"user={user_id}, charge_id={charge_id}"
+        )
+
+        time_label = (
+            "сразу после утверждения администратором (до 8 часов)"
+            if publish_type == "immediate"
+            else f"в запланированное время: {scheduled_dt.strftime('%d.%m.%Y %H:%M')} (МСК)"
+            if scheduled_dt else "сразу после утверждения"
+        )
+
+        try:
+            await bot.send_message(
+                chat_id=user_id,
+                text=(
+                    f"✅ <b>Заявка на продвижение принята!</b>\n\n"
+                    f"Розыгрыш <b>#{giveaway_id}</b> будет опубликован в боте {time_label}.\n\n"
+                    f"Ожидайте уведомления после публикации."
+                ),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"[STARS] Не удалось уведомить пользователя {user_id}: {e}")
+        return
+
+    if payload_type != "top_placement":
         return
 
     giveaway_id = payload["giveaway_id"]
