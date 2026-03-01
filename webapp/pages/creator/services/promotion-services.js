@@ -1,16 +1,17 @@
 // webapp/pages/creator/services/promotion-services.js
 import promotionCheckoutTemplate from './promotion-services.template.js';
 
-// ── Цена (меняется в одном месте) ────────────────────────────────────────
-const PROMOTION_PRICE_RUB   = 9990;   // ₽  ← меняй здесь
-const PROMOTION_PRICE_STARS = 500;    // ⭐ ← меняй здесь
+// ── Цены (меняй здесь в одном месте) ─────────────────────────────────────
+const PROMOTION_PRICE_RUB   = 9990;   // ₽
+const PROMOTION_PRICE_STARS = 9990;   // ⭐
 
-// ── Состояние чекаута ─────────────────────────────────────────────────────
+// ── Состояние ─────────────────────────────────────────────────────────────
 let _agreed             = false;
-let _paymentMethod      = 'stars';  // stars | card
+let _paymentMethod      = 'card';      // card | stars — по умолчанию "Картой"
 let _selectedGiveawayId = null;
+let _selectedGiveawayEndAt = null;     // ISO — для валидации даты
 let _selectedTimeType   = 'immediate'; // immediate | scheduled
-let _scheduledAt        = null;        // ISO string
+let _scheduledAt        = null;
 let _checkoutTimerInterval = null;
 
 // ── Шапка / навбар ────────────────────────────────────────────────────────
@@ -89,7 +90,9 @@ async function loadGiveaways() {
             const timerId   = `promo-timer-${g.id}`;
             return `
                 <div class="tc-giveaway-card giveaway-card giveaway-card--all"
-                     data-giveaway-id="${g.id}" role="button" tabindex="0">
+                     data-giveaway-id="${g.id}"
+                     data-giveaway-end="${g.end_at_utc || ''}"
+                     role="button" tabindex="0">
                     <div class="giveaway-left">
                         <div class="giveaway-avatar">
                             ${avatarUrl ? `<img src="${avatarUrl}" alt="" loading="lazy">` : ''}
@@ -131,7 +134,8 @@ function onGiveawaySelected(card) {
     });
 
     card.classList.add('tc-giveaway-card--active');
-    _selectedGiveawayId = card.dataset.giveawayId || null;
+    _selectedGiveawayId    = card.dataset.giveawayId || null;
+    _selectedGiveawayEndAt = card.dataset.giveawayEnd || null;
 
     const ch = card.querySelector('.tc-giveaway-check');
     if (ch) ch.innerHTML = `
@@ -141,13 +145,35 @@ function onGiveawaySelected(card) {
                   stroke-linecap="round" stroke-linejoin="round"/>
         </svg>`;
 
-    // Показываем выбор времени
-    const timeSection = document.getElementById('promo-time-section');
-    timeSection.classList.remove('tc-section--hidden');
-    timeSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Сбрасываем время и показываем все блоки сразу (правка №3)
+    _selectedTimeType = 'immediate';
+    _scheduledAt      = null;
 
-    // Сбрасываем оплату
-    _resetPaymentBlocks();
+    // Сбрасываем пикер
+    const picker = document.getElementById('promo-datetime-input');
+    if (picker) picker.value = '';
+    const hint = document.getElementById('promo-datetime-hint');
+    if (hint) hint.textContent = '';
+    document.getElementById('promo-datetime-picker')?.classList.add('tc-section--hidden');
+
+    // Сбрасываем выбор времени на "Сразу"
+    document.querySelectorAll('.promo-time-card').forEach(c => {
+        const isImmediate = c.dataset.timeType === 'immediate';
+        c.classList.toggle('promo-time-card--active', isImmediate);
+        const checkId = `promo-time-check-${c.dataset.timeType}`;
+        const checkEl = document.getElementById(checkId);
+        if (!checkEl) return;
+        checkEl.innerHTML = isImmediate
+            ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="9" fill="#007AFF"/><path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/></svg>`;
+    });
+
+    // Показываем ВСЕ блоки сразу (правка №3)
+    const timeSection = document.getElementById('promo-time-section');
+    timeSection?.classList.remove('tc-section--hidden');
+    _showPaymentBlocks();
+
+    timeSection?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── Выбор времени публикации ──────────────────────────────────────────────
@@ -156,36 +182,70 @@ function initTimeSelection() {
         card.addEventListener('click', () => onTimeSelected(card));
     });
 
-    // Обработчик пикера даты
     const picker = document.getElementById('promo-datetime-input');
-    if (picker) {
-        // Минимальное время — сейчас + 1 час
-        const minDate = new Date(Date.now() + 60 * 60 * 1000);
-        picker.min = minDate.toISOString().slice(0, 16);
+    if (!picker) return;
 
-        picker.addEventListener('change', () => {
-            if (picker.value) {
-                _scheduledAt = new Date(picker.value).toISOString();
-                const label = document.getElementById('promo-scheduled-desc');
-                if (label) {
-                    const d = new Date(picker.value);
-                    label.textContent = d.toLocaleString('ru-RU', {
+    picker.addEventListener('change', () => {
+        if (!picker.value) return;
+
+        const hint = document.getElementById('promo-datetime-hint');
+        const selectedMs = new Date(picker.value).getTime();
+        const nowMs      = Date.now();
+        const minMs      = nowMs + 24 * 60 * 60 * 1000; // минимум +24 часа (правка №5)
+
+        // Валидация: не раньше чем через 24 часа
+        if (selectedMs < minMs) {
+            if (hint) {
+                hint.textContent = '⚠️ Выберите время минимум через 24 часа от текущего момента';
+                hint.style.color = 'var(--color-danger, #FF3B30)';
+            }
+            _scheduledAt = null;
+            return;
+        }
+
+        // Валидация: не позже окончания розыгрыша (правка №5)
+        if (_selectedGiveawayEndAt) {
+            const endMs = new Date(_selectedGiveawayEndAt).getTime();
+            if (selectedMs >= endMs) {
+                if (hint) {
+                    const endStr = new Date(_selectedGiveawayEndAt).toLocaleString('ru-RU', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
-                    }) + ' (МСК)';
+                    });
+                    hint.textContent = `⚠️ Дата публикации должна быть раньше окончания розыгрыша (${endStr})`;
+                    hint.style.color = 'var(--color-danger, #FF3B30)';
                 }
-                // Показываем блоки оплаты
-                _showPaymentBlocks();
+                _scheduledAt = null;
+                return;
             }
-        });
-    }
+        }
+
+        // Всё ок
+        _scheduledAt = new Date(picker.value).toISOString();
+        if (hint) {
+            const d = new Date(picker.value);
+            hint.textContent = '✓ ' + d.toLocaleString('ru-RU', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            }) + ' (МСК)';
+            hint.style.color = 'var(--color-primary, #007AFF)';
+        }
+
+        const descEl = document.getElementById('promo-scheduled-desc');
+        if (descEl) {
+            const d = new Date(picker.value);
+            descEl.textContent = d.toLocaleString('ru-RU', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            }) + ' (МСК)';
+        }
+    });
 }
 
 function onTimeSelected(card) {
     const timeType = card.dataset.timeType;
     _selectedTimeType = timeType;
 
-    // Обновляем галочки
     document.querySelectorAll('.promo-time-card').forEach(c => {
         const isActive = c.dataset.timeType === timeType;
         c.classList.toggle('promo-time-card--active', isActive);
@@ -193,39 +253,44 @@ function onTimeSelected(card) {
         const checkEl = document.getElementById(checkId);
         if (!checkEl) return;
         checkEl.innerHTML = isActive
-            ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                   <circle cx="9" cy="9" r="9" fill="#007AFF"/>
-                   <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round"/>
-               </svg>`
-            : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                   <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
-               </svg>`;
+            ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="9" fill="#007AFF"/><path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/></svg>`;
     });
 
     const pickerWrap = document.getElementById('promo-datetime-picker');
+    const picker     = document.getElementById('promo-datetime-input');
 
     if (timeType === 'immediate') {
         _scheduledAt = null;
-        if (pickerWrap) pickerWrap.classList.add('tc-section--hidden');
-        _showPaymentBlocks();
+        pickerWrap?.classList.add('tc-section--hidden');
+        if (picker) picker.value = '';
+        const hint = document.getElementById('promo-datetime-hint');
+        if (hint) hint.textContent = '';
     } else {
-        // scheduled — показываем пикер, оплату покажем после выбора даты
-        if (pickerWrap) pickerWrap.classList.remove('tc-section--hidden');
-        _resetPaymentBlocks();
-        // Если дата уже была выбрана раньше
-        const picker = document.getElementById('promo-datetime-input');
-        if (picker && picker.value) {
-            _scheduledAt = new Date(picker.value).toISOString();
-            _showPaymentBlocks();
+        // Показываем пикер (правка №4 — широкий блок)
+        pickerWrap?.classList.remove('tc-section--hidden');
+        pickerWrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Устанавливаем min: сейчас + 24 часа (правка №5)
+        if (picker) {
+            const minDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            picker.min = minDate.toISOString().slice(0, 16);
+
+            // Устанавливаем max: окончание розыгрыша (правка №5)
+            if (_selectedGiveawayEndAt) {
+                const maxDate = new Date(new Date(_selectedGiveawayEndAt).getTime() - 60 * 1000);
+                picker.max = maxDate.toISOString().slice(0, 16);
+            }
+
+            // Автофокус чтобы пользователь понял что надо нажать
+            setTimeout(() => { try { picker.focus(); picker.click(); } catch (e) {} }, 100);
         }
     }
 }
 
 // ── Показ / сброс блоков оплаты ───────────────────────────────────────────
 function _showPaymentBlocks() {
-    ['promo-payment-section', 'promo-summary-section',
-     'promo-agree-section', 'promo-disclaimer'].forEach(id => {
+    ['promo-payment-section', 'promo-summary-section', 'promo-disclaimer'].forEach(id => {
         document.getElementById(id)?.classList.remove('tc-section--hidden');
     });
     const footer = document.getElementById('promo-footer-pay');
@@ -236,25 +301,12 @@ function _showPaymentBlocks() {
     _updateSummaryDisplay();
 }
 
-function _resetPaymentBlocks() {
-    ['promo-payment-section', 'promo-summary-section',
-     'promo-agree-section', 'promo-disclaimer'].forEach(id => {
-        document.getElementById(id)?.classList.add('tc-section--hidden');
-    });
-    document.getElementById('promo-footer-pay')?.classList.add('tc-footer--hidden');
-    _agreed = false;
-    const checkbox = document.getElementById('promo-agree-checkbox');
-    const checkSvg = document.getElementById('promo-agree-check');
-    const payBtn   = document.getElementById('promo-pay-btn');
-    if (checkbox) checkbox.classList.remove('tc-agree-checkbox--checked');
-    if (checkSvg) checkSvg.style.display = 'none';
-    if (payBtn)   payBtn.classList.add('tc-pay-btn--inactive');
-}
-
 // ── Итог ──────────────────────────────────────────────────────────────────
 function _updateSummaryDisplay() {
     const isStars = _paymentMethod === 'stars';
-    const text    = isStars ? `${PROMOTION_PRICE_STARS} ⭐` : `${PROMOTION_PRICE_RUB.toLocaleString('ru-RU')} ₽`;
+    const text    = isStars
+        ? `${PROMOTION_PRICE_STARS.toLocaleString('ru-RU')} ⭐`
+        : `${PROMOTION_PRICE_RUB.toLocaleString('ru-RU')} ₽`;
     const priceEl = document.getElementById('promo-summary-price');
     const totalEl = document.getElementById('promo-summary-total');
     if (priceEl) priceEl.textContent = text;
@@ -275,14 +327,8 @@ function initPaymentSelection() {
                 const checkEl = document.getElementById(checkId);
                 if (!checkEl) return;
                 checkEl.innerHTML = isActive
-                    ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                           <circle cx="9" cy="9" r="9" fill="#007AFF"/>
-                           <path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8"
-                                 stroke-linecap="round" stroke-linejoin="round"/>
-                       </svg>`
-                    : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                           <circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/>
-                       </svg>`;
+                    ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="9" fill="#007AFF"/><path d="M5 9L7.5 11.5L13 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+                    : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8.5" stroke="rgba(255,255,255,0.2)"/></svg>`;
             });
 
             _updateSummaryDisplay();
@@ -374,7 +420,7 @@ async function initiateStarsPayment() {
 
 // ── Оплата картой — заглушка ──────────────────────────────────────────────
 function initiateCardPayment() {
-    _showWipModal('🚧 В разработке', 'Оплата картой скоро будет доступна. Используйте Telegram Stars.');
+    _showInfoModal('🚧 В разработке', 'Оплата картой скоро будет доступна. Используйте Telegram Stars.');
 }
 
 // ── Модальные окна ────────────────────────────────────────────────────────
@@ -403,40 +449,27 @@ function showPaymentSuccessModal() {
 }
 
 function showPaymentErrorModal(reason) {
-    const modal = document.createElement('div');
-    modal.className = 'svc-wip-overlay';
-    modal.innerHTML = `
-        <div class="svc-wip-sheet">
-            <p class="svc-wip-title">❌ Ошибка оплаты</p>
-            <p class="svc-wip-text">${reason || 'Не удалось провести оплату. Попробуйте ещё раз.'}</p>
-            <button class="svc-wip-btn" type="button" id="promo-error-close">Понятно</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    requestAnimationFrame(() => modal.classList.add('is-visible'));
-    document.getElementById('promo-error-close').addEventListener('click', () => {
-        modal.classList.remove('is-visible');
-        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
-    });
+    _showInfoModal('❌ Ошибка оплаты', reason || 'Не удалось провести оплату. Попробуйте ещё раз.');
 }
 
-function _showWipModal(title, text) {
+function _showInfoModal(title, text) {
     const modal = document.createElement('div');
     modal.className = 'svc-wip-overlay';
     modal.innerHTML = `
         <div class="svc-wip-sheet">
             <p class="svc-wip-title">${title}</p>
             <p class="svc-wip-text">${text}</p>
-            <button class="svc-wip-btn" type="button" id="promo-wip-close">Понятно</button>
+            <button class="svc-wip-btn" type="button" id="promo-info-close">Понятно</button>
         </div>
     `;
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('is-visible'));
-    document.getElementById('promo-wip-close').addEventListener('click', () => {
+    const close = () => {
         modal.classList.remove('is-visible');
         modal.addEventListener('transitionend', () => modal.remove(), { once: true });
-    });
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    };
+    document.getElementById('promo-info-close').addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
 }
 
 // ── Кнопка оплаты ─────────────────────────────────────────────────────────
@@ -446,15 +479,32 @@ function initPayBtn() {
 
     payBtn.addEventListener('click', () => {
         if (!_agreed) {
-            const block = document.getElementById('promo-agree-block');
-            if (block) {
-                block.classList.add('tc-agree-block--error');
-                block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                block.classList.add('tc-pay-btn--shake');
-                setTimeout(() => block.classList.remove('tc-pay-btn--shake'), 400);
+            const agreeBlock = document.getElementById('promo-agree-block');
+            agreeBlock?.classList.remove('tc-agree-block--error');
+            payBtn.classList.remove('tc-pay-btn--shake');
+            void payBtn.offsetWidth; // reflow для перезапуска анимации
+            agreeBlock?.classList.add('tc-agree-block--error');
+            payBtn.classList.add('tc-pay-btn--shake');
+            if (navigator.vibrate) navigator.vibrate(80);
+            payBtn.addEventListener('animationend', () => {
+                payBtn.classList.remove('tc-pay-btn--shake');
+            }, { once: true });
+            agreeBlock?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+
+        // Для scheduled — проверяем что дата выбрана и валидна
+        if (_selectedTimeType === 'scheduled' && !_scheduledAt) {
+            const picker = document.getElementById('promo-datetime-input');
+            picker?.focus();
+            const hint = document.getElementById('promo-datetime-hint');
+            if (hint && !hint.textContent) {
+                hint.textContent = '⚠️ Укажите дату и время публикации';
+                hint.style.color = 'var(--color-danger, #FF3B30)';
             }
             return;
         }
+
         if (_paymentMethod === 'stars') {
             initiateStarsPayment();
         } else {
@@ -463,19 +513,17 @@ function initPayBtn() {
     });
 }
 
-// ── Монтирование чекаута ──────────────────────────────────────────────────
+// ── Монтирование ──────────────────────────────────────────────────────────
 export function mountPromotionCheckout(container, onBack, onSuccess) {
-    _onPaymentSuccess = onSuccess || null;
-
-    // Сброс состояния
-    _agreed             = false;
-    _paymentMethod      = 'stars';
-    _selectedGiveawayId = null;
-    _selectedTimeType   = 'immediate';
-    _scheduledAt        = null;
+    _onPaymentSuccess      = onSuccess || null;
+    _agreed                = false;
+    _paymentMethod         = 'card';
+    _selectedGiveawayId    = null;
+    _selectedGiveawayEndAt = null;
+    _selectedTimeType      = 'immediate';
+    _scheduledAt           = null;
     if (_checkoutTimerInterval) { clearInterval(_checkoutTimerInterval); _checkoutTimerInterval = null; }
 
-    // Рендер
     container.innerHTML = promotionCheckoutTemplate();
     setShellVisibility(false);
 
@@ -487,7 +535,6 @@ export function mountPromotionCheckout(container, onBack, onSuccess) {
     };
     showBackButton(handleBack);
 
-    // Инициализация
     loadGiveaways();
     initTimeSelection();
     initPaymentSelection();

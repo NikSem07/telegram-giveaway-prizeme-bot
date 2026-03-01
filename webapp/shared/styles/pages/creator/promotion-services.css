@@ -1,56 +1,74 @@
 /* webapp/shared/styles/pages/creator/promotion-services.css */
 
-/* Пикер даты/времени */
+/* Пикер даты/времени — широкий блок (правка №4) */
 .promo-datetime-picker {
     margin-top: 8px;
-    padding: 12px 14px;
+    padding: 14px 16px;
     background: var(--card-bg, rgba(255,255,255,0.06));
     border-radius: var(--radius-lg, 14px);
+    border: 1.5px solid rgba(255,255,255,0.08);
 }
 
 .promo-datetime-label {
     display: block;
     font-size: 12px;
     color: var(--color-text-secondary, rgba(255,255,255,0.5));
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
+/* Широкое поле ввода — занимает всю ширину (правка №4) */
 .promo-datetime-input {
+    display: block;
     width: 100%;
     background: rgba(255,255,255,0.08);
-    border: 1.5px solid rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.15);
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     color: #fff;
-    font-size: 15px;
+    font-size: 16px;
     font-family: inherit;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
     box-sizing: border-box;
+    cursor: pointer;
     transition: border-color 0.18s ease;
+    min-height: 48px;
 }
 
 .promo-datetime-input:focus {
     border-color: var(--color-primary, #007AFF);
 }
 
-/* Тип карточки времени — расширяем tc-period-card */
-.promo-time-card {
+/* Цвет иконки календаря на iOS/Safari */
+.promo-datetime-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.7;
     cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+    width: 22px;
+    height: 22px;
 }
 
-.promo-time-card--active {
-    border-color: var(--color-primary, #007AFF) !important;
-    background: rgba(0, 122, 255, 0.07) !important;
+/* Подсказка под пикером */
+.promo-datetime-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    min-height: 16px;
 }
 
-/* Описание под названием варианта */
+/* Описание под названием варианта времени */
 .tc-period-desc {
     font-size: 12px;
     color: var(--color-text-secondary, rgba(255,255,255,0.5));
     margin-top: 2px;
+    line-height: 1.4;
+}
+
+/* Активный вариант времени */
+.promo-time-card--active {
+    border-color: var(--color-primary, #007AFF) !important;
+    background: rgba(0, 122, 255, 0.07) !important;
 }
