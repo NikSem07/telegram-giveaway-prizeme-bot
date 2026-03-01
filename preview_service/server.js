@@ -1808,6 +1808,157 @@ app.post('/api/top_placement_checkout_data', async (req, res) => {
   }
 });
 
+// --- POST /api/promotion_checkout_data ---
+// Активные розыгрыши создателя для чекаута "Продвижение в боте"
+app.post('/api/promotion_checkout_data', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed)
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId))
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+
+    const result = await pool.query(`
+      SELECT
+        g.id,
+        g.internal_title,
+        g.end_at_utc,
+        array_remove(
+          array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
+          NULL
+        ) AS channels,
+        (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
+      FROM giveaways g
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE g.owner_user_id = $1
+        AND g.status = 'active'
+      GROUP BY g.id
+      ORDER BY g.id DESC
+    `, [userId]);
+
+    return res.json({
+      ok: true,
+      items: (result.rows || []).map(row => ({
+        id:                       row.id,
+        title:                    row.internal_title,
+        end_at_utc:               row.end_at_utc,
+        channels:                 row.channels || [],
+        first_channel_avatar_url: row.first_channel_chat_id
+          ? `/api/chat_avatar/${row.first_channel_chat_id}`
+          : null,
+      })),
+    });
+  } catch (error) {
+    console.error('[API promotion_checkout_data] error:', error);
+    return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+  }
+});
+
+// --- POST /api/create_promotion_stars_invoice ---
+// Создаёт Stars инвойс для сервиса "Продвижение в боте"
+// ЦЕНА: константа, меняется в одном месте
+const PROMOTION_PRICE_STARS = 500; // ← меняй здесь
+
+app.post('/api/create_promotion_stars_invoice', async (req, res) => {
+  try {
+    const { init_data, giveaway_id, publish_type, scheduled_at } = req.body;
+
+    const parsedInitData = _tgCheckMiniAppInitData(init_data);
+    if (!parsedInitData || !parsedInitData.user_parsed)
+      return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+
+    const userId = Number(parsedInitData.user_parsed.id);
+    if (!Number.isFinite(userId))
+      return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+
+    if (!['immediate', 'scheduled'].includes(publish_type))
+      return res.status(400).json({ ok: false, reason: 'invalid_publish_type' });
+
+    if (publish_type === 'scheduled' && !scheduled_at)
+      return res.status(400).json({ ok: false, reason: 'scheduled_at_required' });
+
+    const gw = await pool.query(
+      `SELECT id, internal_title FROM giveaways
+       WHERE id = $1 AND owner_user_id = $2 AND status = 'active'`,
+      [giveaway_id, userId]
+    );
+    if (!gw.rows.length)
+      return res.status(400).json({ ok: false, reason: 'giveaway_not_found' });
+
+    const giveawayTitle = gw.rows[0].internal_title;
+    const publishLabel  = publish_type === 'immediate'
+      ? 'сразу после утверждения'
+      : `в ${new Date(scheduled_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)`;
+
+    const botToken = process.env.BOT_TOKEN;
+    const invoiceResp = await fetch(
+      `https://api.telegram.org/bot${botToken}/createInvoiceLink`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:          'Продвижение в боте',
+          description:    `«${giveawayTitle}» — публикация ${publishLabel}`,
+          payload:        JSON.stringify({
+            type:         'bot_promotion',
+            giveaway_id:  Number(giveaway_id),
+            publish_type,
+            scheduled_at: scheduled_at || null,
+            user_id:      userId,
+          }),
+          currency:       'XTR',
+          prices:         [{ label: 'Продвижение в боте', amount: PROMOTION_PRICE_STARS }],
+          provider_token: '',
+        }),
+      }
+    );
+
+    const invoiceData = await invoiceResp.json();
+    if (!invoiceData.ok) {
+      console.error('[API create_promotion_stars_invoice] Telegram error:', invoiceData);
+      return res.status(500).json({ ok: false, reason: 'telegram_api_error' });
+    }
+
+    return res.json({ ok: true, invoice_link: invoiceData.result });
+
+  } catch (error) {
+    console.error('[API create_promotion_stars_invoice] error:', error);
+    return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+  }
+});
+
+// --- POST /api/promotion_after_payment ---
+// Вызывается ботом после успешной оплаты Stars (pre_checkout → successful_payment)
+// Создаёт запись в bot_promotions
+app.post('/api/promotion_after_payment', async (req, res) => {
+  try {
+    const { giveaway_id, user_id, publish_type, scheduled_at, price_stars } = req.body;
+
+    await pool.query(`
+      INSERT INTO bot_promotions
+        (giveaway_id, owner_user_id, status, payment_method, payment_status,
+         price_stars, publish_type, scheduled_at)
+      VALUES ($1, $2, 'pending', 'stars', 'paid', $3, $4, $5)
+      ON CONFLICT DO NOTHING
+    `, [
+      Number(giveaway_id),
+      Number(user_id),
+      Number(price_stars) || PROMOTION_PRICE_STARS,
+      publish_type || 'immediate',
+      scheduled_at ? new Date(scheduled_at) : null,
+    ]);
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('[API promotion_after_payment] error:', error);
+    return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+  }
+});
+
 
 // --- POST /api/participant_giveaways ---
 // Отдает список розыгрышей участника по вкладке (active/finished/cancelled)
