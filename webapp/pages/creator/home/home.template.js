@@ -9,8 +9,8 @@ export default function creatorHomeTemplate(context = {}) {
         <!-- LEFT COLUMN -->
         <div class="creator-home-v2-left">
 
-          <!-- Total giveaways card -->
-          <div class="creator-home-v2-card creator-home-v2-card--total">
+          <!-- Total giveaways card — кликабельный, ведёт в раздел "Розыгрыши" -->
+          <button class="creator-home-v2-card creator-home-v2-card--total" type="button" data-creator-action="giveaways">
             <div class="creator-home-v2-total-text">
               <div class="creator-home-v2-total-line1">Всего проведено</div>
               <div class="creator-home-v2-total-line2">
@@ -18,7 +18,7 @@ export default function creatorHomeTemplate(context = {}) {
                 <span class="creator-home-v2-total-word">розыгрыша</span>
               </div>
             </div>
-          </div>
+          </button>
 
           <!-- Donate -->
           <button class="creator-home-v2-card creator-home-v2-card--donate" data-creator-action="donate" type="button">

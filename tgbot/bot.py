@@ -3007,7 +3007,7 @@ async def on_chat_shared(m: Message, state: FSMContext):
 
             if from_miniapp:
                 await state.update_data(add_channel_from_miniapp=False)
-                miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+                miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_home"
                 kb = InlineKeyboardBuilder()
                 kb.button(text="📲 Вернуться в mini-app", web_app=WebAppInfo(url=miniapp_url))
                 kb.adjust(1)

@@ -1,5 +1,6 @@
 // webapp/pages/creator/home/home.js
 import creatorHomeTemplate from './home.template.js';
+import AppState from '../../../shared/state.js';
 
 // Утилита для определения окружения
 function isInTelegramWebApp() {
@@ -194,6 +195,13 @@ function attachEventListeners(container) {
     e.stopPropagation();
     console.log('[CreatorHome] Subscribe button clicked');
     openTributeStartApp('sHOW');
+    });
+
+    // Total giveaways → переход в раздел "Розыгрыши"
+    container.querySelector('[data-creator-action="giveaways"]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        AppState.setPage('giveaways');
     });
 
     // Create giveaway
