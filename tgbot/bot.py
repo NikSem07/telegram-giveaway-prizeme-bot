@@ -3562,10 +3562,624 @@ def kb_admin_main() -> InlineKeyboardMarkup:
 # ── Уровень 2: управление сервисами ──────────────────────────────────────
 def kb_admin_services() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="🏆 Топ-розыгрыши",  callback_data="adm:top_menu")
-    kb.button(text="◀️ Назад",           callback_data="adm:back_main")
+    kb.button(text="🏆 Топ-розыгрыши",       callback_data="adm:top_menu")
+    kb.button(text="📣 Продвижение в боте",   callback_data="adm:promo_menu")
+    kb.button(text="◀️ Назад",                callback_data="adm:back_main")
     kb.adjust(1)
     return kb.as_markup()
+
+# ══════════════════════════════════════════════════════════════════════════
+# ── ПРОДВИЖЕНИЕ В БОТЕ — клавиатуры ──────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+
+def kb_admin_promo_menu() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📋 Заявки на продвижение",  callback_data="adm:promo_requests")
+    kb.button(text="⏳ Ожидают публикации",      callback_data="adm:promo_scheduled")
+    kb.button(text="🚀 Продвинуть вручную",      callback_data="adm:promo_manual:0")
+    kb.button(text="◀️ Назад",                   callback_data="adm:back_services")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ── ПРОДВИЖЕНИЕ В БОТЕ — handlers ────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+
+@dp.callback_query(F.data == "adm:promo_menu")
+async def cb_admin_promo_menu(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "📣 <b>Продвижение в боте</b>\n\nВыберите действие:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_promo_menu()
+    )
+    await cb.answer()
+
+
+@dp.callback_query(F.data == "adm:back_promo_menu")
+async def cb_admin_back_promo_menu(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    await cb.message.edit_text(
+        "📣 <b>Продвижение в боте</b>\n\nВыберите действие:",
+        parse_mode="HTML",
+        reply_markup=kb_admin_promo_menu()
+    )
+    await cb.answer()
+
+
+# ── Заявки на продвижение (статус pending) ────────────────────────────────
+@dp.callback_query(F.data == "adm:promo_requests")
+async def cb_admin_promo_requests(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT bp.id, bp.giveaway_id, g.internal_title
+            FROM bot_promotions bp
+            JOIN giveaways g ON g.id = bp.giveaway_id
+            WHERE bp.status = 'pending'
+            ORDER BY bp.created_at ASC
+        """))
+        rows = result.fetchall()
+
+    if not rows:
+        await cb.message.edit_text(
+            "📣 <b>Заявки на продвижение</b>\n\nНет новых заявок.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardBuilder().button(
+                text="◀️ Назад", callback_data="adm:promo_menu"
+            ).as_markup()
+        )
+        await cb.answer()
+        return
+
+    kb = InlineKeyboardBuilder()
+    for row in rows:
+        kb.button(
+            text=f"#{row.giveaway_id} — {row.internal_title[:30]}",
+            callback_data=f"adm:promo_req_info:{row.id}"
+        )
+    kb.button(text="◀️ Назад", callback_data="adm:promo_menu")
+    kb.adjust(1)
+
+    await cb.message.edit_text(
+        "📣 <b>Заявки на продвижение</b>\n\nВыберите заявку:",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+# ── Карточка заявки ───────────────────────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_req_info:"))
+async def cb_admin_promo_req_info(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[3])
+
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT bp.id, bp.giveaway_id, g.internal_title,
+                   bp.payment_method, bp.payment_status, bp.price_stars, bp.price_rub,
+                   bp.publish_type, bp.scheduled_at, bp.created_at,
+                   array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels
+            FROM bot_promotions bp
+            JOIN giveaways g ON g.id = bp.giveaway_id
+            LEFT JOIN giveaway_channels gc ON gc.giveaway_id = bp.giveaway_id
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE bp.id = :pid
+            GROUP BY bp.id, g.internal_title
+        """), {"pid": promo_id})
+        row = result.fetchone()
+
+    if not row:
+        await cb.answer("Заявка не найдена.", show_alert=True)
+        return
+
+    channels_str = ", ".join(row.channels) if row.channels else "—"
+    pay_method   = "Stars ⭐" if row.payment_method == "stars" else "Картой 💳"
+    pay_amount   = f"{row.price_stars} ⭐" if row.payment_method == "stars" else f"{row.price_rub} ₽"
+    time_str     = (
+        "Сразу после утверждения"
+        if row.publish_type == "immediate"
+        else row.scheduled_at.strftime("%d.%m.%Y %H:%M (МСК)") if row.scheduled_at else "—"
+    )
+
+    text = (
+        f"📣 <b>Заявка #{promo_id}</b>\n\n"
+        f"<b>Розыгрыш:</b> #{row.giveaway_id} — {row.internal_title}\n"
+        f"<b>Каналы/группы:</b> {channels_str}\n"
+        f"<b>Оплата:</b> {pay_method}, {pay_amount}\n"
+        f"<b>Статус оплаты:</b> {row.payment_status}\n"
+        f"<b>Время публикации:</b> {time_str}\n"
+        f"<b>Заявка создана:</b> {row.created_at.strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Утвердить", callback_data=f"adm:promo_approve:{promo_id}")
+    kb.button(text="◀️ Назад",     callback_data="adm:promo_requests")
+    kb.adjust(1)
+
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+# ── Утвердить заявку ──────────────────────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_approve:"))
+async def cb_admin_promo_approve(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[3])
+
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT bp.*, g.internal_title
+            FROM bot_promotions bp
+            JOIN giveaways g ON g.id = bp.giveaway_id
+            WHERE bp.id = :pid
+        """), {"pid": promo_id})
+        row = result.fetchone()
+
+        if not row:
+            await cb.answer("Заявка не найдена.", show_alert=True)
+            return
+
+        now_utc = datetime.now(timezone.utc)
+
+        if row.publish_type == "immediate" or (
+            row.scheduled_at and row.scheduled_at <= now_utc
+        ):
+            # Публикуем сразу
+            await s.execute(stext("""
+                UPDATE bot_promotions
+                SET status = 'published', approved_at = :now, published_at = :now
+                WHERE id = :pid
+            """), {"now": now_utc, "pid": promo_id})
+            await s.commit()
+            await _publish_giveaway_to_bot(row.giveaway_id)
+            await cb.message.edit_text(
+                f"✅ Розыгрыш <b>#{row.giveaway_id}</b> опубликован в боте!",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardBuilder().button(
+                    text="◀️ Назад", callback_data="adm:promo_menu"
+                ).as_markup()
+            )
+        else:
+            # Запланированная публикация
+            await s.execute(stext("""
+                UPDATE bot_promotions
+                SET status = 'approved', approved_at = :now
+                WHERE id = :pid
+            """), {"now": now_utc, "pid": promo_id})
+            await s.commit()
+            sched_str = row.scheduled_at.strftime("%d.%m.%Y %H:%M")
+            await cb.message.edit_text(
+                f"✅ Заявка утверждена!\n\nРозыгрыш <b>#{row.giveaway_id}</b> "
+                f"будет опубликован <b>{sched_str} (МСК)</b>.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardBuilder().button(
+                    text="◀️ Назад", callback_data="adm:promo_menu"
+                ).as_markup()
+            )
+
+    await cb.answer()
+
+
+# ── Ожидают публикации (статус approved) ─────────────────────────────────
+@dp.callback_query(F.data == "adm:promo_scheduled")
+async def cb_admin_promo_scheduled(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT bp.id, bp.giveaway_id, g.internal_title
+            FROM bot_promotions bp
+            JOIN giveaways g ON g.id = bp.giveaway_id
+            WHERE bp.status = 'approved'
+            ORDER BY bp.scheduled_at ASC NULLS LAST
+        """))
+        rows = result.fetchall()
+
+    if not rows:
+        await cb.message.edit_text(
+            "⏳ <b>Ожидают публикации</b>\n\nНет запланированных публикаций.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardBuilder().button(
+                text="◀️ Назад", callback_data="adm:promo_menu"
+            ).as_markup()
+        )
+        await cb.answer()
+        return
+
+    kb = InlineKeyboardBuilder()
+    for row in rows:
+        kb.button(
+            text=f"#{row.giveaway_id} — {row.internal_title[:30]}",
+            callback_data=f"adm:promo_sched_info:{row.id}"
+        )
+    kb.button(text="◀️ Назад", callback_data="adm:promo_menu")
+    kb.adjust(1)
+
+    await cb.message.edit_text(
+        "⏳ <b>Ожидают публикации</b>\n\nВыберите розыгрыш:",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+# ── Карточка запланированной публикации ───────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_sched_info:"))
+async def cb_admin_promo_sched_info(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[3])
+
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT bp.id, bp.giveaway_id, g.internal_title,
+                   bp.payment_method, bp.price_stars, bp.price_rub,
+                   bp.publish_type, bp.scheduled_at, bp.approved_at,
+                   array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels
+            FROM bot_promotions bp
+            JOIN giveaways g ON g.id = bp.giveaway_id
+            LEFT JOIN giveaway_channels gc ON gc.giveaway_id = bp.giveaway_id
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE bp.id = :pid
+            GROUP BY bp.id, g.internal_title
+        """), {"pid": promo_id})
+        row = result.fetchone()
+
+    if not row:
+        await cb.answer("Не найдено.", show_alert=True)
+        return
+
+    channels_str = ", ".join(row.channels) if row.channels else "—"
+    pay_method   = "Stars ⭐" if row.payment_method == "stars" else "Картой 💳"
+    pay_amount   = f"{row.price_stars} ⭐" if row.payment_method == "stars" else f"{row.price_rub} ₽"
+    time_str     = (
+        row.scheduled_at.strftime("%d.%m.%Y %H:%M (МСК)")
+        if row.scheduled_at else "Сразу (уже утверждено)"
+    )
+
+    text = (
+        f"⏳ <b>Запланирована публикация #{promo_id}</b>\n\n"
+        f"<b>Розыгрыш:</b> #{row.giveaway_id} — {row.internal_title}\n"
+        f"<b>Каналы/группы:</b> {channels_str}\n"
+        f"<b>Оплата:</b> {pay_method}, {pay_amount}\n"
+        f"<b>Время публикации:</b> {time_str}\n"
+        f"<b>Утверждено:</b> {row.approved_at.strftime('%d.%m.%Y %H:%M') if row.approved_at else '—'}"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚀 Опубликовать сейчас",   callback_data=f"adm:promo_pub_now:{promo_id}")
+    kb.button(text="❌ Отменить публикацию",    callback_data=f"adm:promo_cancel_confirm:{promo_id}")
+    kb.button(text="◀️ Назад",                  callback_data="adm:promo_scheduled")
+    kb.adjust(1)
+
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+# ── Опубликовать сейчас ───────────────────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_pub_now:"))
+async def cb_admin_promo_pub_now(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[3])
+
+    async with Session() as s:
+        result = await s.execute(stext(
+            "SELECT giveaway_id FROM bot_promotions WHERE id = :pid"
+        ), {"pid": promo_id})
+        row = result.fetchone()
+        if not row:
+            await cb.answer("Не найдено.", show_alert=True)
+            return
+
+        await s.execute(stext("""
+            UPDATE bot_promotions
+            SET status = 'published', published_at = :now
+            WHERE id = :pid
+        """), {"now": datetime.now(timezone.utc), "pid": promo_id})
+        await s.commit()
+
+    await _publish_giveaway_to_bot(row.giveaway_id)
+    await cb.message.edit_text(
+        f"✅ Розыгрыш <b>#{row.giveaway_id}</b> опубликован в боте!",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="◀️ Назад", callback_data="adm:promo_menu"
+        ).as_markup()
+    )
+    await cb.answer()
+
+
+# ── Отменить публикацию — подтверждение (pop-up) ─────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_cancel_confirm:"))
+async def cb_admin_promo_cancel_confirm(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[3])
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да, отменить",  callback_data=f"adm:promo_cancel:{promo_id}")
+    kb.button(text="◀️ Отмена",        callback_data=f"adm:promo_sched_info:{promo_id}")
+    kb.adjust(1)
+
+    await cb.message.edit_text(
+        "⚠️ <b>Вы уверены?</b>\n\n"
+        "Публикация будет отменена, услуга не будет оказана.",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+# ── Отменить публикацию — выполнение ─────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_cancel:"))
+async def cb_admin_promo_cancel(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    promo_id = int(cb.data.split(":")[2])
+
+    async with Session() as s:
+        result = await s.execute(stext(
+            "SELECT giveaway_id, owner_user_id FROM bot_promotions WHERE id = :pid"
+        ), {"pid": promo_id})
+        row = result.fetchone()
+        if not row:
+            await cb.answer("Не найдено.", show_alert=True)
+            return
+
+        await s.execute(stext("""
+            UPDATE bot_promotions SET status = 'cancelled' WHERE id = :pid
+        """), {"pid": promo_id})
+        await s.commit()
+
+    try:
+        await bot.send_message(
+            chat_id=row.owner_user_id,
+            text=(
+                f"❌ <b>Публикация розыгрыша #{row.giveaway_id} отменена.</b>\n\n"
+                f"По вопросам возврата средств обращайтесь: @prizeme_support"
+            ),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+    await cb.message.edit_text(
+        f"❌ Публикация розыгрыша <b>#{row.giveaway_id}</b> отменена.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="◀️ Назад", callback_data="adm:promo_menu"
+        ).as_markup()
+    )
+    await cb.answer()
+
+
+# ── Продвинуть вручную — список всех активных розыгрышей (с пагинацией) ──
+@dp.callback_query(F.data.startswith("adm:promo_manual:"))
+async def cb_admin_promo_manual(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    offset = int(cb.data.split(":")[2])
+    page_size = 10
+
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT id, internal_title
+            FROM giveaways
+            WHERE status = 'active'
+            ORDER BY id DESC
+            LIMIT :lim OFFSET :off
+        """), {"lim": page_size + 1, "off": offset})
+        rows = result.fetchall()
+
+    has_next = len(rows) > page_size
+    rows     = rows[:page_size]
+    has_prev = offset > 0
+
+    if not rows:
+        await cb.message.edit_text(
+            "🚀 <b>Продвинуть вручную</b>\n\nНет активных розыгрышей.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardBuilder().button(
+                text="◀️ Назад", callback_data="adm:promo_menu"
+            ).as_markup()
+        )
+        await cb.answer()
+        return
+
+    kb = InlineKeyboardBuilder()
+    for row in rows:
+        kb.button(
+            text=f"#{row.id} — {row.internal_title[:30]}",
+            callback_data=f"adm:promo_manual_info:{row.id}"
+        )
+
+    nav_row = []
+    if has_prev:
+        nav_row.append(("◀️", f"adm:promo_manual:{offset - page_size}"))
+    if has_next:
+        nav_row.append(("▶️", f"adm:promo_manual:{offset + page_size}"))
+
+    kb.adjust(1)
+    if nav_row:
+        nav_kb = InlineKeyboardBuilder()
+        for label, data in nav_row:
+            nav_kb.button(text=label, callback_data=data)
+        kb.attach(nav_kb)
+
+    kb.button(text="◀️ Назад", callback_data="adm:promo_menu")
+    kb.adjust(1)
+
+    await cb.message.edit_text(
+        f"🚀 <b>Продвинуть вручную</b>\n\nВыберите розыгрыш:",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+# ── Продвинуть вручную — карточка розыгрыша ──────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_manual_info:"))
+async def cb_admin_promo_manual_info(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    giveaway_id = int(cb.data.split(":")[3])
+
+    async with Session() as s:
+        result = await s.execute(stext("""
+            SELECT g.id, g.internal_title, g.end_at_utc,
+                   array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels
+            FROM giveaways g
+            LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE g.id = :gid AND g.status = 'active'
+            GROUP BY g.id
+        """), {"gid": giveaway_id})
+        row = result.fetchone()
+
+    if not row:
+        await cb.answer("Розыгрыш не найден.", show_alert=True)
+        return
+
+    channels_str = ", ".join(row.channels) if row.channels else "—"
+    end_str      = row.end_at_utc.strftime("%d.%m.%Y %H:%M") if row.end_at_utc else "—"
+
+    text = (
+        f"🚀 <b>Розыгрыш #{giveaway_id}</b>\n\n"
+        f"<b>Название:</b> {row.internal_title}\n"
+        f"<b>Каналы/группы:</b> {channels_str}\n"
+        f"<b>Завершается:</b> {end_str} UTC"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📢 Опубликовать", callback_data=f"adm:promo_manual_confirm:{giveaway_id}")
+    kb.button(text="◀️ Назад",        callback_data="adm:promo_manual:0")
+    kb.adjust(1)
+
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+# ── Продвинуть вручную — подтверждение (pop-up) ───────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_manual_confirm:"))
+async def cb_admin_promo_manual_confirm(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    giveaway_id = int(cb.data.split(":")[3])
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да, опубликовать", callback_data=f"adm:promo_manual_pub:{giveaway_id}")
+    kb.button(text="◀️ Отмена",           callback_data=f"adm:promo_manual_info:{giveaway_id}")
+    kb.adjust(1)
+
+    await cb.message.edit_text(
+        f"⚠️ <b>Опубликовать розыгрыш #{giveaway_id} в боте?</b>\n\n"
+        f"Все пользователи получат уведомление.",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+# ── Продвинуть вручную — публикация ──────────────────────────────────────
+@dp.callback_query(F.data.startswith("adm:promo_manual_pub:"))
+async def cb_admin_promo_manual_pub(cb: CallbackQuery):
+    if not await _admin_guard(cb): return
+    giveaway_id = int(cb.data.split(":")[3])
+
+    await _publish_giveaway_to_bot(giveaway_id)
+
+    await cb.message.edit_text(
+        f"✅ Розыгрыш <b>#{giveaway_id}</b> опубликован в боте!",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="◀️ Назад", callback_data="adm:promo_menu"
+        ).as_markup()
+    )
+    await cb.answer()
+
+
+# ── Вспомогательная функция публикации розыгрыша в бот ───────────────────
+async def _publish_giveaway_to_bot(giveaway_id: int):
+    """Публикует пост розыгрыша в личку всем пользователям бота."""
+    async with Session() as s:
+        gw_result = await s.execute(stext("""
+            SELECT g.id, g.internal_title, g.end_at_utc, g.owner_user_id,
+                   array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels
+            FROM giveaways g
+            LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE g.id = :gid AND g.status = 'active'
+            GROUP BY g.id
+        """), {"gid": giveaway_id})
+        gw = gw_result.fetchone()
+
+        if not gw:
+            logging.warning(f"[PROMO_PUB] Розыгрыш #{giveaway_id} не найден или неактивен")
+            return
+
+        # Получаем всех пользователей
+        users_result = await s.execute(stext(
+            "SELECT user_id FROM users ORDER BY user_id ASC"
+        ))
+        user_ids = [r.user_id for r in users_result.fetchall()]
+
+    channels_str = ", ".join(gw.channels) if gw.channels else "—"
+    end_str      = gw.end_at_utc.strftime("%d.%m.%Y %H:%M") if gw.end_at_utc else "—"
+
+    text = (
+        f"🎉 <b>Новый розыгрыш!</b>\n\n"
+        f"<b>{gw.internal_title}</b>\n\n"
+        f"📢 <b>Каналы:</b> {channels_str}\n"
+        f"⏰ <b>Завершается:</b> {end_str} UTC\n\n"
+        f"Нажмите «Участвовать», чтобы принять участие!"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🎟 Участвовать", callback_data=f"participate:{giveaway_id}")
+    markup = kb.as_markup()
+
+    sent = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            await bot.send_message(chat_id=uid, text=text,
+                                   parse_mode="HTML", reply_markup=markup)
+            sent += 1
+            await asyncio.sleep(0.05)  # антифлуд
+        except Exception:
+            failed += 1
+
+    logging.info(f"[PROMO_PUB] #{giveaway_id}: отправлено {sent}, ошибок {failed}")
+
+
+# ── Планировщик запланированных публикаций ────────────────────────────────
+async def check_scheduled_promotions():
+    """Запускается каждую минуту — публикует розыгрыши по расписанию."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            now_utc = datetime.now(timezone.utc)
+            async with Session() as s:
+                result = await s.execute(stext("""
+                    SELECT id, giveaway_id
+                    FROM bot_promotions
+                    WHERE status = 'approved'
+                      AND publish_type = 'scheduled'
+                      AND scheduled_at <= :now
+                """), {"now": now_utc})
+                due = result.fetchall()
+
+                for row in due:
+                    await s.execute(stext("""
+                        UPDATE bot_promotions
+                        SET status = 'published', published_at = :now
+                        WHERE id = :pid
+                    """), {"now": now_utc, "pid": row.id})
+                await s.commit()
+
+            for row in due:
+                await _publish_giveaway_to_bot(row.giveaway_id)
+                logging.info(f"[PROMO_SCHED] Опубликован #{row.giveaway_id}")
+
+        except Exception as e:
+            logging.error(f"[PROMO_SCHED] Ошибка: {e}")
+            
 
 # ── Уровень 3: меню топ-розыгрышей ───────────────────────────────────────
 def kb_admin_top_menu() -> InlineKeyboardMarkup:
