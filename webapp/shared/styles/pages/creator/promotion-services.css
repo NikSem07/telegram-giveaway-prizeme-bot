@@ -72,3 +72,39 @@
     border-color: var(--color-primary, #007AFF) !important;
     background: rgba(0, 122, 255, 0.07) !important;
 }
+
+/* Кнопка оплаты — прижата к низу экрана, точно как в топ-чекауте */
+#promo-footer-pay {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding-top: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
+    z-index: 100;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(15, 17, 21, 0.88) 28%,
+        rgba(15, 17, 21, 0.98) 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* Кнопка оплаты — прижата к низу, точно как #tc-footer-pay в топ-чекауте */
+#promo-footer-pay {
+    bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding-top: 12px;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(15, 17, 21, 0.88) 28%,
+        rgba(15, 17, 21, 0.98) 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
