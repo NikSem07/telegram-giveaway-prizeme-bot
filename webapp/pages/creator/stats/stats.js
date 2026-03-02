@@ -212,33 +212,46 @@ function renderGwList(filter) {
     el.innerHTML = filtered.map((g, i) => {
         const s   = g.status || 'draft';
         const chs = (g.channels || []).filter(Boolean).join(', ') || '—';
-        
-        // Бейджи статуса в стиле Tribute (pill с годом)
+
         const badgeColors = {
-            active:    'background:rgba(52,199,89,0.2);color:#34C759;border:1px solid rgba(52,199,89,0.4)',
-            finished:  'background:rgba(255,59,48,0.2);color:#FF3B30;border:1px solid rgba(255,59,48,0.4)',
-            draft:     'background:rgba(255,149,0,0.2);color:#FF9500;border:1px solid rgba(255,149,0,0.4)',
-            cancelled: 'background:rgba(255,59,48,0.15);color:#FF3B30;border:1px solid rgba(255,59,48,0.3)',
+            active:    'background:rgba(52,199,89,0.18);color:#34C759;border:1px solid rgba(52,199,89,0.35)',
+            finished:  'background:rgba(255,59,48,0.18);color:#FF453A;border:1px solid rgba(255,59,48,0.35)',
+            draft:     'background:rgba(255,149,0,0.18);color:#FF9F0A;border:1px solid rgba(255,149,0,0.35)',
+            cancelled: 'background:rgba(255,59,48,0.15);color:#FF453A;border:1px solid rgba(255,59,48,0.3)',
         };
         const badgeStyle = badgeColors[s] || badgeColors.draft;
-        const badgeText  = { active:'● Активен', finished:'● Завершён', draft:'● Черновик', cancelled:'● Отменён' }[s] || s;
+        const badgeText  = { active:'Активен', finished:'Завершён', draft:'Черновик', cancelled:'Отменён' }[s] || s;
+
+        const avatarUrl = g.first_channel_chat_id
+            ? `/api/chat_avatar/${g.first_channel_chat_id}`
+            : null;
+
+        const avatarHtml = avatarUrl
+            ? `<img src="${avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+                onerror="this.parentElement.innerHTML='🎁'">`
+            : '🎁';
 
         return `
-        <div class="participant-giveaways-card st-gw-item" data-gid="${g.id}" style="animation-delay:${Math.min(i,6)*0.05}s">
-            <div class="participant-giveaways-card__left">
-                <div class="participant-giveaways-card__avatar">🎁</div>
-            </div>
-            <div class="participant-giveaways-card__body">
-                <div class="participant-giveaways-card__channels" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                    <span>${_esc(chs)}</span>
-                    <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;${badgeStyle}">${badgeText}</span>
+        <div class="st-gw-card" data-gid="${g.id}" style="animation-delay:${Math.min(i,6)*0.05}s">
+            <div class="st-gw-card__left">
+                <div class="st-gw-card__avatar">${avatarHtml}</div>
+                <div class="st-gw-card__participants">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6">
+                        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                    </svg>
+                    ${fmt(g.participants)}
                 </div>
-                <div class="participant-giveaways-card__title">${_esc(g.internal_title)}</div>
-                <div class="participant-giveaways-card__meta">👥 ${fmt(g.participants)} участников</div>
             </div>
-            <div class="participant-giveaways-card__arrow">
-                <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                    <path d="M3 1.5l3 3-3 3" stroke="#737375" stroke-width="1.5" stroke-linecap="round"/>
+            <div class="st-gw-card__body">
+                <div class="st-gw-card__top">
+                    <span class="st-gw-card__channels">${_esc(chs)}</span>
+                    <span class="st-gw-card__badge" style="${badgeStyle}">${badgeText}</span>
+                </div>
+                <div class="st-gw-card__title">${_esc(g.internal_title)}</div>
+            </div>
+            <div class="st-gw-card__arrow">
+                <svg width="9" height="14" viewBox="0 0 9 14" fill="none">
+                    <path d="M1.5 1l6 6-6 6" stroke="#737375" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
         </div>`;

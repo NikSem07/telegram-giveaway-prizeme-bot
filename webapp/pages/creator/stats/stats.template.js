@@ -44,7 +44,7 @@ export function statsOverviewTemplate() {
     </div>
 
     <div class="st-section">
-        <div class="st-section-lbl">Розыгрыши</div>
+        <div class="st-section-lbl">Мои розыгрыши</div>
         <div class="st-filters" id="st-filters">
             <button class="st-filter-btn st-filter-btn--on" data-filter="all">Все</button>
             <button class="st-filter-btn" data-filter="active">Активные</button>

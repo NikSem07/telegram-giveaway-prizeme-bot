@@ -2776,7 +2776,8 @@ app.post('/api/stats/giveaways_list', async (req, res) => {
         g.id, g.internal_title, g.status, g.created_at, g.end_at_utc,
         COUNT(e.id) FILTER (WHERE e.prelim_ok = true) AS participants,
         array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels,
-        MIN(oc.username) AS first_channel_username
+        MIN(oc.username) AS first_channel_username,
+        (array_agg(oc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
       FROM giveaways g
       LEFT JOIN entries e ON e.giveaway_id = g.id
       LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
