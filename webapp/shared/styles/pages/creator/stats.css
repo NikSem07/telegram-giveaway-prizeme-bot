@@ -169,7 +169,7 @@ body.page-stats #main-content {
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(28, 28, 30, 1);
+    background: #1c1c1e !important;
     border-radius: 12px;
     padding: 8px 10px;
     cursor: pointer;
@@ -220,7 +220,7 @@ body.page-stats #main-content {
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 3px;
     font-size: 10px;
@@ -228,10 +228,13 @@ body.page-stats #main-content {
     color: rgba(255, 255, 255, 0.9);
     background: rgba(0, 0, 0, 0.72);
     border-radius: 20px;
-    padding: 2px 6px 2px 4px;
+    padding: 2px 6px 2px 5px;
     white-space: nowrap;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .st-gw-card__body {

@@ -27,6 +27,22 @@ function pct(a, b) {
     return Math.round(na / nb * 100) + '%';
 }
 
+function _pluralTickets(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'Билетов';
+    if (mod10 === 1) return 'Билет';
+    if (mod10 >= 2 && mod10 <= 4) return 'Билета';
+    return 'Билетов';
+}
+
+function _pluralGiveaways(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'Розыгрышей';
+    if (mod10 === 1) return 'Розыгрыш';
+    if (mod10 >= 2 && mod10 <= 4) return 'Розыгрыша';
+    return 'Розыгрышей';
+}
+
 function _esc(s) {
     if (!s) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -97,7 +113,12 @@ async function renderOverview() {
 function _initLottie() {
     const wrap = document.getElementById('st-lottie-wrap');
     if (!wrap) return;
-    if (wrap.querySelector('canvas,svg')) return; // уже инициализирован
+    // Уничтожаем предыдущую анимацию если есть
+    if (wrap._lottieAnim) {
+        try { wrap._lottieAnim.destroy(); } catch(e) {}
+        wrap._lottieAnim = null;
+        wrap.innerHTML = '';
+    }
 
     if (!window.lottie) {
         const s = document.createElement('script');
@@ -110,16 +131,17 @@ function _initLottie() {
 }
 
 function _playLottie(wrap) {
-    fetch('/miniapp-static/assets/gif/Graph-Stats.json')
+    fetch('/miniapp-static/assets/gif/Programming-Computer.json')
         .then(r => r.json())
         .then(animData => {
-            window.lottie.loadAnimation({
+            const anim = window.lottie.loadAnimation({
                 container: wrap,
                 renderer: 'svg',
                 loop: true,
                 autoplay: true,
                 animationData: animData
             });
+            wrap._lottieAnim = anim;
         })
         .catch(e => { console.warn('[stats/lottie]', e); wrap.style.display = 'none'; });
 }
@@ -135,8 +157,18 @@ async function loadOverviewData() {
         if (!d.ok) return;
 
         const ov = d.overview;
-        document.getElementById('kpi-participants').textContent = fmt(ov.total_entries);
-        document.getElementById('kpi-total').textContent        = fmt((Number(ov.active_giveaways)||0) + (Number(ov.finished_giveaways)||0));
+        const totalEntries = Number(ov.total_entries) || 0;
+        const totalGiveaways = (Number(ov.active_giveaways)||0) + (Number(ov.finished_giveaways)||0);
+
+        document.getElementById('kpi-participants').textContent = fmt(totalEntries);
+        document.getElementById('kpi-total').textContent        = fmt(totalGiveaways);
+
+        // Склонение меток
+        const lblP = document.getElementById('kpi-participants-lbl');
+        if (lblP) lblP.textContent = _pluralTickets(totalEntries);
+        const lblT = document.getElementById('kpi-total-lbl');
+        if (lblT) lblT.textContent = _pluralGiveaways(totalGiveaways);
+
         document.getElementById('kpi-active').textContent       = fmt(ov.active_giveaways);
         document.getElementById('kpi-finished').textContent     = fmt(ov.finished_giveaways);
 
@@ -266,9 +298,7 @@ function renderGwList(filter) {
             <div class="st-gw-card__left">
                 <div class="st-gw-card__avatar">${avatarHtml}</div>
                 <div class="st-gw-card__participants">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.75;flex-shrink:0">
-                        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                    </svg>
+                    <img src="/miniapp-static/assets/icons/profile-icon.svg" width="13" height="13" style="opacity:0.8;flex-shrink:0;filter:brightness(10)">
                     ${fmt(g.participants)}
                 </div>
             </div>

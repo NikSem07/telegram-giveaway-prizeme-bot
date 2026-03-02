@@ -9,19 +9,19 @@ export function statsOverviewTemplate() {
     <div class="st-header">
         <div class="st-lottie-wrap" id="st-lottie-wrap"></div>
         <div class="st-title">Статистика</div>
-        <div class="st-subtitle">Здесь представлена общая статистика по всем розыгрышам, для просмотра статистики по отдельному розыгрышу выберите соответствующий розыгрыш из списка ниже</div>
+        <div class="st-subtitle">В разделе общая статистика по всем розыгрышам, ниже можете выбрать конкретный розыгрыш</div>
     </div>
 
     <div class="st-kpi-row">
         <div class="st-kpi" style="--st-kpi-color:#007AFF">
             <span class="st-kpi-emoji">🎟</span>
             <div class="st-kpi-val" id="kpi-participants">—</div>
-            <div class="st-kpi-lbl">Участников</div>
+            <div class="st-kpi-lbl">Билетов</div>
         </div>
         <div class="st-kpi" style="--st-kpi-color:#FF9500">
             <span class="st-kpi-emoji">🏆</span>
             <div class="st-kpi-val" id="kpi-total">—</div>
-            <div class="st-kpi-lbl">Всего</div>
+            <div class="st-kpi-lbl">Розыгрышей</div>
         </div>
         <div class="st-kpi" style="--st-kpi-color:#34C759">
             <span class="st-kpi-emoji">🚀</span>
@@ -37,7 +37,7 @@ export function statsOverviewTemplate() {
 
     <div class="st-section">
         <div class="st-section-lbl">Мои розыгрыши</div>
-        <<div class="st-filters" id="st-filters">
+        <div class="st-filters" id="st-filters">
             <button class="st-filter-btn st-filter-btn--on" data-filter="all">Все</button>
             <button class="st-filter-btn" data-filter="active">Активные</button>
             <button class="st-filter-btn" data-filter="finished">Завершённые</button>
