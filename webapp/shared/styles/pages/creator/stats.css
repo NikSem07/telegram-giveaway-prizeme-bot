@@ -22,17 +22,27 @@ body.page-stats #main-content {
 }
 
 /* ── Хедер ───────────────────────────────────────────────────────────────── */
-.st-header { padding: 2px 0 20px; }
+.st-header { padding: 2px 0 20px; text-align: center; }
 
 .st-title {
     font-size: 24px;
     font-weight: 800;
     color: var(--color-text);
     letter-spacing: -0.4px;
-    margin-bottom: 3px;
+    margin-bottom: 6px;
 }
 
-.st-subtitle { font-size: 13px; color: var(--color-text-secondary); }
+.st-subtitle {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.st-lottie-wrap {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 8px;
+}
 
 /* ── KPI сетка ───────────────────────────────────────────────────────────── */
 .st-kpi-row {

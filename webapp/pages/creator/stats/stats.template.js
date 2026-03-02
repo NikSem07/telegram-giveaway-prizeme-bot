@@ -7,8 +7,9 @@ export function statsOverviewTemplate() {
     return `
 <div class="stats-page" id="stats-overview-page">
     <div class="st-header">
-        <div class="st-title">📊 Статистика</div>
-        <div class="st-subtitle">Аналитика по всем розыгрышам</div>
+        <div class="st-lottie-wrap" id="st-lottie-wrap"></div>
+        <div class="st-title">Статистика</div>
+        <div class="st-subtitle">Здесь представлена общая статистика по всем розыгрышам, для просмотра статистики по отдельному розыгрышу выберите соответствующий розыгрыш из списка ниже</div>
     </div>
 
     <div class="st-kpi-row">
@@ -17,15 +18,15 @@ export function statsOverviewTemplate() {
             <div class="st-kpi-val" id="kpi-participants">—</div>
             <div class="st-kpi-lbl">Участников</div>
         </div>
-        <div class="st-kpi" style="--st-kpi-color:#34C759">
-            <span class="st-kpi-emoji">🚀</span>
-            <div class="st-kpi-val" id="kpi-active">—</div>
-            <div class="st-kpi-lbl">Активных</div>
-        </div>
         <div class="st-kpi" style="--st-kpi-color:#FF9500">
             <span class="st-kpi-emoji">🏆</span>
             <div class="st-kpi-val" id="kpi-total">—</div>
             <div class="st-kpi-lbl">Всего</div>
+        </div>
+        <div class="st-kpi" style="--st-kpi-color:#34C759">
+            <span class="st-kpi-emoji">🚀</span>
+            <div class="st-kpi-val" id="kpi-active">—</div>
+            <div class="st-kpi-lbl">Активных</div>
         </div>
         <div class="st-kpi" style="--st-kpi-color:#FF2D55">
             <span class="st-kpi-emoji">✅</span>
@@ -35,21 +36,11 @@ export function statsOverviewTemplate() {
     </div>
 
     <div class="st-section">
-        <div class="st-section-lbl">Рост участников — 30 дней</div>
-        <div class="st-chart-card">
-            <div class="st-chart-body" id="overview-chart-body">
-                <canvas id="overview-chart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="st-section">
         <div class="st-section-lbl">Мои розыгрыши</div>
-        <div class="st-filters" id="st-filters">
+        <<div class="st-filters" id="st-filters">
             <button class="st-filter-btn st-filter-btn--on" data-filter="all">Все</button>
             <button class="st-filter-btn" data-filter="active">Активные</button>
             <button class="st-filter-btn" data-filter="finished">Завершённые</button>
-            <button class="st-filter-btn" data-filter="draft">Черновики</button>
         </div>
         <div class="st-gw-list" id="st-gw-list">
             <div class="st-loading">
