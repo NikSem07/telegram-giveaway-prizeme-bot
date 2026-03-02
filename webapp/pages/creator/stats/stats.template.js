@@ -54,28 +54,42 @@ export function statsOverviewTemplate() {
 
 export function statsDetailTemplate(g) {
     const s = g.status || 'draft';
+    const badgeColors = {
+        active:    'background:rgba(52,199,89,0.18);color:#34C759;border:1px solid rgba(52,199,89,0.35)',
+        finished:  'background:rgba(255,59,48,0.18);color:#FF453A;border:1px solid rgba(255,59,48,0.35)',
+        draft:     'background:rgba(255,149,0,0.18);color:#FF9F0A;border:1px solid rgba(255,149,0,0.35)',
+        cancelled: 'background:rgba(255,59,48,0.15);color:#FF453A;border:1px solid rgba(255,59,48,0.3)',
+    };
+    const endedAt = g.ended_at ? new Date(g.ended_at).toLocaleString('ru-RU', {
+        day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+    }) : null;
+    const timeBadge = s === 'active'
+        ? `<span class="st-detail-badge" id="detail-timer-badge" style="background:rgba(0,122,255,0.15);color:#007AFF;border:1px solid rgba(0,122,255,0.3)">⏱ <span id="detail-timer">...</span></span>`
+        : endedAt
+            ? `<span class="st-detail-badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-secondary);border:1px solid rgba(255,255,255,0.1)">${endedAt}</span>`
+            : '';
     return `
 <div class="st-detail" id="st-detail-page">
     <div class="st-detail-head">
-        <div class="st-detail-ava" id="detail-ava">🎁</div>
-        <div class="st-detail-info">
-            <div class="st-detail-title">${_esc(g.internal_title)}</div>
-            <span class="st-badge st-badge--${STATUS_CLS[s]||'draft'}">${STATUS_LABEL[s]||s}</span>
+        <div class="st-detail-title">${_esc(g.internal_title)}</div>
+        <div class="st-detail-badges">
+            <span class="st-detail-badge" style="${badgeColors[s]||badgeColors.draft}">${STATUS_LABEL[s]||s}</span>
+            ${timeBadge}
         </div>
     </div>
 
     <div class="st-m3">
         <div class="st-m3-card">
             <div class="st-m3-val" id="dm-parts">—</div>
-            <div class="st-m3-lbl">Участников</div>
+            <div class="st-m3-lbl" id="dm-parts-lbl">УЧАСТНИКОВ</div>
         </div>
         <div class="st-m3-card">
             <div class="st-m3-val" id="dm-clicks">—</div>
-            <div class="st-m3-lbl">Кликов</div>
+            <div class="st-m3-lbl" id="dm-clicks-lbl">КЛИКОВ</div>
         </div>
         <div class="st-m3-card">
             <div class="st-m3-val" id="dm-conv">—</div>
-            <div class="st-m3-lbl">Конверсия</div>
+            <div class="st-m3-lbl">КОНВЕРСИЯ</div>
         </div>
     </div>
 

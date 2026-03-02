@@ -102,6 +102,7 @@ async function renderOverview() {
     if (!main) return;
     main.innerHTML = statsOverviewTemplate();
     window.scrollTo({ top: 0, behavior: 'instant' });
+    document.body.classList.add('page-stats');
 
     // Навешиваем фильтры
     document.getElementById('st-filters')?.addEventListener('click', e => {
@@ -350,6 +351,9 @@ async function renderDetail(giveaway) {
 
     main.innerHTML = statsDetailTemplate(giveaway);
     window.scrollTo({ top: 0, behavior: 'instant' });
+    if (giveaway.status === 'active' && giveaway.ended_at) {
+        _startDetailTimer(giveaway.ended_at);
+    }
     _showBack(() => {
         _hideBack();
         renderOverview().then(() => {
@@ -396,13 +400,57 @@ async function renderDetail(giveaway) {
 }
 
 function _renderMetrics(d) {
-    const m = d.metrics || {};
-    const parts  = Number(m.participants)  || 0;
-    const clicks = Number(m.total_clicks)  || 0;
+    const m      = d.metrics || {};
+    const parts  = Number(m.participants) || 0;
+    const clicks = Number(m.total_clicks) || 0;
     const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+
     el('dm-parts',  fmt(parts));
     el('dm-clicks', fmt(clicks));
     el('dm-conv',   pct(parts, clicks));
+
+    const partsLbl  = document.getElementById('dm-parts-lbl');
+    const clicksLbl = document.getElementById('dm-clicks-lbl');
+    if (partsLbl)  partsLbl.textContent  = _pluralParticipants(parts).toUpperCase();
+    if (clicksLbl) clicksLbl.textContent = _pluralClicks(clicks).toUpperCase();
+}
+
+let _detailTimerInterval = null;
+
+function _startDetailTimer(endedAt) {
+    if (_detailTimerInterval) clearInterval(_detailTimerInterval);
+    const endMs = new Date(endedAt).getTime();
+    const update = () => {
+        const el = document.getElementById('detail-timer');
+        if (!el) { clearInterval(_detailTimerInterval); return; }
+        const diff = endMs - Date.now();
+        if (diff <= 0) { el.textContent = 'Завершён'; clearInterval(_detailTimerInterval); return; }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        el.textContent = d > 0
+            ? `${d} дн., ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+            : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    };
+    update();
+    _detailTimerInterval = setInterval(update, 1000);
+}
+
+function _pluralParticipants(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'участников';
+    if (mod10 === 1) return 'участвует';
+    if (mod10 >= 2 && mod10 <= 4) return 'участвуют';
+    return 'участвуют';
+}
+
+function _pluralClicks(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'кликов';
+    if (mod10 === 1) return 'клик';
+    if (mod10 >= 2 && mod10 <= 4) return 'клика';
+    return 'кликов';
 }
 
 function _renderDetailChart(d, period) {
@@ -427,6 +475,9 @@ function _renderDetailChart(d, period) {
         let acc = 0;
         rows.forEach(r => { acc += Number(r.participants) || 0; cumul.push(acc); });
 
+        const maxVal = Math.max(...cumul, 1);
+        const stepSize = Math.ceil(maxVal / 4);
+
         _charts['detail'] = new Chart(canvas, {
             type: 'line',
             data: {
@@ -434,39 +485,60 @@ function _renderDetailChart(d, period) {
                 datasets: [{
                     data: cumul,
                     borderColor: '#007AFF',
-                    backgroundColor: 'rgba(0,122,255,0.1)',
+                    backgroundColor: 'rgba(0,122,255,0.08)',
                     borderWidth: 2,
                     fill: true,
-                    tension: 0.4,
+                    tension: 0.35,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 6,
                     pointHoverBackgroundColor: '#007AFF',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 500, easing: 'easeOutQuart' },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: isDark() ? '#1c1c1e' : '#fff',
-                        titleColor: isDark() ? '#fff' : '#000',
-                        bodyColor:  isDark() ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
+                        titleColor: isDark() ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+                        bodyColor:  isDark() ? '#fff' : '#000',
                         borderColor: isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                         borderWidth: 1,
-                        callbacks: { label: ctx => ' ' + fmt(ctx.raw) + ' участников' }
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            title: items => items[0]?.label || '',
+                            label: ctx => ' ' + ctx.raw.toLocaleString('ru-RU') + ' участников',
+                        }
                     }
                 },
                 scales: {
                     x: {
                         grid: { color: c.grid, drawBorder: false },
-                        ticks: { color: c.text, font: { size: 10 }, maxTicksLimit: 6 }
+                        border: { display: false },
+                        ticks: {
+                            color: c.text,
+                            font: { size: 10 },
+                            maxTicksLimit: 5,
+                            maxRotation: 0,
+                        }
                     },
                     y: {
                         grid: { color: c.grid, drawBorder: false },
-                        ticks: { color: c.text, font: { size: 10 }, callback: v => fmt(v) },
-                        beginAtZero: true
+                        border: { display: false },
+                        beginAtZero: true,
+                        ticks: {
+                            color: c.text,
+                            font: { size: 10 },
+                            stepSize,
+                            precision: 0,
+                            callback: v => Number.isInteger(v) ? v.toLocaleString('ru-RU') : null,
+                        }
                     }
                 }
             }
@@ -504,28 +576,57 @@ function _renderFunnel(d) {
 function _renderSources(d) {
     const el = document.getElementById('st-sources');
     if (!el) return;
-    const srcs = d.sources || [];
 
-    if (!srcs.length) {
+    const srcs    = d.sources || [];
+    const total   = srcs.reduce((s, r) => s + (Number(r.participants) || 0), 0);
+    const metrics = d.metrics || {};
+    const totalParts = Number(metrics.participants) || 0;
+    const otherCnt = Math.max(totalParts - total, 0);
+
+    const rows = [...srcs];
+
+    if (!rows.length && !otherCnt) {
         el.innerHTML = '<div class="st-empty-txt" style="padding:8px 0;font-size:13px;color:var(--color-text-secondary)">Данные появятся по мере участия</div>';
         return;
     }
 
-    const maxV = Math.max(...srcs.map(s => Number(s.participants)||0), 1);
-    el.innerHTML = srcs.map(s => {
+    const maxV = Math.max(...rows.map(s => Number(s.participants) || 0), otherCnt, 1);
+
+    const rowsHtml = rows.map(s => {
         const cnt  = Number(s.participants) || 0;
         const w    = Math.round(cnt / maxV * 100);
-        const name = s.title || (s.username ? '@'+s.username : 'Канал');
+        const name = s.title || (s.username ? '@' + s.username : 'Канал');
+        const chatId = s.chat_id || s.channel_id || null;
+        const avatarHtml = chatId
+            ? `<img src="/api/chat_avatar/${chatId}" alt=""
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+                onerror="this.parentElement.innerHTML='📢'">`
+            : '📢';
         return `
         <div class="st-src-row">
-            <div class="st-src-icon">📢</div>
+            <div class="st-src-icon st-src-icon--round">${avatarHtml}</div>
             <div class="st-src-body">
                 <div class="st-src-name">${_esc(name)}</div>
                 <div class="st-src-track"><div class="st-src-bar" style="width:${w}%"></div></div>
             </div>
             <div class="st-src-cnt">${fmt(cnt)}</div>
         </div>`;
-    }).join('');
+    });
+
+    if (otherCnt > 0 || rows.length > 0) {
+        const w = Math.round(otherCnt / maxV * 100);
+        rowsHtml.push(`
+        <div class="st-src-row">
+            <div class="st-src-icon st-src-icon--round" style="background:rgba(255,255,255,0.06);font-size:16px;display:flex;align-items:center;justify-content:center">🌐</div>
+            <div class="st-src-body">
+                <div class="st-src-name">Другие источники</div>
+                <div class="st-src-track"><div class="st-src-bar" style="width:${w}%;background:rgba(255,255,255,0.3)"></div></div>
+            </div>
+            <div class="st-src-cnt">${fmt(otherCnt)}</div>
+        </div>`);
+    }
+
+    el.innerHTML = rowsHtml.join('');
 }
 
 function _renderNewSubs(d) {
@@ -685,6 +786,7 @@ function _showBack(cb) {
 }
 
 function _hideBack() {
+    if (_detailTimerInterval) { clearInterval(_detailTimerInterval); _detailTimerInterval = null; }
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
     try { tg.BackButton.hide(); if (_backCb) tg.BackButton.offClick(_backCb); _backCb = null; } catch(e) {}
@@ -692,10 +794,10 @@ function _hideBack() {
 
 // ── Точка входа ───────────────────────────────────────────────────────────
 function renderStatsPage() {
-    // Уничтожаем все старые графики
     Object.keys(_charts).forEach(destroyChart);
     _allGiveaways = [];
     _detailData   = null;
+    document.body.classList.add('page-stats');
     renderOverview();
 }
 
