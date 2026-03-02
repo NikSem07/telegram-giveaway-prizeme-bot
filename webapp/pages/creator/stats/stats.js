@@ -113,37 +113,43 @@ async function renderOverview() {
 function _initLottie() {
     const wrap = document.getElementById('st-lottie-wrap');
     if (!wrap) return;
-    // Уничтожаем предыдущую анимацию если есть
-    if (wrap._lottieAnim) {
-        try { wrap._lottieAnim.destroy(); } catch(e) {}
-        wrap._lottieAnim = null;
-        wrap.innerHTML = '';
-    }
+    if (wrap.dataset.loaded === '1') return; // уже запущена
+    wrap.dataset.loaded = '1';
+
+    const play = () => {
+        if (wrap._lottieAnim) {
+            try { wrap._lottieAnim.destroy(); } catch(e) {}
+            wrap.innerHTML = '';
+        }
+        fetch('/miniapp-static/assets/gif/Programming-Computer.json')
+            .then(r => r.json())
+            .then(animData => {
+                wrap._lottieAnim = window.lottie.loadAnimation({
+                    container: wrap,
+                    renderer: 'svg',
+                    loop: true,
+                    autoplay: true,
+                    animationData: animData
+                });
+            })
+            .catch(() => { wrap.style.display = 'none'; });
+    };
 
     if (!window.lottie) {
+        // Проверяем не грузится ли уже скрипт
+        if (document.querySelector('script[data-lottie]')) {
+            // Ждём загрузки
+            document.querySelector('script[data-lottie]').addEventListener('load', play, { once: true });
+            return;
+        }
         const s = document.createElement('script');
         s.src = 'https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js';
-        s.onload = () => _playLottie(wrap);
+        s.dataset.lottie = '1';
+        s.onload = play;
         document.head.appendChild(s);
     } else {
-        _playLottie(wrap);
+        play();
     }
-}
-
-function _playLottie(wrap) {
-    fetch('/miniapp-static/assets/gif/Programming-Computer.json')
-        .then(r => r.json())
-        .then(animData => {
-            const anim = window.lottie.loadAnimation({
-                container: wrap,
-                renderer: 'svg',
-                loop: true,
-                autoplay: true,
-                animationData: animData
-            });
-            wrap._lottieAnim = anim;
-        })
-        .catch(e => { console.warn('[stats/lottie]', e); wrap.style.display = 'none'; });
 }
 
 async function loadOverviewData() {
