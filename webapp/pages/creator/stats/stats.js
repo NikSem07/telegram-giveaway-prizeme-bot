@@ -259,7 +259,7 @@ function renderGwList(filter) {
 
     // Делегирование — один обработчик на весь список
     el.onclick = (e) => {
-        const item = e.target.closest('.st-gw-item');
+        const item = e.target.closest('.st-gw-card');
         if (!item) return;
         const gid = item.dataset.gid;
         const giveaway = _allGiveaways.find(g => String(g.id) === String(gid));
