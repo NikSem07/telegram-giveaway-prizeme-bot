@@ -15,10 +15,15 @@ function getInitData() {
 function fmt(n) {
     const num = Number(n);
     if (!isFinite(num) || n === null || n === undefined || n === '') return '—';
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 10000)   return Math.round(num / 1000) + 'K';
-    if (num >= 1000)    return (num / 1000).toFixed(1) + 'K';
-    return num.toLocaleString('ru-RU');
+    if (num >= 1000000) {
+        const v = num / 1000000;
+        return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(2).replace(/\.?0+$/, '')) + 'м';
+    }
+    if (num >= 1000) {
+        const v = num / 1000;
+        return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')) + 'к';
+    }
+    return String(num);
 }
 
 function pct(a, b) {
@@ -96,14 +101,17 @@ async function renderOverview() {
     const main = document.getElementById('main-content');
     if (!main) return;
     main.innerHTML = statsOverviewTemplate();
+    window.scrollTo({ top: 0, behavior: 'instant' });
 
     // Навешиваем фильтры
     document.getElementById('st-filters')?.addEventListener('click', e => {
         const btn = e.target.closest('.st-filter-btn');
         if (!btn) return;
+        const scrollY = window.scrollY;
         document.querySelectorAll('.st-filter-btn').forEach(b => b.classList.remove('st-filter-btn--on'));
         btn.classList.add('st-filter-btn--on');
         renderGwList(btn.dataset.filter);
+        requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' }));
     });
 
     await Promise.all([loadOverviewData(), loadGiveaways()]);
@@ -341,7 +349,13 @@ async function renderDetail(giveaway) {
     if (!main) return;
 
     main.innerHTML = statsDetailTemplate(giveaway);
-    _showBack(() => { _hideBack(); renderOverview(); });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    _showBack(() => {
+        _hideBack();
+        renderOverview().then(() => {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        });
+    });
 
     try {
         await ensureChartJs();
