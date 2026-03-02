@@ -2543,6 +2543,256 @@ app.post('/api/creator_channel_delete', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// ── СТАТИСТИКА СОЗДАТЕЛЯ ──────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── /api/stats/overview — общий дашборд создателя ────────────────────────
+app.post('/api/stats/overview', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    const userId = parsed.user_parsed.id;
+
+    const result = await pool.query(`
+      SELECT
+        COUNT(DISTINCT g.id)                                            AS total_giveaways,
+        COUNT(DISTINCT g.id) FILTER (WHERE g.status = 'active')        AS active_giveaways,
+        COUNT(DISTINCT g.id) FILTER (WHERE g.status = 'finished')      AS finished_giveaways,
+        COUNT(DISTINCT e.user_id)                                       AS total_unique_participants,
+        COUNT(e.id)                                                     AS total_entries,
+        COALESCE(SUM(CASE WHEN so.service_type = 'top_placement'   THEN COALESCE(so.price_rub,0) ELSE 0 END), 0) AS spent_top_rub,
+        COALESCE(SUM(CASE WHEN so.service_type = 'bot_promotion'   THEN COALESCE(bp.price_stars,0) ELSE 0 END), 0) AS spent_promo_stars
+      FROM giveaways g
+      LEFT JOIN entries e        ON e.giveaway_id = g.id AND e.prelim_ok = true
+      LEFT JOIN service_orders so ON so.giveaway_id = g.id AND so.owner_user_id = $1
+      LEFT JOIN bot_promotions bp ON bp.giveaway_id = g.id AND bp.owner_user_id = $1
+      WHERE g.owner_user_id = $1
+    `, [userId]);
+
+    // Топ розыгрышей по участникам
+    const topResult = await pool.query(`
+      SELECT g.id, g.internal_title, g.status, g.created_at, g.end_at_utc,
+             COUNT(e.id) FILTER (WHERE e.prelim_ok = true) AS participants
+      FROM giveaways g
+      LEFT JOIN entries e ON e.giveaway_id = g.id
+      WHERE g.owner_user_id = $1
+      GROUP BY g.id
+      ORDER BY participants DESC
+      LIMIT 5
+    `, [userId]);
+
+    // Динамика по дням (последние 30 дней)
+    const trendsResult = await pool.query(`
+      SELECT
+        date_trunc('day', e.created_at) AS day,
+        COUNT(e.id) AS new_entries
+      FROM entries e
+      JOIN giveaways g ON g.id = e.giveaway_id
+      WHERE g.owner_user_id = $1
+        AND e.prelim_ok = true
+        AND e.created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY day
+      ORDER BY day ASC
+    `, [userId]);
+
+    res.json({
+      ok: true,
+      overview: result.rows[0],
+      top_giveaways: topResult.rows,
+      trends: trendsResult.rows
+    });
+  } catch (e) {
+    console.error('[stats/overview]', e);
+    res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
+// ── /api/stats/giveaway — детальная статистика розыгрыша ─────────────────
+app.post('/api/stats/giveaway', async (req, res) => {
+  try {
+    const { init_data, giveaway_id } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    const userId = parsed.user_parsed.id;
+    const gid = parseInt(giveaway_id);
+
+    // Проверяем что розыгрыш принадлежит этому пользователю
+    const ownerCheck = await pool.query(
+      'SELECT id, internal_title, status, created_at, end_at_utc FROM giveaways WHERE id = $1 AND owner_user_id = $2',
+      [gid, userId]
+    );
+    if (!ownerCheck.rows.length) return res.status(403).json({ ok: false, reason: 'not_found' });
+    const giveaway = ownerCheck.rows[0];
+
+    // Базовые метрики
+    const metricsResult = await pool.query(`
+      SELECT
+        COUNT(*)                                        AS total_clicks,
+        COUNT(*) FILTER (WHERE prelim_ok = true)        AS participants,
+        COUNT(*) FILTER (WHERE prelim_ok = false)       AS dropped,
+        COUNT(DISTINCT user_id)                         AS unique_users
+      FROM entries WHERE giveaway_id = $1
+    `, [gid]);
+
+    // Динамика по часам (последние 7 дней) или по дням (всё время)
+    const hourlyResult = await pool.query(`
+      SELECT
+        date_trunc('hour', created_at) AS bucket,
+        COUNT(*) FILTER (WHERE prelim_ok = true) AS participants
+      FROM entries
+      WHERE giveaway_id = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY bucket ORDER BY bucket ASC
+    `, [gid]);
+
+    const dailyResult = await pool.query(`
+      SELECT
+        date_trunc('day', created_at) AS bucket,
+        COUNT(*) FILTER (WHERE prelim_ok = true) AS participants
+      FROM entries
+      WHERE giveaway_id = $1
+      GROUP BY bucket ORDER BY bucket ASC
+    `, [gid]);
+
+    // Источники по каналам
+    const sourcesResult = await pool.query(`
+      SELECT
+        oc.id AS channel_id,
+        oc.title,
+        oc.username,
+        oc.chat_id,
+        COUNT(e.id) FILTER (WHERE e.prelim_ok = true) AS participants
+      FROM giveaway_channels gc
+      JOIN organizer_channels oc ON oc.id = gc.channel_id
+      LEFT JOIN entries e ON e.giveaway_id = gc.giveaway_id
+        AND e.source_channel_id = oc.chat_id
+      WHERE gc.giveaway_id = $1
+      GROUP BY oc.id, oc.title, oc.username, oc.chat_id
+      ORDER BY participants DESC
+    `, [gid]);
+
+    // Новые подписчики по каналам (was_subscribed = false → стали участником)
+    const newSubsResult = await pool.query(`
+      SELECT
+        es.channel_id,
+        oc.title,
+        COUNT(*) AS new_subscribers
+      FROM entry_subscriptions es
+      LEFT JOIN organizer_channels oc ON oc.chat_id = es.channel_id
+      WHERE es.giveaway_id = $1 AND es.was_subscribed = false
+      GROUP BY es.channel_id, oc.title
+      ORDER BY new_subscribers DESC
+    `, [gid]);
+
+    // Аудитория: Premium vs обычные
+    const premiumResult = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE u.is_premium = true)  AS premium_count,
+        COUNT(*) FILTER (WHERE u.is_premium = false) AS regular_count
+      FROM entries e
+      JOIN users u ON u.user_id = e.user_id
+      WHERE e.giveaway_id = $1 AND e.prelim_ok = true
+    `, [gid]);
+
+    // Языки (как прокси для географии)
+    const languagesResult = await pool.query(`
+      SELECT
+        COALESCE(u.language_code, 'unknown') AS lang,
+        COUNT(*) AS cnt
+      FROM entries e
+      JOIN users u ON u.user_id = e.user_id
+      WHERE e.giveaway_id = $1 AND e.prelim_ok = true
+      GROUP BY lang ORDER BY cnt DESC LIMIT 10
+    `, [gid]);
+
+    // Воронка: клики → проверка → получили билет
+    const funnelResult = await pool.query(`
+      SELECT
+        COUNT(*)                                     AS total_clicks,
+        COUNT(*) FILTER (WHERE prelim_checked_at IS NOT NULL) AS checked,
+        COUNT(*) FILTER (WHERE prelim_ok = true)     AS got_ticket
+      FROM entries WHERE giveaway_id = $1
+    `, [gid]);
+
+    // Финансы по этому розыгрышу
+    const financeResult = await pool.query(`
+      SELECT
+        COALESCE(SUM(so.price_rub), 0) AS total_rub,
+        service_type,
+        COUNT(*) AS orders_count
+      FROM service_orders so
+      WHERE so.giveaway_id = $1 AND so.status IN ('paid', 'active')
+      GROUP BY service_type
+    `, [gid]);
+
+    const promoFinanceResult = await pool.query(`
+      SELECT COALESCE(SUM(price_stars), 0) AS total_stars, COUNT(*) AS orders_count
+      FROM bot_promotions
+      WHERE giveaway_id = $1 AND payment_status = 'paid'
+    `, [gid]);
+
+    // Победители (если завершён)
+    const winnersResult = await pool.query(`
+      SELECT w.rank, w.user_id, u.username, u.first_name
+      FROM winners w
+      LEFT JOIN users u ON u.user_id = w.user_id
+      WHERE w.giveaway_id = $1
+      ORDER BY w.rank ASC
+    `, [gid]);
+
+    res.json({
+      ok: true,
+      giveaway,
+      metrics:      metricsResult.rows[0],
+      hourly:       hourlyResult.rows,
+      daily:        dailyResult.rows,
+      sources:      sourcesResult.rows,
+      new_subs:     newSubsResult.rows,
+      premium:      premiumResult.rows[0],
+      languages:    languagesResult.rows,
+      funnel:       funnelResult.rows[0],
+      finance:      financeResult.rows,
+      promo_finance: promoFinanceResult.rows[0],
+      winners:      winnersResult.rows,
+    });
+  } catch (e) {
+    console.error('[stats/giveaway]', e);
+    res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
+// ── /api/stats/giveaways_list — список розыгрышей для выбора ─────────────
+app.post('/api/stats/giveaways_list', async (req, res) => {
+  try {
+    const { init_data } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    const userId = parsed.user_parsed.id;
+
+    const result = await pool.query(`
+      SELECT
+        g.id, g.internal_title, g.status, g.created_at, g.end_at_utc,
+        COUNT(e.id) FILTER (WHERE e.prelim_ok = true) AS participants,
+        array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels,
+        MIN(oc.username) AS first_channel_username
+      FROM giveaways g
+      LEFT JOIN entries e ON e.giveaway_id = g.id
+      LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+      LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+      WHERE g.owner_user_id = $1
+      GROUP BY g.id
+      ORDER BY g.created_at DESC
+    `, [userId]);
+
+    res.json({ ok: true, items: result.rows });
+  } catch (e) {
+    console.error('[stats/giveaways_list]', e);
+    res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
