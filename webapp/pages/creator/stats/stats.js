@@ -212,19 +212,33 @@ function renderGwList(filter) {
     el.innerHTML = filtered.map((g, i) => {
         const s   = g.status || 'draft';
         const chs = (g.channels || []).filter(Boolean).join(', ') || '—';
+        
+        // Бейджи статуса в стиле Tribute (pill с годом)
+        const badgeColors = {
+            active:    'background:rgba(52,199,89,0.2);color:#34C759;border:1px solid rgba(52,199,89,0.4)',
+            finished:  'background:rgba(255,59,48,0.2);color:#FF3B30;border:1px solid rgba(255,59,48,0.4)',
+            draft:     'background:rgba(255,149,0,0.2);color:#FF9500;border:1px solid rgba(255,149,0,0.4)',
+            cancelled: 'background:rgba(255,59,48,0.15);color:#FF3B30;border:1px solid rgba(255,59,48,0.3)',
+        };
+        const badgeStyle = badgeColors[s] || badgeColors.draft;
+        const badgeText  = { active:'● Активен', finished:'● Завершён', draft:'● Черновик', cancelled:'● Отменён' }[s] || s;
+
         return `
-        <div class="st-gw-item" data-gid="${g.id}" style="animation-delay:${Math.min(i,6)*0.05}s">
-            <div class="st-gw-ava">🎁</div>
-            <div class="st-gw-body">
-                <div class="st-gw-name">${_esc(g.internal_title)}</div>
-                <div class="st-gw-ch">${_esc(chs)}</div>
-                <span class="st-badge st-badge--${STATUS_CLS[s]||'draft'}">${STATUS_LABEL[s]||s}</span>
+        <div class="participant-giveaways-card st-gw-item" data-gid="${g.id}" style="animation-delay:${Math.min(i,6)*0.05}s">
+            <div class="participant-giveaways-card__left">
+                <div class="participant-giveaways-card__avatar">🎁</div>
             </div>
-            <div class="st-gw-right">
-                <div class="st-gw-cnt">${fmt(g.participants)}</div>
-                <div class="st-gw-cnt-lbl">участников</div>
-                <svg class="st-gw-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <div class="participant-giveaways-card__body">
+                <div class="participant-giveaways-card__channels" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <span>${_esc(chs)}</span>
+                    <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;${badgeStyle}">${badgeText}</span>
+                </div>
+                <div class="participant-giveaways-card__title">${_esc(g.internal_title)}</div>
+                <div class="participant-giveaways-card__meta">👥 ${fmt(g.participants)} участников</div>
+            </div>
+            <div class="participant-giveaways-card__arrow">
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                    <path d="M3 1.5l3 3-3 3" stroke="#737375" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
             </div>
         </div>`;

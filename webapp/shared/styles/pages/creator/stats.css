@@ -1,8 +1,18 @@
 /* webapp/shared/styles/pages/creator/stats.css */
 
+/* Скрываем переключатель режимов на странице статистики */
+body.page-stats .top-header {
+    display: none !important;
+}
+
+/* Убираем лишний отступ от скрытого хедера */
+body.page-stats #main-content {
+    padding-top: 0 !important;
+}
+
 /* ── Основа ──────────────────────────────────────────────────────────────── */
 .stats-page {
-    padding-bottom: calc(var(--navbar-height) + 24px);
+    padding: 0 0 calc(var(--navbar-height) + 24px) 0;
     animation: st-in 0.32s ease both;
 }
 
@@ -12,7 +22,7 @@
 }
 
 /* ── Хедер ───────────────────────────────────────────────────────────────── */
-.st-header { padding: 2px 16px 20px; }
+.st-header { padding: 2px 0 20px; }
 
 .st-title {
     font-size: 24px;
@@ -29,7 +39,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    padding: 0 16px 20px;
+    padding: 0 0 20px;
 }
 
 .st-kpi {
@@ -80,7 +90,7 @@
 .st-kpi:nth-child(4) { animation-delay: 0.16s; }
 
 /* ── Секция ──────────────────────────────────────────────────────────────── */
-.st-section { padding: 0 16px 20px; }
+.st-section { padding: 0 0 20px; }
 
 .st-section-lbl {
     font-size: 11px;
@@ -109,7 +119,7 @@
 .st-filters {
     display: flex;
     gap: 8px;
-    padding: 0 16px 14px;
+    padding: 0 0 14px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;

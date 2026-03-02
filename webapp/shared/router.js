@@ -167,6 +167,11 @@ const Router = {
         
         try {
             console.log(`[ROUTER] Rendering: ${mode}/${page}`);
+            if (mode === 'creator' && page === 'stats') {
+                document.body.classList.add('page-stats');
+            } else {
+                document.body.classList.remove('page-stats');
+            }
             renderFn();
             
             // ТОЛЬКО логируем состояние контейнера, не пытаемся перерендерить
