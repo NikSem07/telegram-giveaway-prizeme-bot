@@ -41,7 +41,7 @@ body.page-stats #main-content {
 .st-lottie-wrap {
     width: 240px;
     height: 240px;
-    margin: 0 auto -24px;
+    margin: -48px auto -48px;
 }
 
 /* ── KPI сетка ───────────────────────────────────────────────────────────── */

@@ -31,7 +31,7 @@ export function statsOverviewTemplate() {
         <div class="st-kpi" style="--st-kpi-color:#FF2D55">
             <span class="st-kpi-emoji">✅</span>
             <div class="st-kpi-val" id="kpi-finished">—</div>
-            <div class="st-kpi-lbl">Завершено</div>
+            <div class="st-kpi-lbl">Завершенных</div>
         </div>
     </div>
 
@@ -40,7 +40,7 @@ export function statsOverviewTemplate() {
         <div class="st-filters" id="st-filters">
             <button class="st-filter-btn st-filter-btn--on" data-filter="all">Все</button>
             <button class="st-filter-btn" data-filter="active">Активные</button>
-            <button class="st-filter-btn" data-filter="finished">Завершённые</button>
+            <button class="st-filter-btn" data-filter="finished">Завершенные</button>
         </div>
         <div class="st-gw-list" id="st-gw-list">
             <div class="st-loading">
