@@ -908,3 +908,39 @@ body.page-stats #main-content {
     min-width: 32px;
     text-align: right;
 }
+
+.st-newsub-users-lbl {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 14px 0 8px;
+}
+
+.st-newsub-user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.st-newsub-user-ava {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0,122,255,0.15);
+    color: #007AFF;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.st-newsub-user-name {
+    font-size: 14px;
+    color: var(--color-text);
+}

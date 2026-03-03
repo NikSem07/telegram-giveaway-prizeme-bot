@@ -655,14 +655,12 @@ function _renderFunnel(d) {
     if (!el) return;
     const f = d.funnel || {};
     const clicks    = Number(f.total_clicks) || 0;
-    const checked   = Number(f.checked) || 0;
     const got       = Number(f.got_ticket) || 0;
     const max       = clicks || 1;
 
     const steps = [
-        { label: 'Нажали «Участвовать»', val: clicks, w: 100,                           color: '#007AFF' },
-        { label: 'Прошли проверку',       val: checked, w: Math.round(checked/max*100),  color: '#34AADC' },
-        { label: 'Получили билет',         val: got,    w: Math.round(got/max*100),       color: '#34C759' },
+        { label: 'Нажали «Участвовать»', val: clicks, w: 100,                        color: '#007AFF' },
+        { label: 'Получили билет',        val: got,    w: Math.round(got/max*100),    color: '#34C759' },
     ];
 
     el.innerHTML = steps.map(s => `
@@ -744,14 +742,39 @@ function _renderNewSubs(d) {
     }
 
     const total = ns.reduce((s, r) => s + (Number(r.new_subscribers)||0), 0);
+
+    // Получаем список новых подписчиков с именами
+    const newUsers = d.new_sub_users || [];
+
     el.innerHTML = `
         <div class="st-newsub-total">+${fmt(total)} <span>новых подписчиков</span></div>
-        ${ns.map(r => `
-        <div class="st-newsub-row">
-            <div class="st-newsub-icon">📢</div>
-            <div class="st-newsub-name">${_esc(r.title||'Канал')}</div>
-            <div class="st-newsub-cnt">+${fmt(r.new_subscribers)}</div>
-        </div>`).join('')}`;
+        ${ns.map(r => {
+            const avatarHtml = r.chat_id
+                ? `<img src="/api/chat_avatar/${r.chat_id}" alt=""
+                    style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+                    onerror="this.parentElement.innerHTML='📢'">`
+                : '📢';
+            return `
+            <div class="st-newsub-row">
+                <div class="st-src-icon st-src-icon--round">${avatarHtml}</div>
+                <div class="st-newsub-name">${_esc(r.title || r.username || 'Канал')}</div>
+                <div class="st-newsub-cnt">+${fmt(r.new_subscribers)}</div>
+            </div>`;
+        }).join('')}
+        ${newUsers.length ? `
+        <div class="st-newsub-users-lbl">Пользователи</div>
+        ${newUsers.map(u => {
+            const name = u.first_name || (u.username ? '@'+u.username : 'Участник');
+            return `
+            <div class="st-newsub-user-row">
+                <div class="st-newsub-user-ava">
+                    ${u.photo_url
+                        ? `<img src="${_esc(u.photo_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                        : name[0].toUpperCase()}
+                </div>
+                <div class="st-newsub-user-name">${_esc(name)}</div>
+            </div>`;
+        }).join('')}` : ''}`;
 }
 
 function _renderAudience(d) {

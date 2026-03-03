@@ -2215,21 +2215,48 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                 for attempt in range(5):
                     code = gen_ticket_code()
                     try:
+                        # source_channel
+                        src_res = await s.execute(
+                            text("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid ORDER BY id LIMIT 1"),
+                            {"gid": giveaway_id}
+                        )
+                        src_row = src_res.first()
+                        source_channel_id = src_row[0] if src_row else None
+
                         await s.execute(
                             text("""
-                                INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
-                                VALUES (:gid, :u, :code, :prelim_ok, :ts)
+                                INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at, source_channel_id)
+                                VALUES (:gid, :u, :code, :prelim_ok, :ts, :src)
                             """),
                             {
-                                "gid": giveaway_id,
-                                "u": user_id,
-                                "code": code,
-                                "prelim_ok": True,          # ✅ boolean
-                                "ts": datetime.utcnow()     # ✅ naive datetime под timestamp without tz
+                                "gid": giveaway_id, "u": user_id, "code": code,
+                                "prelim_ok": True, "ts": datetime.utcnow(), "src": source_channel_id
                             }
                         )
 
-                        # ВАЖНО: фиксируем транзакцию
+                        # entry_subscriptions
+                        try:
+                            ch_res = await s.execute(
+                                text("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid"),
+                                {"gid": giveaway_id}
+                            )
+                            for (ch_id,) in ch_res.fetchall():
+                                try:
+                                    member = await bot.get_chat_member(ch_id, user_id)
+                                    already_was = member.status not in ("left", "kicked", "banned")
+                                except Exception:
+                                    already_was = True
+                                await s.execute(
+                                    text("""
+                                        INSERT INTO entry_subscriptions(giveaway_id, user_id, channel_id, was_subscribed)
+                                        VALUES (:gid, :uid, :chid, :was)
+                                        ON CONFLICT(giveaway_id, user_id, channel_id) DO NOTHING
+                                    """),
+                                    {"gid": giveaway_id, "uid": user_id, "chid": ch_id, "was": already_was}
+                                )
+                        except Exception as _e:
+                            logging.warning(f"[captcha] entry_subscriptions failed: {_e}")
+
                         await s.commit()
 
                         return {
@@ -8210,6 +8237,46 @@ async def user_join(cq: CallbackQuery):
     # Регистрируем пользователя при участии
     try:
         await ensure_bot_user(cq.from_user.id, cq.from_user.username, cq.from_user.first_name)
+        # Обновляем Telegram Premium статус и язык в таблице users
+        try:
+            async with session_scope() as _s:
+                await _s.execute(
+                    text("""
+                        INSERT INTO users(user_id, username, is_premium, language_code, first_name)
+                        VALUES (:uid, :uname, :premium, :lang, :fname)
+                        ON CONFLICT(user_id) DO UPDATE SET
+                            username      = COALESCE(EXCLUDED.username, users.username),
+                            is_premium    = EXCLUDED.is_premium,
+                            language_code = COALESCE(EXCLUDED.language_code, users.language_code),
+                            first_name    = COALESCE(EXCLUDED.first_name, users.first_name)
+                    """),
+                    {
+                        "uid":     cq.from_user.id,
+                        "uname":   cq.from_user.username,
+                        "premium": bool(getattr(cq.from_user, 'is_premium', False)),
+                        "lang":    getattr(cq.from_user, 'language_code', None),
+                        "fname":   cq.from_user.first_name,
+                    }
+                )
+                await _s.commit()
+        except Exception as _e:
+            logging.warning(f"[user_join] users upsert failed: {_e}")
+
+        # Записываем клик (уникальный на пользователя)
+        try:
+            async with session_scope() as _s:
+                await _s.execute(
+                    text("""
+                        INSERT INTO giveaway_clicks(giveaway_id, user_id, clicked_at)
+                        VALUES (:gid, :uid, NOW())
+                        ON CONFLICT(giveaway_id, user_id) DO NOTHING
+                    """),
+                    {"gid": gid, "uid": user_id}
+                )
+                await _s.commit()
+        except Exception as _e:
+            logging.warning(f"[user_join] click insert failed: {_e}")
+
         logging.info(f"✅ Пользователь {cq.from_user.id} зарегистрирован при участии в розыгрыше")
     except Exception as e:
         logging.error(f"❌ Ошибка регистрации при участии: {e}")
@@ -8275,17 +8342,54 @@ async def user_join(cq: CallbackQuery):
             for _ in range(5):
                 code = gen_ticket_code()
                 try:
+                    # Определяем source_channel — берём первый канал розыгрыша из которого пришёл пост
+                    src_ch_res = await s.execute(
+                        text("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid ORDER BY id LIMIT 1"),
+                        {"gid": gid}
+                    )
+                    src_ch_row = src_ch_res.first()
+                    source_channel_id = src_ch_row[0] if src_ch_row else None
+
                     await s.execute(
                         text("""
-                            INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
-                            VALUES (:gid, :u, :code, :prelim_ok, :ts)
+                            INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at, source_channel_id)
+                            VALUES (:gid, :u, :code, :prelim_ok, :ts, :src)
+                            ON CONFLICT DO NOTHING
                         """),
-                        {"gid": gid, "u": user_id, "code": code, "prelim_ok": True, "ts": datetime.utcnow()}
+                        {"gid": gid, "u": user_id, "code": code, "prelim_ok": True,
+                         "ts": datetime.utcnow(), "src": source_channel_id}
                     )
-                    await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False)
+
+                    # Записываем статус подписки ПЕРЕД выдачей билета (was_subscribed = был ли подписан ДО нажатия)
+                    # Для user_join подписка уже проверена и ОК, поэтому смотрим историю через entry_subscriptions
+                    # Если записи нет — значит подписался специально ради розыгрыша (новый подписчик)
+                    try:
+                        channels_res = await s.execute(
+                            text("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid"),
+                            {"gid": gid}
+                        )
+                        all_channels = [r[0] for r in channels_res.fetchall()]
+                        for ch_id in all_channels:
+                            # was_subscribed = False означает: подписался ради розыгрыша (новый подписчик)
+                            # Мы не можем знать был ли подписан раньше, поэтому:
+                            # - если это первое участие → записываем was_subscribed=False (новый подписчик)
+                            # - дубликаты игнорируются через ON CONFLICT DO NOTHING
+                            await s.execute(
+                                text("""
+                                    INSERT INTO entry_subscriptions(giveaway_id, user_id, channel_id, was_subscribed)
+                                    VALUES (:gid, :uid, :chid, false)
+                                    ON CONFLICT(giveaway_id, user_id, channel_id) DO NOTHING
+                                """),
+                                {"gid": gid, "uid": user_id, "chid": ch_id}
+                            )
+                    except Exception as _e:
+                        logging.warning(f"[user_join] entry_subscriptions insert failed: {_e}")
+
+                    await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False, parse_mode="HTML")
                     break
+
                 except Exception as e:
-                    logging.error(f"❌ Ticket insert failed (gid={giveaway_id}, uid={user_id}): {e}", exc_info=True)
+                    logging.error(f"❌ Ticket insert failed (gid={gid}, uid={user_id}): {e}", exc_info=True)
                     continue
     
     await cq.answer()

@@ -2629,11 +2629,10 @@ app.post('/api/stats/giveaway', async (req, res) => {
     // Базовые метрики
     const metricsResult = await pool.query(`
       SELECT
-        COUNT(*)                                        AS total_clicks,
-        COUNT(*) FILTER (WHERE prelim_ok = true)        AS participants,
-        COUNT(*) FILTER (WHERE prelim_ok = false)       AS dropped,
-        COUNT(DISTINCT user_id)                         AS unique_users
-      FROM entries WHERE giveaway_id = $1
+        (SELECT COUNT(*) FROM giveaway_clicks WHERE giveaway_id = $1)   AS total_clicks,
+        COUNT(DISTINCT e.user_id) FILTER (WHERE e.prelim_ok = true)     AS participants,
+        COUNT(DISTINCT e.user_id) FILTER (WHERE e.prelim_ok = false)    AS dropped
+      FROM entries e WHERE e.giveaway_id = $1
     `, [gid]);
 
     // Динамика по часам (последние 7 дней) или по дням (всё время)
@@ -2677,12 +2676,27 @@ app.post('/api/stats/giveaway', async (req, res) => {
       SELECT
         es.channel_id,
         oc.title,
-        COUNT(*) AS new_subscribers
+        oc.username,
+        COUNT(DISTINCT es.user_id) AS new_subscribers
       FROM entry_subscriptions es
       LEFT JOIN organizer_channels oc ON oc.chat_id = es.channel_id
       WHERE es.giveaway_id = $1 AND es.was_subscribed = false
-      GROUP BY es.channel_id, oc.title
+      GROUP BY es.channel_id, oc.title, oc.username
       ORDER BY new_subscribers DESC
+    `, [gid]);
+
+    // Список пользователей-новых подписчиков с именами
+    const newSubUsersResult = await pool.query(`
+      SELECT DISTINCT ON (es.user_id)
+        es.user_id,
+        u.username,
+        u.first_name,
+        u.photo_url
+      FROM entry_subscriptions es
+      JOIN users u ON u.user_id = es.user_id
+      WHERE es.giveaway_id = $1 AND es.was_subscribed = false
+      ORDER BY es.user_id, es.checked_at DESC
+      LIMIT 50
     `, [gid]);
 
     // Аудитория: Premium vs обычные
@@ -2706,12 +2720,11 @@ app.post('/api/stats/giveaway', async (req, res) => {
       GROUP BY lang ORDER BY cnt DESC LIMIT 10
     `, [gid]);
 
-    // Воронка: клики → проверка → получили билет
+    // Воронка: уникальные клики → получили билет
     const funnelResult = await pool.query(`
       SELECT
-        COUNT(*)                                     AS total_clicks,
-        COUNT(*) FILTER (WHERE prelim_checked_at IS NOT NULL) AS checked,
-        COUNT(*) FILTER (WHERE prelim_ok = true)     AS got_ticket
+        (SELECT COUNT(*) FROM giveaway_clicks WHERE giveaway_id = $1)        AS total_clicks,
+        COUNT(DISTINCT user_id) FILTER (WHERE prelim_ok = true)              AS got_ticket
       FROM entries WHERE giveaway_id = $1
     `, [gid]);
 
@@ -2749,6 +2762,7 @@ app.post('/api/stats/giveaway', async (req, res) => {
       daily:        dailyResult.rows,
       sources:      sourcesResult.rows,
       new_subs:     newSubsResult.rows,
+      new_sub_users: newSubUsersResult.rows,
       premium:      premiumResult.rows[0],
       languages:    languagesResult.rows,
       funnel:       funnelResult.rows[0],
