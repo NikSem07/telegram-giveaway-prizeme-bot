@@ -431,27 +431,50 @@ function _renderMetrics(d) {
 function _initCsvBtn(giveawayId) {
     const btn      = document.getElementById('dm-csv-btn');
     const modal    = document.getElementById('st-csv-modal');
+    if (!btn || !modal) return;
+
+    // Переносим модал в body чтобы position:fixed работало от viewport
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
     const backdrop = document.getElementById('st-csv-backdrop');
     const cancel   = document.getElementById('st-csv-cancel');
     const confirm  = document.getElementById('st-csv-confirm');
-    if (!btn || !modal) return;
+    const content  = document.getElementById('st-csv-content');
 
-    const open  = () => {
+    const open = () => {
         modal.style.display = 'flex';
         requestAnimationFrame(() => modal.classList.add('st-csv-modal--open'));
     };
+
     const close = () => {
         modal.classList.remove('st-csv-modal--open');
-        setTimeout(() => { modal.style.display = 'none'; }, 280);
+        setTimeout(() => {
+            modal.style.display = 'none';
+            // Сбрасываем состояние контента
+            if (content) {
+                content.innerHTML = `
+                    <div class="st-csv-title">Хотите выгрузить CSV файл?</div>
+                    <div class="st-csv-desc">Бот вышлет CSV файл со статистикой, вы также сможете вернуться обратно в приложение</div>
+                    <div class="st-csv-btns">
+                        <button class="st-csv-btn st-csv-btn--cancel" id="st-csv-cancel">Отмена</button>
+                        <button class="st-csv-btn st-csv-btn--confirm" id="st-csv-confirm">Да</button>
+                    </div>`;
+                // Перевешиваем обработчики после перерисовки
+                document.getElementById('st-csv-cancel')?.addEventListener('click', close);
+                document.getElementById('st-csv-confirm')?.addEventListener('click', handleConfirm);
+            }
+        }, 280);
     };
 
-    btn.addEventListener('click', open);
-    cancel?.addEventListener('click', close);
-    backdrop?.addEventListener('click', close);
+    const handleConfirm = async () => {
+        // Показываем состояние загрузки
+        if (content) {
+            content.innerHTML = `
+                <div class="st-csv-loading-txt">Подождите несколько секунд,<br>идёт выгрузка CSV‑файла…</div>`;
+        }
 
-    confirm?.addEventListener('click', async () => {
-        confirm.disabled = true;
-        confirm.textContent = '...';
         try {
             const r = await fetch('/api/stats/request_csv', {
                 method: 'POST',
@@ -459,24 +482,22 @@ function _initCsvBtn(giveawayId) {
                 body: JSON.stringify({ init_data: getInitData(), giveaway_id: giveawayId })
             });
             const d = await r.json();
+            close();
             if (d.ok) {
-                close();
-                // Закрываем mini app и отправляем пользователя в бот
-                setTimeout(() => {
-                    window.Telegram?.WebApp?.close();
-                }, 300);
-            } else {
-                close();
-                console.error('[csv] request failed:', d.reason);
+                // Открываем чат с ботом (бот уже отправил файл туда)
+                const botUsername = d.bot_username || 'PrizeMeRaffleBot';
+                window.Telegram?.WebApp?.openTelegramLink(`https://t.me/${botUsername}`);
             }
         } catch (e) {
             console.error('[csv] error:', e);
             close();
-        } finally {
-            confirm.disabled = false;
-            confirm.textContent = 'Да';
         }
-    });
+    };
+
+    btn.addEventListener('click', open);
+    backdrop?.addEventListener('click', close);
+    cancel?.addEventListener('click', close);
+    confirm?.addEventListener('click', handleConfirm);
 }
 
 let _detailTimerInterval = null;

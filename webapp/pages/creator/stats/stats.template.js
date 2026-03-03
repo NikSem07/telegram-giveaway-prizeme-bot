@@ -103,11 +103,13 @@ export function statsDetailTemplate(g) {
     <div class="st-csv-modal" id="st-csv-modal" style="display:none">
         <div class="st-csv-backdrop" id="st-csv-backdrop"></div>
         <div class="st-csv-sheet">
-            <div class="st-csv-title">Хотите выгрузить CSV файл?</div>
-            <div class="st-csv-desc">Бот вышлет CSV файл со статистикой, вы также сможете вернуться обратно в приложение</div>
-            <div class="st-csv-btns">
-                <button class="st-csv-btn st-csv-btn--cancel" id="st-csv-cancel">Отмена</button>
-                <button class="st-csv-btn st-csv-btn--confirm" id="st-csv-confirm">Да</button>
+            <div id="st-csv-content">
+                <div class="st-csv-title">Хотите выгрузить CSV файл?</div>
+                <div class="st-csv-desc">Бот вышлет CSV файл со статистикой, вы также сможете вернуться обратно в приложение</div>
+                <div class="st-csv-btns">
+                    <button class="st-csv-btn st-csv-btn--cancel" id="st-csv-cancel">Отмена</button>
+                    <button class="st-csv-btn st-csv-btn--confirm" id="st-csv-confirm">Да</button>
+                </div>
             </div>
         </div>
     </div>

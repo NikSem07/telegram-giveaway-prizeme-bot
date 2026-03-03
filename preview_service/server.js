@@ -2808,30 +2808,18 @@ app.post('/api/stats/request_csv', async (req, res) => {
       [gid, userId]
     );
     if (!ownerCheck.rows.length) return res.status(403).json({ ok: false, reason: 'not_found' });
-    const title = ownerCheck.rows[0].internal_title;
 
-    if (!TELEGRAM_API) return res.status(500).json({ ok: false, reason: 'no_bot_token' });
-
-    // Отправляем пользователю сообщение с inline-кнопкой stats:csv:{id}
-    const tgRes = await fetch(`${TELEGRAM_API}/sendMessage`, {
+    // Дёргаем внутренний HTTP endpoint бота для генерации и отправки CSV
+    const botRes = await fetch(`${BOT_INTERNAL_URL}/internal/csv_export`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: userId,
-        text: `📊 <b>Выгрузка CSV</b>\n\nРозыгрыш: <b>${title}</b>\n\nНажмите кнопку ниже для получения файла:`,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '💎📥 Выгрузить CSV', callback_data: `stats:csv:${gid}` }
-          ]]
-        }
-      })
+      body: JSON.stringify({ user_id: userId, giveaway_id: gid })
     });
 
-    const tgData = await tgRes.json();
-    if (!tgData.ok) throw new Error(tgData.description);
+    const botData = await botRes.json();
+    if (!botData.ok) throw new Error(botData.reason || 'bot_error');
 
-    res.json({ ok: true });
+    res.json({ ok: true, bot_username: botData.bot_username });
   } catch (e) {
     console.error('[stats/request_csv]', e);
     res.status(500).json({ ok: false, reason: 'server_error' });
