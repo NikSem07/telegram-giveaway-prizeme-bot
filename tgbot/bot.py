@@ -7446,6 +7446,7 @@ async def _check_and_publish_prime(giveaway_id: int) -> None:
     Проверяет кол-во участников розыгрыша.
     Если достигнуто 3 — публикует пост в PRIME-канал (только один раз).
     """
+    logging.info(f"[_check_and_publish_prime] ▶️ Вызван для gid={giveaway_id}")
     try:
         async with session_scope() as s:
             # Уже опубликован?
@@ -10488,9 +10489,10 @@ async def _internal_claim_ticket(gid: str, user_id: int):
                 except Exception:
                     continue
 
+        logging.info(f"[claim_ticket] is_new_entry={is_new_entry}, giveaway_id={giveaway_id}")
         if is_new_entry:
+            logging.info(f"[claim_ticket] 🚀 Запускаем _check_and_publish_prime для gid={giveaway_id}")
             asyncio.create_task(_check_and_publish_prime(giveaway_id))
-
     return {"ok": True, "ticket": ticket}
 
 def make_internal_app():
