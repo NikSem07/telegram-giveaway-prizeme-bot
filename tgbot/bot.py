@@ -8924,19 +8924,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                 return
             
             winner_ids = [winner[0] for winner in winners]  # winner[0] = user_id
-            
-            # Получаем username победителей для списка
-            winner_usernames = []
-            for winner_id in winner_ids:
-                try:
-                    user = await bot_instance.get_chat(winner_id)
-                    username = f"@{user.username}" if user.username else f"победитель (ID: {winner_id})"
-                    winner_usernames.append(username)
-                except Exception:
-                    winner_usernames.append(f"победитель (ID: {winner_id})")
-            
-            winners_list_text = ", ".join(winner_usernames) if winner_usernames else "победители не определены"
-            
+
             print(f"🔍 Получаем билеты участников для розыгрыша {gid}")
             participant_tickets = {}
             res = await s.execute(
@@ -8946,6 +8934,14 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
             for row in res.all():
                 participant_tickets[row[0]] = row[1]
             print(f"🔍 Найдено билетов в базе: {len(participant_tickets)}")
+
+            # Список билетов победителей (без ников — для приватности)
+            winner_tickets = []
+            for winner_id in winner_ids:
+                ticket = participant_tickets.get(winner_id)
+                if ticket:
+                    winner_tickets.append(f"🎟 <b>{ticket}</b>")
+            winners_list_text = "\n".join(winner_tickets) if winner_tickets else "билеты не определены"
             
             # Уведомляем всех участников
             notified_count = 0
@@ -8986,7 +8982,7 @@ async def notify_participants(gid: int, winners: list, eligible_entries: list, b
                             f"Ваш билет: <b>{ticket_code}</b>\n\n"
                             f"Мы случайным образом определили победителей и, к сожалению, "
                             f"Ваш билет не был выбран.\n\n"
-                            f"Победители: {winners_list_text}\n\n"
+                            f"Билеты победителей:\n{winners_list_text}\n\n"
                             f"Участвуйте в других розыгрышах!"
                         )
                         
@@ -9042,19 +9038,7 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                 return
             
             winner_ids = [winner[0] for winner in winners]
-            
-            # Получаем username НОВЫХ победителей
-            winner_usernames = []
-            for winner_id in winner_ids:
-                try:
-                    user = await bot_instance.get_chat(winner_id)
-                    username = f"@{user.username}" if user.username else f"победитель (ID: {winner_id})"
-                    winner_usernames.append(username)
-                except Exception:
-                    winner_usernames.append(f"победитель (ID: {winner_id})")
-            
-            winners_list_text = ", ".join(winner_usernames) if winner_usernames else "новые победители не определены"
-            
+
             # Получаем билеты участников
             participant_tickets = {}
             res = await s.execute(
@@ -9063,6 +9047,14 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
             )
             for row in res.all():
                 participant_tickets[row[0]] = row[1]
+
+            # Список билетов победителей (без ников — для приватности)
+            winner_tickets = []
+            for winner_id in winner_ids:
+                ticket = participant_tickets.get(winner_id)
+                if ticket:
+                    winner_tickets.append(f"🎟 <b>{ticket}</b>")
+            winners_list_text = "\n".join(winner_tickets) if winner_tickets else "билеты не определены"
             
             # Уведомляем всех участников
             notified_count = 0
@@ -9087,7 +9079,7 @@ async def notify_redraw_participants(gid: int, winners: list, eligible_entries: 
                             f"Ваш билет: <b>{ticket_code}</b>\n\n"
                             f"Мы случайным образом определили НОВЫХ победителей и, к сожалению, "
                             f"Ваш билет не был выбран.\n\n"
-                            f"<b>Новые победители:</b> {winners_list_text}\n\n"
+                            f"<b>Билеты победителей:</b>\n{winners_list_text}\n\n"
                             f"Участвуйте в других розыгрышах!"
                         )
                     
