@@ -10523,11 +10523,59 @@ def make_internal_app():
                 status=500
             )
 
+    async def csv_export(request: web.Request):
+        """
+        Вызывается из Node.js: генерирует и отправляет CSV файл пользователю прямо в бот
+        """
+        try:
+            data        = await request.json()
+            user_id     = int(data.get("user_id") or 0)
+            giveaway_id = int(data.get("giveaway_id") or 0)
+
+            if not user_id or not giveaway_id:
+                return web.json_response({"ok": False, "reason": "bad_params"}, status=400)
+
+            # Проверяем владельца
+            if not await is_giveaway_organizer(user_id, giveaway_id):
+                return web.json_response({"ok": False, "reason": "forbidden"}, status=403)
+
+            # Проверяем участников
+            participant_count = await get_participant_count(giveaway_id)
+            if participant_count == 0:
+                return web.json_response({"ok": False, "reason": "no_participants"})
+
+            # Генерируем CSV в памяти
+            csv_file      = await generate_csv_in_memory(giveaway_id)
+            giveaway_title = await get_giveaway_title(giveaway_id)
+
+            # Отправляем файл пользователю
+            await bot.send_document(
+                chat_id=user_id,
+                document=csv_file,
+                caption=(
+                    f"📊 <b>Статистика розыгрыша</b>\n"
+                    f"<b>Название:</b> {giveaway_title}\n"
+                    f"<b>ID розыгрыша:</b> {giveaway_id}\n"
+                    f"<b>Участников:</b> {participant_count}\n\n"
+                    f"<i>Файл в формате CSV. Откройте в Excel или Google Sheets.</i>"
+                ),
+                parse_mode="HTML"
+            )
+
+            # Возвращаем username бота для редиректа из mini app
+            bot_info = await bot.get_me()
+            return web.json_response({"ok": True, "bot_username": bot_info.username})
+
+        except Exception as e:
+            logging.error(f"[internal/csv_export] error: {e}", exc_info=True)
+            return web.json_response({"ok": False, "reason": str(e)}, status=500)
+
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_simple_captcha_and_participate", verify_simple_captcha_and_participate)
     app.router.add_post("/api/create_simple_captcha_session", create_simple_captcha_session)
+    app.router.add_post("/internal/csv_export", csv_export)
 
     return app
 
