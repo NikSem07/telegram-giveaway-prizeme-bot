@@ -5558,9 +5558,21 @@ async def step_endat(m: Message, state: FSMContext):
         )
 
         # явное текстовое подтверждение для пользователя
+        # Точное время до окончания
+        delta = dt_msk - datetime.now(MSK_TZ)
+        total_seconds = int(delta.total_seconds())
+        d = total_seconds // 86400
+        h = (total_seconds % 86400) // 3600
+        mins = (total_seconds % 3600) // 60
+        parts = []
+        if d: parts.append(f"{d} дн.")
+        if h: parts.append(f"{h} ч.")
+        if mins or not parts: parts.append(f"{mins} мин.")
+        time_left_str = " ".join(parts)
+
         confirm_text = (
             f"🗓 Время окончания установлено: <b>{dt_msk.strftime('%H:%M %d.%m.%Y')}</b>\n"
-            f"Осталось: <b>{days_left}</b> дн."
+            f"Осталось: <b>{time_left_str}</b>"
         )
         await m.answer(confirm_text, parse_mode="HTML")
 
@@ -7938,7 +7950,7 @@ async def cb_launch_do(cq: CallbackQuery):
     kb.adjust(2)  # 2 кнопки в один ряд
     
     # Отправляем одно сообщение
-    await cq.message.answer(combined_text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    await cq.message.answer(combined_text, reply_markup=kb.as_markup(), parse_mode="HTML", disable_web_page_preview=True)
 
 #--- Обработчик настройки розыгрыша ---
 
