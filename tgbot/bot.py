@@ -7470,6 +7470,10 @@ async def _check_and_publish_prime(giveaway_id: int) -> None:
             gw = await s.get(Giveaway, giveaway_id)
             if not gw or gw.status != GiveawayStatus.ACTIVE:
                 return
+            # Явно читаем все нужные поля пока сессия открыта
+            _ = (gw.id, gw.end_at_utc, gw.winners_count, gw.public_description,
+                 gw.photo_file_id, gw.internal_title, gw.media_position, gw.status)
+            await s.refresh(gw)
 
         logging.info("🚀 [PRIME] Достигнуто 3 участника, публикуем в PRIME-канал, gid=%s", giveaway_id)
         await _publish_to_prime_channel(giveaway_id, gw)
