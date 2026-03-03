@@ -10745,8 +10745,16 @@ def make_internal_app():
             logging.error(f"[internal/csv_export] error: {e}", exc_info=True)
             return web.json_response({"ok": False, "reason": str(e)}, status=500)
 
+    async def notify_prime(request: web.Request):
+        data = await request.json()
+        gid = int(data.get("giveaway_id") or 0)
+        if gid:
+            asyncio.create_task(_check_and_publish_prime(gid))
+        return web.json_response({"ok": True})
+
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
+    app.router.add_post("/internal/notify_prime", notify_prime)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_simple_captcha_and_participate", verify_simple_captcha_and_participate)
     app.router.add_post("/api/create_simple_captcha_session", create_simple_captcha_session)

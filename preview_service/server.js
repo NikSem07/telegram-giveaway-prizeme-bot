@@ -886,6 +886,14 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
           ticket = code;
           isNewTicket = true;
           details.push(`ticket_created_attempt_${attempt + 1}`);
+          // Уведомляем бота для публикации в PRIME
+          try {
+            await fetch(`${BOT_INTERNAL_URL}/internal/notify_prime`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ giveaway_id: giveawayId })
+            });
+          } catch (_e) { console.log('[PRIME] notify failed:', _e.message); }
           break;
         } catch (error) {
           if (error.code === '23505') {
@@ -1146,6 +1154,14 @@ app.post('/api/claim', async (req, res) => {
         );
         ticket = code;
         console.log(`[CLAIM] ✅ Успешно создан билет: ${code}`);
+        // Уведомляем бота для публикации в PRIME
+        try {
+          await fetch(`${BOT_INTERNAL_URL}/internal/notify_prime`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ giveaway_id: giveawayId })
+          });
+        } catch (_e) { console.log('[PRIME] notify failed:', _e.message); }
         break;
       } catch (error) {
         if (error.code === '23505') { // UNIQUE constraint violation
