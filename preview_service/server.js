@@ -2793,6 +2793,51 @@ app.post('/api/stats/giveaways_list', async (req, res) => {
   }
 });
 
+// ── /api/stats/request_csv — отправить пользователю кнопку CSV через бота ──
+app.post('/api/stats/request_csv', async (req, res) => {
+  try {
+    const { init_data, giveaway_id } = req.body;
+    const parsed = _tgCheckMiniAppInitData(init_data);
+    if (!parsed) return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+    const userId = parsed.user_parsed.id;
+    const gid    = parseInt(giveaway_id);
+
+    // Проверяем принадлежность розыгрыша
+    const ownerCheck = await pool.query(
+      'SELECT id, internal_title FROM giveaways WHERE id = $1 AND owner_user_id = $2',
+      [gid, userId]
+    );
+    if (!ownerCheck.rows.length) return res.status(403).json({ ok: false, reason: 'not_found' });
+    const title = ownerCheck.rows[0].internal_title;
+
+    if (!TELEGRAM_API) return res.status(500).json({ ok: false, reason: 'no_bot_token' });
+
+    // Отправляем пользователю сообщение с inline-кнопкой stats:csv:{id}
+    const tgRes = await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: userId,
+        text: `📊 <b>Выгрузка CSV</b>\n\nРозыгрыш: <b>${title}</b>\n\nНажмите кнопку ниже для получения файла:`,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '💎📥 Выгрузить CSV', callback_data: `stats:csv:${gid}` }
+          ]]
+        }
+      })
+    });
+
+    const tgData = await tgRes.json();
+    if (!tgData.ok) throw new Error(tgData.description);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[stats/request_csv]', e);
+    res.status(500).json({ ok: false, reason: 'server_error' });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);

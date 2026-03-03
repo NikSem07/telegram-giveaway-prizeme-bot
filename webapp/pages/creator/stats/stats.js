@@ -429,24 +429,53 @@ function _renderMetrics(d) {
 }
 
 function _initCsvBtn(giveawayId) {
-    const btn     = document.getElementById('dm-csv-btn');
-    const modal   = document.getElementById('st-csv-modal');
+    const btn      = document.getElementById('dm-csv-btn');
+    const modal    = document.getElementById('st-csv-modal');
     const backdrop = document.getElementById('st-csv-backdrop');
-    const cancel  = document.getElementById('st-csv-cancel');
-    const confirm = document.getElementById('st-csv-confirm');
+    const cancel   = document.getElementById('st-csv-cancel');
+    const confirm  = document.getElementById('st-csv-confirm');
     if (!btn || !modal) return;
 
-    const open  = () => { modal.style.display = 'flex'; requestAnimationFrame(() => modal.classList.add('st-csv-modal--open')); };
-    const close = () => { modal.classList.remove('st-csv-modal--open'); setTimeout(() => { modal.style.display = 'none'; }, 260); };
+    const open  = () => {
+        modal.style.display = 'flex';
+        requestAnimationFrame(() => modal.classList.add('st-csv-modal--open'));
+    };
+    const close = () => {
+        modal.classList.remove('st-csv-modal--open');
+        setTimeout(() => { modal.style.display = 'none'; }, 280);
+    };
 
     btn.addEventListener('click', open);
     cancel?.addEventListener('click', close);
     backdrop?.addEventListener('click', close);
-    confirm?.addEventListener('click', () => {
-        close();
-        const botUsername = 'PrizeMeBot'; // замени на реальный username бота
-        const url = `https://t.me/${botUsername}?start=csv_${giveawayId}`;
-        window.Telegram?.WebApp?.openTelegramLink(url);
+
+    confirm?.addEventListener('click', async () => {
+        confirm.disabled = true;
+        confirm.textContent = '...';
+        try {
+            const r = await fetch('/api/stats/request_csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ init_data: getInitData(), giveaway_id: giveawayId })
+            });
+            const d = await r.json();
+            if (d.ok) {
+                close();
+                // Закрываем mini app и отправляем пользователя в бот
+                setTimeout(() => {
+                    window.Telegram?.WebApp?.close();
+                }, 300);
+            } else {
+                close();
+                console.error('[csv] request failed:', d.reason);
+            }
+        } catch (e) {
+            console.error('[csv] error:', e);
+            close();
+        } finally {
+            confirm.disabled = false;
+            confirm.textContent = 'Да';
+        }
     });
 }
 

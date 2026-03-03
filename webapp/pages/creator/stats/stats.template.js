@@ -94,9 +94,9 @@ export function statsDetailTemplate(g) {
         </div>
         <div class="st-m3-card st-m3-card--csv" id="dm-csv-btn" data-gid="${_esc(String(g.id))}">
             <img src="/miniapp-static/assets/icons/download-icon.svg"
-                 style="width:22px;height:22px;filter:brightness(10);margin-bottom:4px"
+                 style="width:28px;height:28px;filter:brightness(0) invert(1)"
                  alt="CSV">
-            <div class="st-m3-lbl" style="color:#fff">CSV</div>
+            <div class="st-m3-lbl" style="color:#fff;font-size:11px;font-weight:700;margin-top:2px">CSV</div>
         </div>
     </div>
 
