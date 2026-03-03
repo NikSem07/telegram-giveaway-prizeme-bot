@@ -373,7 +373,9 @@ async function renderDetail(giveaway) {
         _detailData = d;
 
         _renderMetrics(d);
-        _renderDetailChart(d, 'hourly');
+        _renderDetailChart(d, 'all', 'hourly');
+        const totalEl = document.getElementById('detail-chart-total');
+        if (totalEl) totalEl.textContent = (Number(d.metrics?.participants) || 0).toLocaleString('ru-RU');
         _renderFunnel(d);
         _renderSources(d);
         _renderNewSubs(d);
@@ -382,16 +384,26 @@ async function renderDetail(giveaway) {
         _renderFinance(d);
         _renderWinners(d);
 
-        // Переключение периода графика
-        document.getElementById('st-detail-page')?.querySelectorAll('.st-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.st-tab').forEach(t => t.classList.remove('st-tab--on'));
-                tab.classList.add('st-tab--on');
-                const p = tab.dataset.period;
-                const ttl = document.getElementById('detail-chart-ttl');
-                if (ttl) ttl.textContent = p === 'hourly' ? 'По часам (7 дней)' : 'По дням (всё время)';
-                _renderDetailChart(_detailData, p);
-            });
+        // Переключение периода и группировки
+        let _chartPeriod = 'all';
+        let _chartGroup  = 'hourly';
+
+        document.getElementById('chart-period-btns')?.addEventListener('click', e => {
+            const btn = e.target.closest('.st-chart-btn');
+            if (!btn) return;
+            _chartPeriod = btn.dataset.period;
+            document.querySelectorAll('#chart-period-btns .st-chart-btn').forEach(b => b.classList.remove('st-chart-btn--on'));
+            btn.classList.add('st-chart-btn--on');
+            _renderDetailChart(_detailData, _chartPeriod, _chartGroup);
+        });
+
+        document.getElementById('chart-group-btns')?.addEventListener('click', e => {
+            const btn = e.target.closest('.st-chart-btn');
+            if (!btn) return;
+            _chartGroup = btn.dataset.group;
+            document.querySelectorAll('#chart-group-btns .st-chart-btn').forEach(b => b.classList.remove('st-chart-btn--on'));
+            btn.classList.add('st-chart-btn--on');
+            _renderDetailChart(_detailData, _chartPeriod, _chartGroup);
         });
 
     } catch(e) {
@@ -453,30 +465,51 @@ function _pluralClicks(n) {
     return 'кликов';
 }
 
-function _renderDetailChart(d, period) {
+function _renderDetailChart(d, period = 'all', group = 'hourly') {
     requestAnimationFrame(() => {
         const canvas = document.getElementById('detail-chart');
         if (!canvas || !window.Chart) return;
         destroyChart('detail');
 
-        const rows = (period === 'hourly' ? d.hourly : d.daily) || [];
-        if (!rows.length) return;
+        const sourceRows = (group === 'hourly' ? d.hourly : d.daily) || [];
+        if (!sourceRows.length) return;
 
-        const c = chartColors();
-        const labels = rows.map(r => {
-            const dt = new Date(r.bucket);
-            return period === 'hourly'
-                ? dt.toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})
-                : dt.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
-        });
+        // Фильтр по периоду от конца розыгрыша (или NOW если активный)
+        const giveaway  = d.giveaway || {};
+        const endMs     = giveaway.end_at_utc ? new Date(giveaway.end_at_utc).getTime() : Date.now();
+        const periodMs  = { 'all': null, '24h': 86400000, '7d': 7 * 86400000, '30d': 30 * 86400000 };
+        const cutoffMs  = periodMs[period] != null ? endMs - periodMs[period] : null;
 
-        // Накопительный итог
+        const filtered = cutoffMs
+            ? sourceRows.filter(r => new Date(r.bucket).getTime() >= cutoffMs)
+            : sourceRows;
+
+        if (!filtered.length) return;
+
+        // Накопительный итог от начала отфильтрованного диапазона
         const cumul = [];
         let acc = 0;
-        rows.forEach(r => { acc += Number(r.participants) || 0; cumul.push(acc); });
+        filtered.forEach(r => { acc += Number(r.participants) || 0; cumul.push(acc); });
 
-        const maxVal = Math.max(...cumul, 1);
-        const stepSize = Math.ceil(maxVal / 4);
+        // Обновляем счётчик "Участвуют" над графиком
+        const totalEl = document.getElementById('detail-chart-total');
+        if (totalEl) totalEl.textContent = (Number(d.metrics?.participants) || 0).toLocaleString('ru-RU');
+
+        // Форматирование меток оси X
+        const isHourly = group === 'hourly';
+        const labels = filtered.map(r => {
+            const dt = new Date(r.bucket);
+            return isHourly
+                ? dt.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                : dt.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+        });
+
+        const maxVal  = Math.max(...cumul, 1);
+        const rawStep = maxVal / 4;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const stepSize  = Math.ceil(rawStep / magnitude) * magnitude || 1;
+
+        const c = chartColors();
 
         _charts['detail'] = new Chart(canvas, {
             type: 'line',
@@ -499,27 +532,28 @@ function _renderDetailChart(d, period) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: { duration: 500, easing: 'easeOutQuart' },
+                animation: { duration: 400, easing: 'easeOutQuart' },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: isDark() ? '#1c1c1e' : '#fff',
-                        titleColor: isDark() ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+                        backgroundColor: isDark() ? '#2c2c2e' : '#fff',
+                        titleColor: isDark() ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)',
                         bodyColor:  isDark() ? '#fff' : '#000',
-                        borderColor: isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                        borderColor: isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
                         borderWidth: 1,
                         padding: 10,
+                        cornerRadius: 10,
                         displayColors: false,
                         callbacks: {
                             title: items => items[0]?.label || '',
-                            label: ctx => ' ' + ctx.raw.toLocaleString('ru-RU') + ' участников',
+                            label: ctx => ctx.raw.toLocaleString('ru-RU') + ' участников',
                         }
                     }
                 },
                 scales: {
                     x: {
-                        grid: { color: c.grid, drawBorder: false },
+                        grid: { display: false },
                         border: { display: false },
                         ticks: {
                             color: c.text,
@@ -529,7 +563,7 @@ function _renderDetailChart(d, period) {
                         }
                     },
                     y: {
-                        grid: { color: c.grid, drawBorder: false },
+                        grid: { color: c.grid },
                         border: { display: false },
                         beginAtZero: true,
                         ticks: {

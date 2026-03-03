@@ -96,15 +96,26 @@ export function statsDetailTemplate(g) {
     <div class="st-section">
         <div class="st-section-lbl">Динамика участников</div>
         <div class="st-chart-card">
-            <div class="st-chart-head">
-                <div class="st-chart-ttl" id="detail-chart-ttl">По часам (7 дней)</div>
-                <div class="st-tabs">
-                    <button class="st-tab st-tab--on" data-period="hourly">7 дн</button>
-                    <button class="st-tab" data-period="daily">Всё</button>
-                </div>
+            <div class="st-chart-total-row">
+                <div class="st-chart-total-lbl">Участвуют</div>
+                <div class="st-chart-total-val" id="detail-chart-total">—</div>
             </div>
             <div class="st-chart-body" id="detail-chart-body">
                 <canvas id="detail-chart"></canvas>
+            </div>
+            <div class="st-chart-controls">
+                <div class="st-chart-ctrl-lbl">Период</div>
+                <div class="st-chart-btns" id="chart-period-btns">
+                    <button class="st-chart-btn st-chart-btn--on" data-period="all">Все</button>
+                    <button class="st-chart-btn" data-period="24h">24 часа</button>
+                    <button class="st-chart-btn" data-period="7d">7 дней</button>
+                    <button class="st-chart-btn" data-period="30d">30 дней</button>
+                </div>
+                <div class="st-chart-ctrl-lbl" style="margin-top:10px">Группировка</div>
+                <div class="st-chart-btns" id="chart-group-btns">
+                    <button class="st-chart-btn st-chart-btn--on" data-group="hourly">По часам</button>
+                    <button class="st-chart-btn" data-group="daily">По дням</button>
+                </div>
             </div>
         </div>
     </div>

@@ -2643,7 +2643,6 @@ app.post('/api/stats/giveaway', async (req, res) => {
         COUNT(*) FILTER (WHERE prelim_ok = true) AS participants
       FROM entries
       WHERE giveaway_id = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
       GROUP BY bucket ORDER BY bucket ASC
     `, [gid]);
 
