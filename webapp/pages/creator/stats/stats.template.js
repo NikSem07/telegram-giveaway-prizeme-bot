@@ -60,7 +60,8 @@ export function statsDetailTemplate(g) {
         draft:     'background:rgba(255,149,0,0.18);color:#FF9F0A;border:1px solid rgba(255,149,0,0.35)',
         cancelled: 'background:rgba(255,59,48,0.15);color:#FF453A;border:1px solid rgba(255,59,48,0.3)',
     };
-    const endedAt = g.ended_at ? new Date(g.ended_at).toLocaleString('ru-RU', {
+    const endTs   = g.end_at_utc || g.ended_at || null;
+    const endedAt = endTs ? new Date(endTs).toLocaleString('ru-RU', {
         day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
     }) : null;
     const timeBadge = s === 'active'
@@ -91,15 +92,29 @@ export function statsDetailTemplate(g) {
             <div class="st-m3-val" id="dm-conv">—</div>
             <div class="st-m3-lbl">КОНВЕРСИЯ</div>
         </div>
+        <div class="st-m3-card st-m3-card--csv" id="dm-csv-btn" data-gid="${_esc(String(g.id))}">
+            <img src="/miniapp-static/assets/icons/download-icon.svg"
+                 style="width:22px;height:22px;filter:brightness(10);margin-bottom:4px"
+                 alt="CSV">
+            <div class="st-m3-lbl" style="color:#fff">CSV</div>
+        </div>
+    </div>
+
+    <div class="st-csv-modal" id="st-csv-modal" style="display:none">
+        <div class="st-csv-backdrop" id="st-csv-backdrop"></div>
+        <div class="st-csv-sheet">
+            <div class="st-csv-title">Хотите выгрузить CSV файл?</div>
+            <div class="st-csv-desc">Бот вышлет CSV файл со статистикой, вы также сможете вернуться обратно в приложение</div>
+            <div class="st-csv-btns">
+                <button class="st-csv-btn st-csv-btn--cancel" id="st-csv-cancel">Отмена</button>
+                <button class="st-csv-btn st-csv-btn--confirm" id="st-csv-confirm">Да</button>
+            </div>
+        </div>
     </div>
 
     <div class="st-section">
         <div class="st-section-lbl">Динамика участников</div>
         <div class="st-chart-card">
-            <div class="st-chart-total-row">
-                <div class="st-chart-total-lbl">Участвуют</div>
-                <div class="st-chart-total-val" id="detail-chart-total">—</div>
-            </div>
             <div class="st-chart-body" id="detail-chart-body">
                 <canvas id="detail-chart"></canvas>
             </div>
@@ -138,45 +153,17 @@ export function statsDetailTemplate(g) {
         </div>
     </div>
 
-    <div class="st-section" id="newsubs-section">
-        <div class="st-section-lbl">Новые подписчики</div>
+    <div class="st-section">
+        <div class="st-section-lbl">Статус в Telegram</div>
         <div class="st-card">
-            <div class="st-newsubs" id="st-newsubs">
+            <div class="st-aud-full" id="st-aud-premium">
                 <div class="st-mini-loading"><div class="st-spinner"></div></div>
             </div>
         </div>
     </div>
 
     <div class="st-section">
-        <div class="st-section-lbl">Аудитория</div>
-        <div class="st-aud-row">
-            <div class="st-donut-card">
-                <div class="st-donut-ttl">Telegram Premium</div>
-                <div class="st-donut-wrap">
-                    <canvas id="donut-premium"></canvas>
-                    <div class="st-donut-center">
-                        <div class="st-donut-big" id="donut-premium-val">—</div>
-                        <div class="st-donut-sub">Premium</div>
-                    </div>
-                </div>
-                <div class="st-donut-legend" id="donut-premium-leg"></div>
-            </div>
-            <div class="st-donut-card">
-                <div class="st-donut-ttl">Языки</div>
-                <div class="st-donut-wrap">
-                    <canvas id="donut-langs"></canvas>
-                    <div class="st-donut-center">
-                        <div class="st-donut-big" id="donut-langs-val">—</div>
-                        <div class="st-donut-sub">Топ</div>
-                    </div>
-                </div>
-                <div class="st-donut-legend" id="donut-langs-leg"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="st-section">
-        <div class="st-section-lbl">География аудитории</div>
+        <div class="st-section-lbl">Участники по языкам</div>
         <div class="st-card">
             <div class="st-langs" id="st-langs">
                 <div class="st-mini-loading"><div class="st-spinner"></div></div>
@@ -197,6 +184,16 @@ export function statsDetailTemplate(g) {
             <div class="st-wins" id="st-wins"></div>
         </div>
     </div>
+
+    <div class="st-section" id="newsubs-section">
+        <div class="st-section-lbl">Новые подписчики</div>
+        <div class="st-card">
+            <div class="st-newsubs" id="st-newsubs">
+                <div class="st-mini-loading"><div class="st-spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
 </div>`;
 }
 

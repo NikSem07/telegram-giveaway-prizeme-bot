@@ -351,8 +351,8 @@ async function renderDetail(giveaway) {
 
     main.innerHTML = statsDetailTemplate(giveaway);
     window.scrollTo({ top: 0, behavior: 'instant' });
-    if (giveaway.status === 'active' && giveaway.ended_at) {
-        _startDetailTimer(giveaway.ended_at);
+    if (giveaway.status === 'active' && giveaway.end_at_utc) {
+        _startDetailTimer(giveaway.end_at_utc);
     }
     _showBack(() => {
         _hideBack();
@@ -373,6 +373,7 @@ async function renderDetail(giveaway) {
         _detailData = d;
 
         _renderMetrics(d);
+        _initCsvBtn(giveaway.id);
         _renderDetailChart(d, 'all', 'hourly');
         const totalEl = document.getElementById('detail-chart-total');
         if (totalEl) totalEl.textContent = (Number(d.metrics?.participants) || 0).toLocaleString('ru-RU');
@@ -425,6 +426,28 @@ function _renderMetrics(d) {
     const clicksLbl = document.getElementById('dm-clicks-lbl');
     if (partsLbl)  partsLbl.textContent  = _pluralParticipants(parts).toUpperCase();
     if (clicksLbl) clicksLbl.textContent = _pluralClicks(clicks).toUpperCase();
+}
+
+function _initCsvBtn(giveawayId) {
+    const btn     = document.getElementById('dm-csv-btn');
+    const modal   = document.getElementById('st-csv-modal');
+    const backdrop = document.getElementById('st-csv-backdrop');
+    const cancel  = document.getElementById('st-csv-cancel');
+    const confirm = document.getElementById('st-csv-confirm');
+    if (!btn || !modal) return;
+
+    const open  = () => { modal.style.display = 'flex'; requestAnimationFrame(() => modal.classList.add('st-csv-modal--open')); };
+    const close = () => { modal.classList.remove('st-csv-modal--open'); setTimeout(() => { modal.style.display = 'none'; }, 260); };
+
+    btn.addEventListener('click', open);
+    cancel?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+    confirm?.addEventListener('click', () => {
+        close();
+        const botUsername = 'PrizeMeBot'; // замени на реальный username бота
+        const url = `https://t.me/${botUsername}?start=csv_${giveawayId}`;
+        window.Telegram?.WebApp?.openTelegramLink(url);
+    });
 }
 
 let _detailTimerInterval = null;
@@ -496,12 +519,9 @@ function _renderDetailChart(d, period = 'all', group = 'hourly') {
         if (totalEl) totalEl.textContent = (Number(d.metrics?.participants) || 0).toLocaleString('ru-RU');
 
         // Форматирование меток оси X
-        const isHourly = group === 'hourly';
         const labels = filtered.map(r => {
             const dt = new Date(r.bucket);
-            return isHourly
-                ? dt.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-                : dt.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+            return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
         });
 
         const maxVal  = Math.max(...cumul, 1);
@@ -685,56 +705,60 @@ function _renderNewSubs(d) {
 }
 
 function _renderAudience(d) {
-    if (!window.Chart) return;
+    const el = document.getElementById('st-aud-premium');
+    if (!el) return;
 
     const p   = d.premium || {};
     const pc  = Number(p.premium_count) || 0;
     const rc  = Number(p.regular_count) || 0;
     const tot = pc + rc || 1;
     const ppct = Math.round(pc / tot * 100);
+    const rpct = 100 - ppct;
 
-    // Premium donut
+    el.innerHTML = `
+        <div class="st-aud-pie-wrap">
+            <canvas id="donut-premium" width="140" height="140"></canvas>
+            <div class="st-aud-pie-center">
+                <div class="st-aud-pie-val">${ppct}%</div>
+                <div class="st-aud-pie-sub">Premium</div>
+            </div>
+        </div>
+        <div class="st-aud-legend">
+            <div class="st-aud-leg-row">
+                <div class="st-aud-leg-dot" style="background:#FFD700"></div>
+                <div class="st-aud-leg-lbl">⭐ Premium</div>
+                <div class="st-aud-leg-val">${fmt(pc)}</div>
+                <div class="st-aud-leg-pct">${ppct}%</div>
+            </div>
+            <div class="st-aud-leg-row">
+                <div class="st-aud-leg-dot" style="background:rgba(255,255,255,0.25)"></div>
+                <div class="st-aud-leg-lbl">Standard</div>
+                <div class="st-aud-leg-val">${fmt(rc)}</div>
+                <div class="st-aud-leg-pct">${rpct}%</div>
+            </div>
+        </div>`;
+
+    if (!window.Chart) return;
     requestAnimationFrame(() => {
         const cv = document.getElementById('donut-premium');
         if (!cv) return;
         destroyChart('donut-premium');
         _charts['donut-premium'] = new Chart(cv, {
             type: 'doughnut',
-            data: { datasets: [{ data: [pc, rc], backgroundColor:['#FFD700', isDark()?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)'], borderWidth:0 }] },
-            options: { responsive:false, cutout:'70%', plugins:{ legend:{display:false}, tooltip:{enabled:false} }, animation:{duration:500} }
+            data: {
+                datasets: [{
+                    data: [pc || 0.001, rc || 0.001],
+                    backgroundColor: ['#FFD700', isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '68%',
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                animation: { duration: 600 }
+            }
         });
-        const vEl = document.getElementById('donut-premium-val');
-        if (vEl) vEl.textContent = ppct + '%';
-        const legEl = document.getElementById('donut-premium-leg');
-        if (legEl) legEl.innerHTML = `
-            <div class="st-donut-leg"><div class="st-donut-dot" style="background:#FFD700"></div>⭐ ${fmt(pc)}</div>
-            <div class="st-donut-leg"><div class="st-donut-dot" style="background:rgba(255,255,255,0.25)"></div>Обычные ${fmt(rc)}</div>`;
-    });
-
-    // Langs donut
-    const langs = (d.languages || []).slice(0, 5);
-    if (!langs.length) return;
-    const COLORS = ['#007AFF','#34C759','#FF9500','#FF2D55','#AF52DE'];
-    const topLang = langs[0]?.lang || 'unknown';
-    const totalL  = langs.reduce((s,l) => s+Number(l.cnt), 0) || 1;
-
-    requestAnimationFrame(() => {
-        const cv = document.getElementById('donut-langs');
-        if (!cv) return;
-        destroyChart('donut-langs');
-        _charts['donut-langs'] = new Chart(cv, {
-            type: 'doughnut',
-            data: { datasets: [{ data: langs.map(l=>Number(l.cnt)), backgroundColor:COLORS, borderWidth:0 }] },
-            options: { responsive:false, cutout:'70%', plugins:{ legend:{display:false}, tooltip:{enabled:false} }, animation:{duration:500} }
-        });
-        const vEl = document.getElementById('donut-langs-val');
-        if (vEl) vEl.textContent = LANG_FLAG[topLang] || '🌍';
-        const legEl = document.getElementById('donut-langs-leg');
-        if (legEl) legEl.innerHTML = langs.slice(0,3).map((l,i) => `
-            <div class="st-donut-leg">
-                <div class="st-donut-dot" style="background:${COLORS[i]}"></div>
-                ${LANG_FLAG[l.lang]||'🌍'} ${fmt(l.cnt)}
-            </div>`).join('');
     });
 }
 
