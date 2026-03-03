@@ -1406,9 +1406,14 @@ app.post('/api/participant_home_giveaways', async (req, res) => {
     `, [LIMIT_TOP]);
 
     // ── Запрос 2: все активные розыгрыши (для каталога PRIME) ────────────
+    // Показываем только розыгрыши с 3+ участниками
     const latestResult = await pool.query(`
       ${SELECT_GIVEAWAY}
       WHERE g.status = 'active'
+        AND (
+          SELECT COUNT(DISTINCT e.user_id) FROM entries e
+          WHERE e.giveaway_id = g.id AND e.prelim_ok = true
+        ) >= 3
       GROUP BY g.id
       ORDER BY g.id DESC
       LIMIT $1

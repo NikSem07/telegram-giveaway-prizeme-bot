@@ -2258,6 +2258,8 @@ async def process_simple_captcha_participation(user_id: int, giveaway_id: int, c
                             logging.warning(f"[captcha] entry_subscriptions failed: {_e}")
 
                         await s.commit()
+                        # Проверяем порог для публикации в PRIME
+                        asyncio.create_task(_check_and_publish_prime(giveaway_id))
 
                         return {
                             "ok": True,
@@ -7439,6 +7441,41 @@ async def _publish_to_prime_channel(gid: int, gw: "Giveaway") -> int | None:
 
     return sent_message_id
 
+async def _check_and_publish_prime(giveaway_id: int) -> None:
+    """
+    Проверяет кол-во участников розыгрыша.
+    Если достигнуто 3 — публикует пост в PRIME-канал (только один раз).
+    """
+    try:
+        async with session_scope() as s:
+            # Уже опубликован?
+            existing = await s.execute(
+                stext("SELECT id FROM prime_channel_posts WHERE giveaway_id = :gid"),
+                {"gid": giveaway_id}
+            )
+            if existing.first():
+                return  # уже опубликован, ничего не делаем
+
+            # Считаем участников
+            cnt_res = await s.execute(
+                stext("SELECT COUNT(DISTINCT user_id) FROM entries WHERE giveaway_id = :gid AND prelim_ok = true"),
+                {"gid": giveaway_id}
+            )
+            cnt = cnt_res.scalar_one() or 0
+
+            if cnt < 3:
+                return  # ещё не достигли порога
+
+            # Достигли 3 — публикуем
+            gw = await s.get(Giveaway, giveaway_id)
+            if not gw or gw.status != GiveawayStatus.ACTIVE:
+                return
+
+        logging.info("🚀 [PRIME] Достигнуто 3 участника, публикуем в PRIME-канал, gid=%s", giveaway_id)
+        await _publish_to_prime_channel(giveaway_id, gw)
+
+    except Exception as e:
+        logging.error("❌ [PRIME] Ошибка в _check_and_publish_prime, gid=%s: %s", giveaway_id, e)
 
 async def _edit_prime_channel_post(giveaway_id: int, bot_instance: Bot) -> bool:
     """
@@ -7851,11 +7888,8 @@ async def _launch_and_publish(gid: int, message: types.Message):
     else:
         logging.warning(f"⚠️ Не удалось сохранить ни одного message_id для розыгрыша {gid}")
 
-    # Публикуем в PRIME-канал (системно, не зависит от каналов создателя)
-    try:
-        await _publish_to_prime_channel(gid, gw)
-    except Exception as e:
-        logging.error("❌ [PRIME] Не удалось опубликовать в PRIME-канале при запуске gid=%s: %s", gid, e)
+    # PRIME-канал: публикуем только после набора 3 участников (см. _check_and_publish_prime)
+    logging.info("ℹ️ [PRIME] Публикация отложена до набора 3 участников, gid=%s", gid)
 
     return gw
 
@@ -8386,6 +8420,8 @@ async def user_join(cq: CallbackQuery):
                         logging.warning(f"[user_join] entry_subscriptions insert failed: {_e}")
 
                     await cq.message.answer(f"✅ Вы успешно участвуете в розыгрыше!\n\nВаш билет: <b>{code}</b>", disable_notification=False, parse_mode="HTML")
+                    # Проверяем порог для публикации в PRIME
+                    asyncio.create_task(_check_and_publish_prime(gid))
                     break
 
                 except Exception as e:
