@@ -10445,22 +10445,51 @@ async def _internal_claim_ticket(gid: str, user_id: int):
             ticket = row[0]
         else:
             # генерируем и сохраняем
+            is_new_entry = False
             for _ in range(5):
                 ticket = gen_ticket_code()
                 try:
+                    # source_channel
+                    src_res = await s.execute(
+                        stext("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid ORDER BY id LIMIT 1"),
+                        {"gid": giveaway_id}
+                    )
+                    src_row = src_res.first()
+                    source_channel_id = src_row[0] if src_row else None
+
                     await s.execute(stext(
-                        "INSERT INTO entries(giveaway_id,user_id,ticket_code,prelim_ok,prelim_checked_at) "
-                        "VALUES (:g,:u,:code,1,:ts)"
+                        "INSERT INTO entries(giveaway_id,user_id,ticket_code,prelim_ok,prelim_checked_at,source_channel_id) "
+                        "VALUES (:g,:u,:code,true,:ts,:src)"
                     ), {
                         "g": giveaway_id,
                         "u": user_id,
                         "code": ticket,
-                        "ts": datetime.now(timezone.utc)
+                        "ts": datetime.now(timezone.utc),
+                        "src": source_channel_id
                     })
+
+                    # entry_subscriptions
+                    try:
+                        ch_res = await s.execute(
+                            stext("SELECT chat_id FROM giveaway_channels WHERE giveaway_id=:gid"),
+                            {"gid": giveaway_id}
+                        )
+                        for (ch_id,) in ch_res.fetchall():
+                            await s.execute(stext("""
+                                INSERT INTO entry_subscriptions(giveaway_id, user_id, channel_id, was_subscribed)
+                                VALUES (:gid, :uid, :chid, false)
+                                ON CONFLICT(giveaway_id, user_id, channel_id) DO NOTHING
+                            """), {"gid": giveaway_id, "uid": user_id, "chid": ch_id})
+                    except Exception as _e:
+                        logging.warning(f"[claim_ticket] entry_subscriptions failed: {_e}")
+
+                    is_new_entry = True
                     break
                 except Exception:
-                    # коллизия кода — попробуем ещё раз
                     continue
+
+        if is_new_entry:
+            asyncio.create_task(_check_and_publish_prime(giveaway_id))
 
     return {"ok": True, "ticket": ticket}
 
