@@ -2695,7 +2695,7 @@ app.post('/api/stats/giveaway', async (req, res) => {
       FROM entry_subscriptions es
       JOIN users u ON u.user_id = es.user_id
       WHERE es.giveaway_id = $1 AND es.was_subscribed = false
-      ORDER BY es.user_id, es.checked_at DESC
+      ORDER BY es.user_id
       LIMIT 50
     `, [gid]);
 
