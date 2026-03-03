@@ -5559,7 +5559,8 @@ async def step_endat(m: Message, state: FSMContext):
 
         # явное текстовое подтверждение для пользователя
         # Точное время до окончания
-        delta = dt_msk - datetime.now(MSK_TZ)
+        dt_msk_aware = dt_msk if dt_msk.tzinfo else MSK_TZ.localize(dt_msk) if hasattr(MSK_TZ, 'localize') else dt_msk.replace(tzinfo=MSK_TZ)
+        delta = dt_msk_aware - datetime.now(MSK_TZ)
         total_seconds = int(delta.total_seconds())
         d = total_seconds // 86400
         h = (total_seconds % 86400) // 3600
