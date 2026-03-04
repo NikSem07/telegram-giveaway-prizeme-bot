@@ -755,10 +755,11 @@ function _renderNewSubs(d) {
         ${ns.map((r, i) => {
             const chKey = String(r.channel_id || r.chat_id || '');
             const users = usersByChannel[chKey] || [];
-            const avatarHtml = r.chat_id
-                ? `<img src="/api/chat_avatar/${r.chat_id}" alt=""
+            const chatIdForAvatar = r.chat_id || r.channel_id;
+            const avatarHtml = chatIdForAvatar
+                ? `<img src="/api/chat_avatar/${chatIdForAvatar}" alt=""
                     style="width:100%;height:100%;object-fit:cover;border-radius:50%"
-                    onerror="this.parentElement.innerHTML='📢'">`
+                    onerror="this.style.display='none';this.parentElement.innerHTML='📢'">`
                 : '📢';
             return `
             <div class="st-newsub-accordion" data-idx="${i}">
@@ -770,7 +771,7 @@ function _renderNewSubs(d) {
                 </div>
                 <div class="st-newsub-users-list">
                 ${users.length ? users.map(u => {
-                    const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || (u.username ? '@'+u.username : 'Участник');
+                    const name = u.username ? '@'+u.username : ([u.first_name, u.last_name].filter(Boolean).join(' ') || 'Участник');
                     return `
                     <div class="st-newsub-user-row">
                         <div class="st-newsub-user-ava">

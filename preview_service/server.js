@@ -2775,6 +2775,7 @@ app.post('/api/stats/giveaway', async (req, res) => {
     const newSubsResult = await pool.query(`
       SELECT
         es.channel_id,
+        es.channel_id AS chat_id,
         oc.title,
         oc.username,
         COUNT(DISTINCT es.user_id) AS new_subscribers
