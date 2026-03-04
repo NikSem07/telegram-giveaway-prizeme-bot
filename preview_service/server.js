@@ -643,6 +643,15 @@ app.get('/miniapp/results_lose', (req, res) => {
   }
 });
 
+app.get('/miniapp/results_no_participant', (req, res) => {
+  const p = path.join(__dirname, '../webapp/results_no_participant.html');
+  if (fs.existsSync(p)) {
+    res.sendFile(p);
+  } else {
+    res.status(404).send('<h1>Экран недоступен</h1>');
+  }
+});
+
 // Participant and creator home pages
 app.get('/miniapp/index', (req, res) => {
   res.sendFile(path.join(__dirname, '../webapp/index.html'));
