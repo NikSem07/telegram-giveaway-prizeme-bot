@@ -940,6 +940,8 @@ body.page-stats #main-content {
     overflow: hidden;
 }
 
+:root.theme-light .st-newsub-user-ava { --profile-icon-filter: invert(1); }
+
 .st-newsub-user-name {
     font-size: 14px;
     color: var(--color-text);

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PrizeMe — Вы не участвовали</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/miniapp-static/results_no_participant.css?v=V1"/>
+  <link rel="stylesheet" href="/miniapp-static/standalone.css?v=FS-1"/>
+</head>
+<body>
+  <div class="wrap">
+    <section id="screen-no-participant">
+
+      <div class="np-lottie" id="np-lottie"></div>
+
+      <div class="np-title">
+        <h1>Вы не приняли участие в розыгрыше</h1>
+      </div>
+
+      <div class="np-subtitle">
+        <p>Не переживайте, Вы можете принять участие в других розыгрышах, переходите в приложение</p>
+      </div>
+
+    </section>
+  </div>
+
+  <div class="np-btn-wrap">
+    <button class="np-btn" onclick="goToApp()">В приложение</button>
+  </div>
+
+  <script src="/miniapp-static/app.js?v=MULTI-PAGE-V1"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.expand();
+      }
+
+      // Загружаем Lottie анимацию
+      const wrap = document.getElementById('np-lottie');
+      function playLottie() {
+        fetch('/miniapp-static/assets/gif/Telegram-Logo.json')
+          .then(r => r.json())
+          .then(animData => {
+            window.lottie.loadAnimation({
+              container: wrap,
+              renderer: 'svg',
+              loop: true,
+              autoplay: true,
+              animationData: animData
+            });
+          })
+          .catch(() => { wrap.style.display = 'none'; });
+      }
+
+      if (!window.lottie) {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js';
+        s.onload = playLottie;
+        document.head.appendChild(s);
+      } else {
+        playLottie();
+      }
+    });
+
+    function goToApp() {
+      const tg = window.Telegram?.WebApp;
+      if (tg && tg.openTelegramLink) {
+        tg.close();
+      } else {
+        window.location.href = '/miniapp/index';
+      }
+    }
+  </script>
+  <script src="/miniapp-static/standalone.js?v=FS-2"></script>
+</body>
+</html>

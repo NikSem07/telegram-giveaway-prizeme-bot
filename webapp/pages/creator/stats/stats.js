@@ -777,7 +777,7 @@ function _renderNewSubs(d) {
                         <div class="st-newsub-user-ava">
                             ${u.photo_url
                                 ? `<img src="${_esc(u.photo_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-                                : `<span>${name[0].toUpperCase()}</span>`}
+                                : `<img src="/miniapp-static/assets/icons/profile-icon.svg" alt="" style="width:60%;height:60%;opacity:0.5;filter:var(--profile-icon-filter,none)">`}
                         </div>
                         <div class="st-newsub-user-name">${_esc(name)}</div>
                     </div>`;

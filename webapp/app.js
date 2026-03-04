@@ -256,6 +256,7 @@ function checkImmediateResults() {
       '/miniapp/already',
       '/miniapp/results_win',
       '/miniapp/results_lose',
+      '/miniapp/results_no_participant',
       '/miniapp/captcha',
       '/miniapp/success.html',
       '/miniapp/already_participating.html',
@@ -623,7 +624,12 @@ async function resultsFlow(gid) {
       window.location.replace(`/miniapp/results_win?gid=${encodeURIComponent(gid)}`);
       return;
     }
-
+    // Не участвовал (нет билета) -> отдельный экран
+    if (!results.user || !results.user.ticket_code) {
+      console.log("[RESULTS-FLOW] No ticket -> results_no_participant");
+      window.location.replace(`/miniapp/results_no_participant?gid=${encodeURIComponent(gid)}`);
+      return;
+    }
     console.log("[RESULTS-FLOW] Not winner -> results_lose");
     window.location.replace(`/miniapp/results_lose?gid=${encodeURIComponent(gid)}`);
   } catch (err) {
@@ -1673,6 +1679,9 @@ function initializeCurrentPage() {
       case '/miniapp/results_lose':
           initializeResultsLosePage();
           break;
+      case '/miniapp/results_no_participant':
+        // Статичный экран, JS инициализация не нужна
+        break;
       default: {
           // Разрешаем статические страницы (не SPA), чтобы роутер их НЕ редиректил на index
           const allowedStaticPages = new Set([
