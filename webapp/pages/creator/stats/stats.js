@@ -896,12 +896,13 @@ function _renderWinners(d) {
     section.style.display = '';
 
     el.innerHTML = winners.map(w => {
-        const name = w.first_name || (w.username ? '@'+w.username : 'ID ' + w.user_id);
+        const name = w.username ? '@'+w.username : (w.first_name || 'ID ' + w.user_id);
+        const ticket = w.ticket_code || '—';
         return `
         <div class="st-win-row">
             <div class="st-win-rank st-win-rank--${w.rank}">${w.rank}</div>
             <div class="st-win-name">${_esc(name)}</div>
-            ${w.username ? `<div class="st-win-id">@${w.username}</div>` : ''}
+            <div class="st-win-id">Билет: <b>${_esc(ticket)}</b></div>
         </div>`;
     }).join('');
 }

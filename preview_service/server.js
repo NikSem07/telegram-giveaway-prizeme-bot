@@ -62,15 +62,22 @@ async function upsertMiniAppUser(user) {
     const username = usernameRaw.length ? usernameRaw : null;
 
     // Важно: не затираем username на NULL, если он уже был
+    const firstName = (user.first_name || "").trim() || null;
+    const langCode = (user.language_code || "").trim() || null;
+    const isPremium = user.is_premium === true;
+
     await pool.query(
       `
-      INSERT INTO users (user_id, username)
-      VALUES ($1, $2)
+      INSERT INTO users (user_id, username, tz, created_at, language_code, is_premium, first_name)
+      VALUES ($1, $2, 'UTC', NOW(), $3, $4, $5)
       ON CONFLICT (user_id)
       DO UPDATE SET
-        username = COALESCE(EXCLUDED.username, users.username)
+        username      = COALESCE(EXCLUDED.username, users.username),
+        first_name    = COALESCE(EXCLUDED.first_name, users.first_name),
+        language_code = COALESCE(EXCLUDED.language_code, users.language_code),
+        is_premium    = EXCLUDED.is_premium
       `,
-      [userId, username]
+      [userId, username, langCode, isPremium, firstName]
     );
   } catch (e) {
     console.log("[USER_UPSERT] failed:", e?.message || e);
@@ -841,6 +848,16 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
 
   const done = isOkOverall;
 
+  // Записываем клик (уникальный — один раз на пользователя на розыгрыш)
+  try {
+    await pool.query(
+      `INSERT INTO giveaway_clicks (giveaway_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (giveaway_id, user_id) DO NOTHING`,
+      [giveawayId, userId]
+    );
+  } catch (_e) { console.log('[CLICK] insert failed:', _e.message); }
+
   // Если нельзя выдавать билет — возвращаем только проверки
   if (!issueTicket) {
     return {
@@ -878,13 +895,30 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
         ).join('');
 
         try {
-          await pool.query(
-            `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at)
-             VALUES ($1, $2, $3, true, NOW())`,
-            [giveawayId, userId, code]
+          const srcChannelId = channels.length > 0 ? channels[0].chat_id : null;
+          const entryRes = await pool.query(
+            `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at, source_channel_id)
+             VALUES ($1, $2, $3, true, NOW(), $4) RETURNING id`,
+            [giveawayId, userId, code, srcChannelId]
           );
           ticket = code;
           isNewTicket = true;
+          // Записываем entry_subscriptions
+          const entryId = entryRes.rows[0]?.id;
+          if (entryId) {
+            for (const ch of channels) {
+              const wasSub = !need.some(n => String(n.title) === String(ch.title));
+              try {
+                await pool.query(
+                  `INSERT INTO entry_subscriptions
+                     (entry_id, giveaway_id, user_id, channel_id, was_subscribed)
+                   VALUES ($1, $2, $3, $4, $5)
+                   ON CONFLICT DO NOTHING`,
+                  [entryId, giveawayId, userId, ch.chat_id, wasSub]
+                );
+              } catch (_e) { console.log('[ENTRY_SUB] failed:', _e.message); }
+            }
+          }
           details.push(`ticket_created_attempt_${attempt + 1}`);
           // Уведомляем бота для публикации в PRIME
           try {
@@ -1147,13 +1181,36 @@ app.post('/api/claim', async (req, res) => {
       ).join('');
       
       try {
-        await pool.query(
-          `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at) 
-           VALUES ($1, $2, $3, true, NOW())`,
-          [giveawayId, userId, code]
+        const claimSrcRes = await pool.query(
+          `SELECT chat_id FROM giveaway_channels WHERE giveaway_id = $1 ORDER BY id LIMIT 1`,
+          [giveawayId]
+        );
+        const claimSrcId = claimSrcRes.rows[0]?.chat_id || null;
+        const claimEntryRes = await pool.query(
+          `INSERT INTO entries(giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at, source_channel_id)
+           VALUES ($1, $2, $3, true, NOW(), $4) RETURNING id`,
+          [giveawayId, userId, code, claimSrcId]
         );
         ticket = code;
         console.log(`[CLAIM] ✅ Успешно создан билет: ${code}`);
+        // entry_subscriptions
+        const claimEntryId = claimEntryRes.rows[0]?.id;
+        if (claimEntryId) {
+          const claimChRes = await pool.query(
+            `SELECT chat_id FROM giveaway_channels WHERE giveaway_id = $1`, [giveawayId]
+          );
+          for (const ch of claimChRes.rows) {
+            try {
+              await pool.query(
+                `INSERT INTO entry_subscriptions
+                   (entry_id, giveaway_id, user_id, channel_id, was_subscribed)
+                 VALUES ($1, $2, $3, $4, false)
+                 ON CONFLICT DO NOTHING`,
+                [claimEntryId, giveawayId, userId, ch.chat_id]
+              );
+            } catch (_e) {}
+          }
+        }
         // Уведомляем бота для публикации в PRIME
         try {
           await fetch(`${BOT_INTERNAL_URL}/internal/notify_prime`, {
@@ -2768,9 +2825,10 @@ app.post('/api/stats/giveaway', async (req, res) => {
 
     // Победители (если завершён)
     const winnersResult = await pool.query(`
-      SELECT w.rank, w.user_id, u.username, u.first_name
+      SELECT w.rank, w.user_id, u.username, u.first_name, e.ticket_code
       FROM winners w
       LEFT JOIN users u ON u.user_id = w.user_id
+      LEFT JOIN entries e ON e.giveaway_id = w.giveaway_id AND e.user_id = w.user_id
       WHERE w.giveaway_id = $1
       ORDER BY w.rank ASC
     `, [gid]);
