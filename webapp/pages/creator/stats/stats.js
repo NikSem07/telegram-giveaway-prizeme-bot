@@ -735,46 +735,55 @@ function _renderNewSubs(d) {
     const el = document.getElementById('st-newsubs');
     if (!el) return;
     const ns = d.new_subs || [];
-
     if (!ns.length) {
         el.innerHTML = '<div class="st-empty-txt" style="padding:8px 0;font-size:13px;color:var(--color-text-secondary)">Данные появятся после участия пользователей</div>';
         return;
     }
-
     const total = ns.reduce((s, r) => s + (Number(r.new_subscribers)||0), 0);
-
-    // Получаем список новых подписчиков с именами
     const newUsers = d.new_sub_users || [];
+
+    // Группируем пользователей по каналу
+    const usersByChannel = {};
+    newUsers.forEach(u => {
+        const key = String(u.channel_id);
+        if (!usersByChannel[key]) usersByChannel[key] = [];
+        usersByChannel[key].push(u);
+    });
 
     el.innerHTML = `
         <div class="st-newsub-total">+${fmt(total)} <span>новых подписчиков</span></div>
-        ${ns.map(r => {
+        ${ns.map((r, i) => {
+            const chKey = String(r.channel_id || r.chat_id || '');
+            const users = usersByChannel[chKey] || [];
             const avatarHtml = r.chat_id
                 ? `<img src="/api/chat_avatar/${r.chat_id}" alt=""
                     style="width:100%;height:100%;object-fit:cover;border-radius:50%"
                     onerror="this.parentElement.innerHTML='📢'">`
                 : '📢';
             return `
-            <div class="st-newsub-row">
-                <div class="st-src-icon st-src-icon--round">${avatarHtml}</div>
-                <div class="st-newsub-name">${_esc(r.title || r.username || 'Канал')}</div>
-                <div class="st-newsub-cnt">+${fmt(r.new_subscribers)}</div>
-            </div>`;
-        }).join('')}
-        ${newUsers.length ? `
-        <div class="st-newsub-users-lbl">Пользователи</div>
-        ${newUsers.map(u => {
-            const name = u.first_name || (u.username ? '@'+u.username : 'Участник');
-            return `
-            <div class="st-newsub-user-row">
-                <div class="st-newsub-user-ava">
-                    ${u.photo_url
-                        ? `<img src="${_esc(u.photo_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-                        : name[0].toUpperCase()}
+            <div class="st-newsub-accordion" data-idx="${i}">
+                <div class="st-newsub-row st-newsub-row--clickable" onclick="this.closest('.st-newsub-accordion').classList.toggle('st-newsub-accordion--open')">
+                    <div class="st-src-icon st-src-icon--round">${avatarHtml}</div>
+                    <div class="st-newsub-name">${_esc(r.title || r.username || 'Канал')}</div>
+                    <div class="st-newsub-cnt">+${fmt(r.new_subscribers)}</div>
+                    <div class="st-newsub-chevron">›</div>
                 </div>
-                <div class="st-newsub-user-name">${_esc(name)}</div>
+                <div class="st-newsub-users-list">
+                ${users.length ? users.map(u => {
+                    const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || (u.username ? '@'+u.username : 'Участник');
+                    return `
+                    <div class="st-newsub-user-row">
+                        <div class="st-newsub-user-ava">
+                            ${u.photo_url
+                                ? `<img src="${_esc(u.photo_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                                : `<span>${name[0].toUpperCase()}</span>`}
+                        </div>
+                        <div class="st-newsub-user-name">${_esc(name)}</div>
+                    </div>`;
+                }).join('') : '<div class="st-newsub-empty">Нет данных о пользователях</div>'}
+                </div>
             </div>`;
-        }).join('')}` : ''}`;
+        }).join('')}`;
 }
 
 function _renderAudience(d) {

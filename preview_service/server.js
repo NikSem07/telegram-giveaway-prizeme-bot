@@ -858,6 +858,20 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
     );
   } catch (_e) { console.log('[CLICK] insert failed:', _e.message); }
 
+  // Записываем pending_subscriptions для каналов где НЕ подписан (для трекинга новых подписчиков)
+  if (!done) {
+    for (const n of need) {
+      try {
+        await pool.query(
+          `INSERT INTO pending_subscriptions (giveaway_id, user_id, channel_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (giveaway_id, user_id, channel_id) DO NOTHING`,
+          [giveawayId, userId, n.chat_id || channels.find(c => c.title === n.title)?.chat_id]
+        );
+      } catch (_e) { console.log('[PENDING_SUB] insert failed:', _e.message); }
+    }
+  }
+
   // Если нельзя выдавать билет — возвращаем только проверки
   if (!issueTicket) {
     return {
@@ -903,11 +917,19 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
           );
           ticket = code;
           isNewTicket = true;
-          // Записываем entry_subscriptions
+          // Записываем entry_subscriptions — was_subscribed=false если был в pending
           const entryId = entryRes.rows[0]?.id;
           if (entryId) {
+            // Проверяем кто был в pending (не был подписан при первом нажатии)
+            const pendingRes = await pool.query(
+              `SELECT channel_id FROM pending_subscriptions
+               WHERE giveaway_id=$1 AND user_id=$2`,
+              [giveawayId, userId]
+            );
+            const pendingChannels = new Set(pendingRes.rows.map(r => String(r.channel_id)));
+
             for (const ch of channels) {
-              const wasSub = !need.some(n => String(n.title) === String(ch.title));
+              const wasSub = !pendingChannels.has(String(ch.chat_id));
               try {
                 await pool.query(
                   `INSERT INTO entry_subscriptions
@@ -2765,16 +2787,17 @@ app.post('/api/stats/giveaway', async (req, res) => {
 
     // Список пользователей-новых подписчиков с именами
     const newSubUsersResult = await pool.query(`
-      SELECT DISTINCT ON (es.user_id)
+      SELECT DISTINCT ON (es.user_id, es.channel_id)
         es.user_id,
+        es.channel_id,
         u.username,
         u.first_name,
         u.photo_url
       FROM entry_subscriptions es
       JOIN users u ON u.user_id = es.user_id
       WHERE es.giveaway_id = $1 AND es.was_subscribed = false
-      ORDER BY es.user_id
-      LIMIT 50
+      ORDER BY es.user_id, es.channel_id
+      LIMIT 100
     `, [gid]);
 
     // Аудитория: Premium vs обычные
