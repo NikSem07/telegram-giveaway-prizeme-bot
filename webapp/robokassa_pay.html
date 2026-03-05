@@ -43,6 +43,9 @@
             is_test:        Number(urlParams.get('is_test')),
         } : null;
 
+        console.log('[ROBO_PAY] URL:', window.location.href);
+        console.log('[ROBO_PAY] inv_id from URL:', urlParams.get('inv_id'));
+        
         if (!params) {
             document.getElementById('rp-loading').style.display = 'none';
             document.getElementById('rp-error').style.display = 'flex';
@@ -65,7 +68,7 @@
                     Encoding:       'utf-8',
                     IsTest:         params.is_test,
                     SignatureValue: params.signature,
-                    Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'] })
+                    Settings:       { PaymentMethods: ['BankCard', 'SBP'] }
                 }
             );
 
