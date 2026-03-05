@@ -46,18 +46,20 @@
             document.getElementById('rp-loading').style.display = 'none';
             document.getElementById('rp-container').style.display = 'block';
 
-            Robokassa.Render({
-                MerchantLogin:  params.merchant_login,
-                OutSum:         params.out_sum,
-                InvId:          params.inv_id,
-                Description:    params.description,
-                Culture:        'ru',
-                Encoding:       'utf-8',
-                IsTest:         params.is_test,
-                SignatureValue: params.signature,
-                Target:         'rp-container',
-                Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'] })
-            });
+            Robokassa.Render(
+                document.getElementById('rp-container'),
+                {
+                    MerchantLogin:  params.merchant_login,
+                    OutSum:         params.out_sum,
+                    InvId:          params.inv_id,
+                    Description:    params.description,
+                    Culture:        'ru',
+                    Encoding:       'utf-8',
+                    IsTest:         params.is_test,
+                    SignatureValue: params.signature,
+                    Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'] })
+                }
+            );
 
             // Polling статуса
             const initData = sessionStorage.getItem('prizeme_init_data') || tg?.initData || '';
