@@ -308,3 +308,31 @@
     text-decoration: underline;
     text-underline-offset: 2px;
 }
+
+/* ── Robokassa iFrame fix ─────────────────────────────────────────────── */
+
+/* Оверлей поверх всего */
+#robokassa-frame-overlay,
+div[id*="robokassa"],
+div[class*="robokassa"] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    overflow: hidden !important;
+}
+
+/* Сам iframe */
+iframe[src*="robokassa"],
+iframe[src*="auth.robokassa"] {
+    position: fixed !important;
+    top: env(safe-area-inset-top, 44px) !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: calc(100vh - env(safe-area-inset-top, 44px)) !important;
+    border: none !important;
+    z-index: 100000 !important;
+    background: #ffffff !important;
+    overflow-y: scroll !important;
+    -webkit-overflow-scrolling: touch !important;
+}
