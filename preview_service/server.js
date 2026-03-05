@@ -29,9 +29,16 @@ app.use('/miniapp', express.static(path.join(__dirname, '../webapp'), { index: f
 
 // Конфигурация из .env
 const BOT_TOKEN = process.env.BOT_TOKEN?.trim();
-const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:8088';
 const WEBAPP_BASE_URL = process.env.WEBAPP_BASE_URL?.trim();
 const TELEGRAM_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
+const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:8088';
+
+// Robokassa
+const ROBOKASSA_LOGIN     = process.env.ROBOKASSA_LOGIN     || '';
+const ROBOKASSA_PASSWORD1 = process.env.ROBOKASSA_PASSWORD1 || '';
+const ROBOKASSA_PASSWORD2 = process.env.ROBOKASSA_PASSWORD2 || '';
+const ROBOKASSA_IS_TEST   = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
+
 
 // Логируем конфигурацию при запуске
 console.log('🔧 Configuration loaded:');
@@ -1859,6 +1866,167 @@ app.post('/api/create_stars_invoice', async (req, res) => {
 });
 
 // --- POST /api/top_placement_checkout_data ---
+// ── Robokassa: MD5 helper ─────────────────────────────────────────────────
+function _roboMd5(str) {
+    return crypto.createHash('md5').update(str).digest('hex').toUpperCase();
+}
+
+// --- POST /api/create_robokassa_invoice ---
+app.post('/api/create_robokassa_invoice', async (req, res) => {
+    try {
+        const { init_data, giveaway_id, period, price_rub } = req.body;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const userId = Number(parsedInitData.user_parsed.id);
+
+        const VALID_PERIODS = { day: 149, week: 499 };
+        if (!VALID_PERIODS[period]) {
+            return res.status(400).json({ ok: false, reason: 'invalid_period' });
+        }
+
+        const gw = await pool.query(
+            `SELECT id, internal_title FROM giveaways
+             WHERE id = $1 AND owner_user_id = $2 AND status = 'active'`,
+            [giveaway_id, userId]
+        );
+        if (!gw.rows.length) {
+            return res.status(400).json({ ok: false, reason: 'giveaway_not_found' });
+        }
+
+        const giveawayTitle = gw.rows[0].internal_title;
+        const outSum        = VALID_PERIODS[period].toFixed(2);
+        const invId         = Date.now() * 1000 + (userId % 1000);
+        const periodLabel   = period === 'day' ? '1 день' : '1 неделю';
+        const description   = `Топ-размещение «${giveawayTitle}» на ${periodLabel}`;
+        const signature     = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${ROBOKASSA_PASSWORD1}`);
+
+        await pool.query(
+            `INSERT INTO robokassa_orders (inv_id, giveaway_id, user_id, period, amount_rub, status)
+             VALUES ($1, $2, $3, $4, $5, 'pending')`,
+            [invId, giveaway_id, userId, period, outSum]
+        );
+
+        return res.json({
+            ok: true,
+            merchant_login: ROBOKASSA_LOGIN,
+            out_sum:        outSum,
+            inv_id:         invId,
+            description,
+            signature,
+            is_test:        ROBOKASSA_IS_TEST
+        });
+    } catch (e) {
+        console.error('[ROBOKASSA] create_invoice error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
+// --- POST /api/robokassa_result (ResultURL от Robokassa) ---
+app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async (req, res) => {
+    try {
+        const { OutSum, InvId, SignatureValue } = req.body;
+        console.log('[ROBOKASSA] result:', { OutSum, InvId, SignatureValue });
+
+        // Проверяем подпись
+        const expected = _roboMd5(`${OutSum}:${InvId}:${ROBOKASSA_PASSWORD2}`);
+        if (expected !== String(SignatureValue).toUpperCase()) {
+            console.error('[ROBOKASSA] bad signature');
+            return res.status(400).send('bad signature');
+        }
+
+        const invId = Number(InvId);
+        const order = await pool.query(
+            `SELECT * FROM robokassa_orders WHERE inv_id = $1`, [invId]
+        );
+        if (!order.rows.length) {
+            return res.status(400).send('order not found');
+        }
+        const o = order.rows[0];
+        if (o.status !== 'pending') {
+            // Уже обработан — идемпотентность
+            return res.send(`OK${invId}`);
+        }
+
+        const periodDays  = o.period === 'day' ? 1 : 7;
+        const periodLabel = o.period === 'day' ? '1 день' : '1 неделю';
+        const startsAt    = new Date();
+        const endsAt      = new Date(startsAt.getTime() + periodDays * 86400 * 1000);
+
+        // Деактивируем предыдущий топ
+        await pool.query(
+            `UPDATE top_placements SET is_active = false
+             WHERE giveaway_id = $1 AND is_active = true`,
+            [o.giveaway_id]
+        );
+
+        // Создаём service_order
+        const soRes = await pool.query(
+            `INSERT INTO service_orders (giveaway_id, user_id, service_type, price_rub, status, created_at)
+             VALUES ($1, $2, 'top_placement', $3, 'paid', NOW()) RETURNING id`,
+            [o.giveaway_id, o.user_id, o.amount_rub]
+        );
+        const serviceOrderId = soRes.rows[0].id;
+
+        // Создаём top_placement
+        await pool.query(
+            `INSERT INTO top_placements (giveaway_id, service_order_id, starts_at, ends_at, is_active)
+             VALUES ($1, $2, $3, $4, true)`,
+            [o.giveaway_id, serviceOrderId, startsAt, endsAt]
+        );
+
+        // Обновляем статус заказа
+        await pool.query(
+            `UPDATE robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
+            [invId]
+        );
+
+        // Уведомляем бота
+        try {
+            await fetch(`${BOT_INTERNAL_URL}/internal/top_placement_paid`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    user_id:     o.user_id,
+                    giveaway_id: o.giveaway_id,
+                    period:      o.period,
+                    period_label: periodLabel,
+                    payment_type: 'card'
+                })
+            });
+        } catch (_e) { console.log('[ROBOKASSA] bot notify failed:', _e.message); }
+
+        console.log(`[ROBOKASSA] ✅ paid inv_id=${invId}, gid=${o.giveaway_id}`);
+        return res.send(`OK${invId}`);
+    } catch (e) {
+        console.error('[ROBOKASSA] result error:', e);
+        return res.status(500).send('error');
+    }
+});
+
+// --- GET /api/robokassa_order_status ---
+app.get('/api/robokassa_order_status', async (req, res) => {
+    try {
+        const { inv_id, init_data } = req.query;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const order = await pool.query(
+            `SELECT status FROM robokassa_orders WHERE inv_id = $1`, [Number(inv_id)]
+        );
+        if (!order.rows.length) {
+            return res.json({ ok: true, status: 'not_found' });
+        }
+        return res.json({ ok: true, status: order.rows[0].status });
+    } catch (e) {
+        console.error('[ROBOKASSA] order_status error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
+
 // Отдаёт активные розыгрыши создателя для экрана чекаута топ-размещения.
 // Исключает розыгрыши, которые уже в топе.
 app.post('/api/top_placement_checkout_data', async (req, res) => {

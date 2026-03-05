@@ -379,25 +379,96 @@ async function initiateStarsPayment() {
     }
 }
 
-// ── Оплата картой — заглушка (Robokassa, после активации) ────────────────
-function initiateCardPayment() {
-    const modal = document.createElement('div');
-    modal.className = 'svc-wip-overlay';
-    modal.innerHTML = `
-        <div class="svc-wip-sheet">
-            <p class="svc-wip-title">🚧 В разработке</p>
-            <p class="svc-wip-text">Оплата картой скоро будет доступна. Используйте Telegram Stars.</p>
-            <button class="svc-wip-btn" type="button" id="svc-wip-close">Понятно</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    requestAnimationFrame(() => modal.classList.add('is-visible'));
-    const close = () => {
-        modal.classList.remove('is-visible');
-        modal.addEventListener('transitionend', () => modal.remove(), { once: true });
-    };
-    document.getElementById('svc-wip-close').addEventListener('click', close);
-    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+// ── Оплата картой (Robokassa) ────────────────
+function loadRobokassaScript() {
+    return new Promise((resolve, reject) => {
+        if (window.Robokassa) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://auth.robokassa.ru/Merchant/bundle/robokassa_iframe.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+async function pollRobokassaStatus(invId, initData, maxAttempts = 300) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const timer = setInterval(async () => {
+            attempts++;
+            try {
+                const r = await fetch(
+                    `/api/robokassa_order_status?inv_id=${invId}&init_data=${encodeURIComponent(initData)}`
+                );
+                const d = await r.json();
+                if (d.status === 'paid') {
+                    clearInterval(timer);
+                    resolve();
+                } else if (d.status === 'failed') {
+                    clearInterval(timer);
+                    reject(new Error('Платёж отклонён'));
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(timer);
+                    reject(new Error('Время ожидания истекло'));
+                }
+            } catch (e) {
+                if (attempts >= maxAttempts) {
+                    clearInterval(timer);
+                    reject(e);
+                }
+            }
+        }, 2000);
+    });
+}
+
+async function initiateCardPayment() {
+    const payBtn = document.getElementById('tc-pay-btn');
+    payBtn.disabled = true;
+    payBtn.textContent = 'Загрузка...';
+
+    try {
+        await loadRobokassaScript();
+
+        const initData = window.Telegram?.WebApp?.initData || '';
+        const resp = await fetch('/api/create_robokassa_invoice', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                init_data:   initData,
+                giveaway_id: _selectedGiveawayId,
+                period:      _selectedPeriodId,
+                price_rub:   _selectedPriceRub
+            })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
+
+        // Открываем Robokassa modal
+        Robokassa.Render({
+            MerchantLogin:  data.merchant_login,
+            OutSum:         data.out_sum,
+            InvId:          data.inv_id,
+            Description:    data.description,
+            Culture:        'ru',
+            Encoding:       'utf-8',
+            IsTest:         data.is_test,
+            SignatureValue: data.signature,
+            Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'], Mode: 'modal' })
+        });
+
+        payBtn.textContent = 'Ожидаем оплату...';
+
+        // Polling статуса
+        await pollRobokassaStatus(data.inv_id, initData);
+        showPaymentSuccessModal();
+
+    } catch (e) {
+        console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
+        showPaymentErrorModal(e.message);
+    } finally {
+        payBtn.disabled = false;
+        payBtn.textContent = 'Перейти к оплате';
+    }
 }
 
 // ── Переход на главную участника после успешной оплаты ───────────────────
