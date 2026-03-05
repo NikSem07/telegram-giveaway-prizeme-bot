@@ -37,7 +37,9 @@ const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:8088'
 const ROBOKASSA_LOGIN     = process.env.ROBOKASSA_LOGIN     || '';
 const ROBOKASSA_PASSWORD1 = process.env.ROBOKASSA_PASSWORD1 || '';
 const ROBOKASSA_PASSWORD2 = process.env.ROBOKASSA_PASSWORD2 || '';
-const ROBOKASSA_IS_TEST   = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
+const ROBOKASSA_IS_TEST        = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
+const ROBOKASSA_TEST_PASSWORD1 = process.env.ROBOKASSA_TEST_PASSWORD1 || '';
+const ROBOKASSA_TEST_PASSWORD2 = process.env.ROBOKASSA_TEST_PASSWORD2 || '';
 
 
 // Логируем конфигурацию при запуске
@@ -1900,7 +1902,8 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
         const invId         = Date.now() * 1000 + (userId % 1000);
         const periodLabel   = period === 'day' ? '1 день' : '1 неделю';
         const description   = `Топ-размещение «${giveawayTitle}» на ${periodLabel}`;
-        const signature     = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${ROBOKASSA_PASSWORD1}`);
+        const p1            = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD1 : ROBOKASSA_PASSWORD1;
+        const signature     = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${p1}`);
 
         await pool.query(
             `INSERT INTO robokassa_orders (inv_id, giveaway_id, user_id, period, amount_rub, status)
@@ -1930,7 +1933,8 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
         console.log('[ROBOKASSA] result:', { OutSum, InvId, SignatureValue });
 
         // Проверяем подпись
-        const expected = _roboMd5(`${OutSum}:${InvId}:${ROBOKASSA_PASSWORD2}`);
+        const p2       = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD2 : ROBOKASSA_PASSWORD2;
+        const expected = _roboMd5(`${OutSum}:${InvId}:${p2}`);
         if (expected !== String(SignatureValue).toUpperCase()) {
             console.error('[ROBOKASSA] bad signature');
             return res.status(400).send('bad signature');
