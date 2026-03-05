@@ -406,7 +406,7 @@ async function initiateCardPayment() {
             login:    data.merchant_login,
             is_test:  data.is_test,
         });
-        window.location.href = '/miniapp/robokassa_pay?' + params.toString();
+        window.location.assign('/miniapp/robokassa_pay?' + params.toString());
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
         showPaymentErrorModal(e.message);
