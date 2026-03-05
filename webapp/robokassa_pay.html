@@ -36,7 +36,9 @@
         const params = JSON.parse(sessionStorage.getItem('prizeme_robokassa_params') || 'null');
 
         if (!params) {
-            showError();
+            document.getElementById('rp-loading').style.display = 'none';
+            document.getElementById('rp-error').style.display = 'flex';
+            document.querySelector('.rp-error-text').textContent = 'DEBUG: params not found in sessionStorage';
             return;
         }
 
@@ -63,7 +65,9 @@
 
         } catch(e) {
             console.error('[ROBOKASSA_PAY]', e);
-            showError();
+            document.getElementById('rp-loading').style.display = 'none';
+            document.getElementById('rp-error').style.display = 'flex';
+            document.querySelector('.rp-error-text').textContent = 'DEBUG: ' + e.message;
         }
 
         function showError() {
