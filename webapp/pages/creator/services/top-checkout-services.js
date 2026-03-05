@@ -397,20 +397,16 @@ async function initiateCardPayment() {
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
-        sessionStorage.setItem('prizeme_robokassa_params', JSON.stringify(data));
-        sessionStorage.setItem('prizeme_init_data', initData);
-        const _onFocus = async () => {
-            window.removeEventListener('focus', _onFocus);
-            if (sessionStorage.getItem('prizeme_robokassa_paid') === '1') {
-                sessionStorage.removeItem('prizeme_robokassa_paid');
-                showPaymentSuccessModal();
-            } else {
-                payBtn.disabled = false;
-                payBtn.textContent = 'Перейти к оплате';
-            }
-        };
-        window.addEventListener('focus', _onFocus);
-        window.location.href = '/miniapp/robokassa_pay';
+        // Передаём inv_id через URL, остальное страница запросит сама
+        const params = new URLSearchParams({
+            inv_id:   data.inv_id,
+            out_sum:  data.out_sum,
+            desc:     data.description,
+            sig:      data.signature,
+            login:    data.merchant_login,
+            is_test:  data.is_test,
+        });
+        window.location.href = '/miniapp/robokassa_pay?' + params.toString();
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
         showPaymentErrorModal(e.message);

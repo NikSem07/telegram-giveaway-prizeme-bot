@@ -33,7 +33,15 @@
         }
 
         // Читаем параметры из sessionStorage (туда запишет top-checkout-services.js)
-        const params = JSON.parse(sessionStorage.getItem('prizeme_robokassa_params') || 'null');
+        const urlParams = new URLSearchParams(window.location.search);
+        const params = urlParams.get('inv_id') ? {
+            inv_id:         urlParams.get('inv_id'),
+            out_sum:        urlParams.get('out_sum'),
+            description:    urlParams.get('desc'),
+            signature:      urlParams.get('sig'),
+            merchant_login: urlParams.get('login'),
+            is_test:        Number(urlParams.get('is_test')),
+        } : null;
 
         if (!params) {
             document.getElementById('rp-loading').style.display = 'none';
@@ -62,7 +70,7 @@
             );
 
             // Polling статуса
-            const initData = sessionStorage.getItem('prizeme_init_data') || tg?.initData || '';
+            const initData = tg?.initData || '';
             pollStatus(params.inv_id, initData);
 
         } catch(e) {
