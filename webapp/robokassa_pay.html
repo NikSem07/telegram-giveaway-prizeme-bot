@@ -23,7 +23,7 @@
     </div>
 
     <script>
-    (async function() {
+    document.addEventListener('DOMContentLoaded', async function() {
         const tg = window.Telegram?.WebApp;
         if (tg) {
             tg.ready();
@@ -98,7 +98,7 @@
                 }
             }, 2000);
         }
-    })();
+    });
     </script>
 </body>
 </html>
