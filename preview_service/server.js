@@ -661,6 +661,15 @@ app.get('/miniapp/results_no_participant', (req, res) => {
   }
 });
 
+app.get('/miniapp/robokassa_pay', (req, res) => {
+    const p = path.join(__dirname, '../webapp/robokassa_pay.html');
+    if (fs.existsSync(p)) {
+        res.sendFile(p);
+    } else {
+        res.status(404).send('<h1>Страница оплаты недоступна</h1>');
+    }
+});
+
 // Participant and creator home pages
 app.get('/miniapp/index', (req, res) => {
   res.sendFile(path.join(__dirname, '../webapp/index.html'));

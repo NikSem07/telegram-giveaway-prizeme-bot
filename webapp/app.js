@@ -257,6 +257,7 @@ function checkImmediateResults() {
       '/miniapp/results_win',
       '/miniapp/results_lose',
       '/miniapp/results_no_participant',
+      '/miniapp/robokassa_pay',
       '/miniapp/captcha',
       '/miniapp/success.html',
       '/miniapp/already_participating.html',
@@ -1681,6 +1682,9 @@ function initializeCurrentPage() {
           break;
       case '/miniapp/results_no_participant':
         // Статичный экран, JS инициализация не нужна
+        break;
+      case '/miniapp/robokassa_pay':
+        // Standalone страница, инициализация внутри HTML
         break;
       default: {
           // Разрешаем статические страницы (не SPA), чтобы роутер их НЕ редиректил на index

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PrizeMe — Оплата</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/miniapp-static/standalone.css?v=FS-1" />
+    <link rel="stylesheet" href="/miniapp/robokassa_pay.css" />
+    <script src="https://auth.robokassa.ru/Merchant/bundle/robokassa_iframe.js"></script>
+</head>
+<body>
+    <div id="rp-loading" class="rp-loading">
+        <div class="rp-spinner"></div>
+        <p>Загружаем форму оплаты...</p>
+    </div>
+    <div id="rp-container" class="rp-container" style="display:none;">
+        <!-- Robokassa встроит форму сюда -->
+    </div>
+    <div id="rp-error" class="rp-error" style="display:none;">
+        <p class="rp-error-text">Не удалось загрузить форму оплаты</p>
+        <button class="rp-btn-back" onclick="history.back()">Назад</button>
+    </div>
+
+    <script>
+    (async function() {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            tg.BackButton.show();
+            tg.BackButton.onClick(() => history.back());
+        }
+
+        // Читаем параметры из sessionStorage (туда запишет top-checkout-services.js)
+        const params = JSON.parse(sessionStorage.getItem('prizeme_robokassa_params') || 'null');
+
+        if (!params) {
+            showError();
+            return;
+        }
+
+        try {
+            document.getElementById('rp-loading').style.display = 'none';
+            document.getElementById('rp-container').style.display = 'block';
+
+            Robokassa.Render({
+                MerchantLogin:  params.merchant_login,
+                OutSum:         params.out_sum,
+                InvId:          params.inv_id,
+                Description:    params.description,
+                Culture:        'ru',
+                Encoding:       'utf-8',
+                IsTest:         params.is_test,
+                SignatureValue: params.signature,
+                Target:         'rp-container',
+                Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'] })
+            });
+
+            // Polling статуса
+            const initData = sessionStorage.getItem('prizeme_init_data') || tg?.initData || '';
+            pollStatus(params.inv_id, initData);
+
+        } catch(e) {
+            console.error('[ROBOKASSA_PAY]', e);
+            showError();
+        }
+
+        function showError() {
+            document.getElementById('rp-loading').style.display = 'none';
+            document.getElementById('rp-error').style.display = 'flex';
+        }
+
+        async function pollStatus(invId, initData) {
+            let attempts = 0;
+            const maxAttempts = 300;
+            const timer = setInterval(async () => {
+                attempts++;
+                try {
+                    const r = await fetch(
+                        `/api/robokassa_order_status?inv_id=${invId}&init_data=${encodeURIComponent(initData)}`
+                    );
+                    const d = await r.json();
+                    if (d.status === 'paid') {
+                        clearInterval(timer);
+                        sessionStorage.setItem('prizeme_robokassa_paid', '1');
+                        // Возвращаемся на чекаут — он покажет success modal
+                        history.back();
+                    } else if (d.status === 'failed' || attempts >= maxAttempts) {
+                        clearInterval(timer);
+                    }
+                } catch(e) {
+                    if (attempts >= maxAttempts) clearInterval(timer);
+                }
+            }, 2000);
+        }
+    })();
+    </script>
+</body>
+</html>

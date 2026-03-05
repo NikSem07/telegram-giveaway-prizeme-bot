@@ -379,56 +379,11 @@ async function initiateStarsPayment() {
     }
 }
 
-// ── Оплата картой (Robokassa) ────────────────
-function loadRobokassaScript() {
-    return new Promise((resolve, reject) => {
-        if (window.Robokassa) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = 'https://auth.robokassa.ru/Merchant/bundle/robokassa_iframe.js';
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-    });
-}
-
-async function pollRobokassaStatus(invId, initData, maxAttempts = 300) {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const timer = setInterval(async () => {
-            attempts++;
-            try {
-                const r = await fetch(
-                    `/api/robokassa_order_status?inv_id=${invId}&init_data=${encodeURIComponent(initData)}`
-                );
-                const d = await r.json();
-                if (d.status === 'paid') {
-                    clearInterval(timer);
-                    resolve();
-                } else if (d.status === 'failed') {
-                    clearInterval(timer);
-                    reject(new Error('Платёж отклонён'));
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(timer);
-                    reject(new Error('Время ожидания истекло'));
-                }
-            } catch (e) {
-                if (attempts >= maxAttempts) {
-                    clearInterval(timer);
-                    reject(e);
-                }
-            }
-        }, 2000);
-    });
-}
-
 async function initiateCardPayment() {
     const payBtn = document.getElementById('tc-pay-btn');
     payBtn.disabled = true;
     payBtn.textContent = 'Загрузка...';
-
     try {
-        await loadRobokassaScript();
-
         const initData = window.Telegram?.WebApp?.initData || '';
         const resp = await fetch('/api/create_robokassa_invoice', {
             method:  'POST',
@@ -442,26 +397,20 @@ async function initiateCardPayment() {
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
-
-        // Открываем Robokassa modal
-        Robokassa.Render({
-            MerchantLogin:  data.merchant_login,
-            OutSum:         data.out_sum,
-            InvId:          data.inv_id,
-            Description:    data.description,
-            Culture:        'ru',
-            Encoding:       'utf-8',
-            IsTest:         data.is_test,
-            SignatureValue: data.signature,
-            Settings:       JSON.stringify({ PaymentMethods: ['BankCard', 'SBP'], Mode: 'modal' })
-        });
-
-        payBtn.textContent = 'Ожидаем оплату...';
-
-        // Polling статуса
-        await pollRobokassaStatus(data.inv_id, initData);
-        showPaymentSuccessModal();
-
+        sessionStorage.setItem('prizeme_robokassa_params', JSON.stringify(data));
+        sessionStorage.setItem('prizeme_init_data', initData);
+        const _onFocus = async () => {
+            window.removeEventListener('focus', _onFocus);
+            if (sessionStorage.getItem('prizeme_robokassa_paid') === '1') {
+                sessionStorage.removeItem('prizeme_robokassa_paid');
+                showPaymentSuccessModal();
+            } else {
+                payBtn.disabled = false;
+                payBtn.textContent = 'Перейти к оплате';
+            }
+        };
+        window.addEventListener('focus', _onFocus);
+        window.location.href = '/miniapp/robokassa_pay';
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
         showPaymentErrorModal(e.message);
