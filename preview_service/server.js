@@ -1985,12 +1985,47 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
         }
 
         const invId = Number(InvId);
-        const order = await pool.query(
+
+        // Проверяем оба типа заказов
+        let order = await pool.query(
             `SELECT * FROM robokassa_orders WHERE inv_id = $1`, [invId]
         );
+
+        // Если не top_placement — проверяем promotion
         if (!order.rows.length) {
-            return res.status(400).send('order not found');
+            const promoOrder = await pool.query(
+                `SELECT * FROM promotion_robokassa_orders WHERE inv_id = $1`, [invId]
+            );
+            if (!promoOrder.rows.length) {
+                return res.status(400).send('order not found');
+            }
+            // Обрабатываем промо-заказ
+            const o = promoOrder.rows[0];
+            if (o.status !== 'pending') return res.send(`OK${invId}`);
+
+            await pool.query(
+                `UPDATE promotion_robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
+                [invId]
+            );
+            try {
+                await fetch(`${BOT_INTERNAL_URL}/internal/promotion_paid`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({
+                        user_id:      o.user_id,
+                        giveaway_id:  o.giveaway_id,
+                        publish_type: o.publish_type,
+                        scheduled_at: o.scheduled_at,
+                        amount_rub:   o.amount_rub,
+                        payment_type: 'card',
+                    }),
+                });
+            } catch (_e) { console.log('[PROMO_ROBO] bot notify failed:', _e.message); }
+
+            console.log(`[PROMO_ROBO] ✅ paid inv_id=${invId}`);
+            return res.send(`OK${invId}`);
         }
+
         const o = order.rows[0];
         if (o.status !== 'pending') {
             // Уже обработан — идемпотентность

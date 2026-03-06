@@ -3193,19 +3193,15 @@ async def cmd_start(m: Message, state: FSMContext):
             await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
             return
 
-        if order_row[2] is not None:
-            status_check = await Session().__aenter__()
-            try:
-                r2 = await status_check.execute(
-                    sqlalchemy.text("SELECT status FROM promotion_robokassa_orders WHERE inv_id = :inv_id"),
-                    {"inv_id": inv_id}
-                )
-                row2 = r2.fetchone()
-                if row2 and row2[0] == 'paid':
-                    await m.answer("✅ Эта заявка уже оплачена! Ожидайте публикации.")
-                    return
-            finally:
-                await status_check.__aexit__(None, None, None)
+        async with Session() as status_check:
+            r2 = await status_check.execute(
+                sqlalchemy.text("SELECT status FROM promotion_robokassa_orders WHERE inv_id = :inv_id"),
+                {"inv_id": inv_id}
+            )
+            row2 = r2.fetchone()
+            if row2 and row2[0] == 'paid':
+                await m.answer("✅ Эта заявка уже оплачена! Ожидайте публикации.")
+                return
 
         import hashlib as _hs
         robo_login   = os.environ.get("ROBOKASSA_LOGIN", "prizeme")
