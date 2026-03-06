@@ -3205,11 +3205,14 @@ async def cmd_start(m: Message, state: FSMContext):
 
         # Получаем детали заказа из БД напрямую
         try:
-            async with pool_pg.acquire() as conn:
-                order_row = await conn.fetchrow(
-                    "SELECT period, amount_rub FROM robokassa_orders WHERE inv_id = $1",
-                    inv_id
+            async with Session() as session:
+                result = await session.execute(
+                    sqlalchemy.text(
+                        "SELECT period, amount_rub FROM robokassa_orders WHERE inv_id = :inv_id"
+                    ),
+                    {"inv_id": inv_id}
                 )
+                order_row = result.fetchone()
         except Exception as e:
             logging.error(f"[pay_start] db error: {e}")
             order_row = None
