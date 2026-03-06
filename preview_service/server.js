@@ -1928,8 +1928,9 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
             inv_id:         invId,
             description,
             signature,
-            success_url:    successUrl,
-            is_test:        ROBOKASSA_IS_TEST
+            is_test:        ROBOKASSA_IS_TEST,
+            period:         period,
+            price_rub:      outSum
         });
     } catch (e) {
         console.error('[ROBOKASSA] create_invoice error:', e);

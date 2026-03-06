@@ -398,48 +398,24 @@ async function initiateCardPayment() {
         const data = await resp.json();
         if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
 
-        // Формируем прямую ссылку на Robokassa (без iframe/Render)
-        const isTest = data.is_test ? 1 : 0;
-        const baseUrl = isTest
-            ? 'https://auth.robokassa.ru/Merchant/Index.aspx'
-            : 'https://auth.robokassa.ru/Merchant/Index.aspx';
-        const roboParams = new URLSearchParams({
-            MerchantLogin:  data.merchant_login,
-            OutSum:         data.out_sum,
-            InvId:          data.inv_id,
-            Description:    data.description,
-            SignatureValue: data.signature,
-            IsTest:         isTest,
-            Culture:        'ru',
-            Encoding:       'utf-8',
-            SuccessURL:     data.success_url || '',
-            FailURL:        data.success_url || '',
-        });
-        const payUrl = `${baseUrl}?${roboParams.toString()}`;
-
-        console.log('[TOP_CHECKOUT] Opening Robokassa URL:', payUrl);
-
-        // Запускаем polling ДО открытия ссылки
-        _startCardPaymentPolling(data.inv_id, initData, payBtn);
-
-        // Сохраняем inv_id чтобы восстановить polling после возврата
-        sessionStorage.setItem('prizeme_pending_inv_id', String(data.inv_id));
-
-        // Открываем форму оплаты
+        // Открываем бота с параметром оплаты
         const tg = window.Telegram?.WebApp;
-        if (tg?.openLink) {
-            tg.openLink(payUrl, { try_instant_view: false });
+        const deepLink = `https://t.me/prizeme_official_bot?start=pay_${data.inv_id}`;
+
+        console.log('[TOP_CHECKOUT] Opening bot payment link:', deepLink);
+
+        if (tg?.openTelegramLink) {
+            tg.openTelegramLink(deepLink);
         } else {
-            window.open(payUrl, '_blank');
+            window.open(deepLink, '_blank');
         }
 
-        payBtn.textContent = 'Ожидаем оплату...';
-        payBtn.style.background = 'rgba(255,255,255,0.15)';
-        payBtn.style.color = 'rgba(255,255,255,0.5)';
-        payBtn.style.cursor = 'default';
-        payBtn.style.background = 'rgba(255,255,255,0.15)';
-        payBtn.style.color = 'rgba(255,255,255,0.5)';
-        payBtn.style.cursor = 'default';
+        // Сбрасываем кнопку — пользователь ушёл в бота
+        payBtn.disabled = false;
+        payBtn.textContent = 'Перейти к оплате';
+        payBtn.style.background = '';
+        payBtn.style.color = '';
+        payBtn.style.cursor = '';
 
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
@@ -447,52 +423,6 @@ async function initiateCardPayment() {
         payBtn.textContent = 'Перейти к оплате';
         showPaymentErrorModal(e.message);
     }
-}
-
-function _startCardPaymentPolling(invId, initData, payBtn) {
-    let attempts = 0;
-    const maxAttempts = 150; // 5 минут (2 сек * 150)
-    const timer = setInterval(async () => {
-        attempts++;
-        try {
-            const r = await fetch(
-                `/api/robokassa_order_status?inv_id=${invId}`
-            );
-            const d = await r.json();
-            console.log('[TOP_CHECKOUT] poll status:', d.status, 'attempt:', attempts);
-
-            if (d.status === 'paid') {
-                clearInterval(timer);
-                sessionStorage.removeItem('prizeme_pending_inv_id');
-                payBtn.disabled = false;
-                payBtn.textContent = 'Перейти к оплате';
-                payBtn.style.background = '';
-                payBtn.style.color = '';
-                payBtn.style.cursor = '';
-                showPaymentSuccessModal();
-            } else if (d.status === 'failed' || attempts >= maxAttempts) {
-                clearInterval(timer);
-                sessionStorage.removeItem('prizeme_pending_inv_id');
-                payBtn.disabled = false;
-                payBtn.textContent = 'Перейти к оплате';
-                payBtn.style.background = '';
-                payBtn.style.color = '';
-                payBtn.style.cursor = '';
-                if (attempts >= maxAttempts) {
-                    showPaymentErrorModal('Время ожидания оплаты истекло. Если вы оплатили — обратитесь в поддержку.');
-                }
-            }
-        } catch (e) {
-            if (attempts >= maxAttempts) {
-                clearInterval(timer);
-                payBtn.disabled = false;
-                payBtn.textContent = 'Перейти к оплате';
-                payBtn.style.background = '';
-                payBtn.style.color = '';
-                payBtn.style.cursor = '';
-            }
-        }
-    }, 2000);
 }
 
 // ── Переход на главную участника после успешной оплаты ───────────────────
@@ -593,27 +523,6 @@ function mountTopCheckout(container, onBack, onPaymentSuccess) {
     initAgreeBlock();
     initLegalLinks();
     loadGiveaways();
-
-    // Восстанавливаем polling если пользователь вернулся после оплаты
-    _resumePendingPollingIfNeeded();
-}
-
-function _resumePendingPollingIfNeeded() {
-    const pendingInvId = sessionStorage.getItem('prizeme_pending_inv_id');
-    if (!pendingInvId) return;
-
-    console.log('[TOP_CHECKOUT] Resuming polling for inv_id:', pendingInvId);
-
-    const payBtn = document.getElementById('tc-pay-btn');
-    if (payBtn) {
-        payBtn.disabled = true;
-        payBtn.textContent = 'Ожидаем оплату...';
-        payBtn.style.background = 'rgba(255,255,255,0.15)';
-        payBtn.style.color = 'rgba(255,255,255,0.5)';
-        payBtn.style.cursor = 'default';
-    }
-
-    _startCardPaymentPolling(pendingInvId, '', payBtn);
 }
 
 export { mountTopCheckout };
