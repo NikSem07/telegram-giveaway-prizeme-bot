@@ -240,6 +240,7 @@ function onPeriodSelected(card) {
     _selectedPeriodId   = card.dataset.periodId;
     _selectedPriceRub   = Number(card.dataset.priceRub);
     _selectedPriceStars = Number(card.dataset.priceStars);
+    console.log('[TOP_CHECKOUT] period selected, priceRub:', _selectedPriceRub, 'priceStars:', _selectedPriceStars);
 
     // Обновляем отображение итога в зависимости от метода оплаты
     _updateSummaryDisplay();
@@ -496,7 +497,6 @@ export async function mountTopCheckout(container, onBack, onPaymentSuccess) {
     _onPaymentSuccess = onPaymentSuccess || null;
 
     await loadPrices();
-    console.log('[TOP_CHECKOUT] prices loaded:', JSON.stringify(_prices.top));
     container.innerHTML = topCheckoutTemplate(_prices.top);
     setShellVisibility(false);
 
