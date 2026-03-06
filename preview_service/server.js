@@ -1912,6 +1912,7 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
         const periodLabel   = period === 'day' ? '1 день' : '1 неделю';
         const description   = `Топ-размещение «${giveawayTitle}» на ${periodLabel}`;
         const p1            = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD1 : ROBOKASSA_PASSWORD1;
+        const successUrl    = `https://t.me/${process.env.BOT_USERNAME || 'prizeme_bot'}?startapp=page_services`;
         const signature     = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${p1}`);
 
         await pool.query(
@@ -1927,6 +1928,7 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
             inv_id:         invId,
             description,
             signature,
+            success_url:    successUrl,
             is_test:        ROBOKASSA_IS_TEST
         });
     } catch (e) {
@@ -2021,10 +2023,9 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
 // --- GET /api/robokassa_order_status ---
 app.get('/api/robokassa_order_status', async (req, res) => {
     try {
-        const { inv_id, init_data } = req.query;
-        const parsedInitData = _tgCheckMiniAppInitData(init_data);
-        if (!parsedInitData?.user_parsed) {
-            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        const { inv_id } = req.query;
+        if (!inv_id) {
+            return res.status(400).json({ ok: false, reason: 'missing_inv_id' });
         }
         const order = await pool.query(
             `SELECT status FROM robokassa_orders WHERE inv_id = $1`, [Number(inv_id)]

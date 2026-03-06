@@ -412,6 +412,8 @@ async function initiateCardPayment() {
             IsTest:         isTest,
             Culture:        'ru',
             Encoding:       'utf-8',
+            SuccessURL:     data.success_url || '',
+            FailURL:        data.success_url || '',
         });
         const payUrl = `${baseUrl}?${roboParams.toString()}`;
 
@@ -420,15 +422,18 @@ async function initiateCardPayment() {
         // Запускаем polling ДО открытия ссылки
         _startCardPaymentPolling(data.inv_id, initData, payBtn);
 
-        // Открываем в системном браузере (не внутри WebView)
+        // Открываем через внутренний браузер Telegram
         const tg = window.Telegram?.WebApp;
         if (tg?.openLink) {
-            tg.openLink(payUrl);
+            tg.openLink(payUrl, { try_instant_view: false });
         } else {
             window.open(payUrl, '_blank');
         }
 
         payBtn.textContent = 'Ожидаем оплату...';
+        payBtn.style.background = 'rgba(255,255,255,0.15)';
+        payBtn.style.color = 'rgba(255,255,255,0.5)';
+        payBtn.style.cursor = 'default';
 
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
@@ -445,7 +450,7 @@ function _startCardPaymentPolling(invId, initData, payBtn) {
         attempts++;
         try {
             const r = await fetch(
-                `/api/robokassa_order_status?inv_id=${invId}&init_data=${encodeURIComponent(initData)}`
+                `/api/robokassa_order_status?inv_id=${invId}`
             );
             const d = await r.json();
             console.log('[TOP_CHECKOUT] poll status:', d.status, 'attempt:', attempts);
@@ -454,11 +459,17 @@ function _startCardPaymentPolling(invId, initData, payBtn) {
                 clearInterval(timer);
                 payBtn.disabled = false;
                 payBtn.textContent = 'Перейти к оплате';
+                payBtn.style.background = '';
+                payBtn.style.color = '';
+                payBtn.style.cursor = '';
                 showPaymentSuccessModal();
             } else if (d.status === 'failed' || attempts >= maxAttempts) {
                 clearInterval(timer);
                 payBtn.disabled = false;
                 payBtn.textContent = 'Перейти к оплате';
+                payBtn.style.background = '';
+                payBtn.style.color = '';
+                payBtn.style.cursor = '';
                 if (attempts >= maxAttempts) {
                     showPaymentErrorModal('Время ожидания оплаты истекло. Если вы оплатили — обратитесь в поддержку.');
                 }
@@ -468,6 +479,9 @@ function _startCardPaymentPolling(invId, initData, payBtn) {
                 clearInterval(timer);
                 payBtn.disabled = false;
                 payBtn.textContent = 'Перейти к оплате';
+                payBtn.style.background = '';
+                payBtn.style.color = '';
+                payBtn.style.cursor = '';
             }
         }
     }, 2000);
