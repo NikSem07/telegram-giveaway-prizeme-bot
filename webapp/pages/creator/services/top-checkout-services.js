@@ -422,7 +422,10 @@ async function initiateCardPayment() {
         // Запускаем polling ДО открытия ссылки
         _startCardPaymentPolling(data.inv_id, initData, payBtn);
 
-        // Открываем через внутренний браузер Telegram
+        // Сохраняем inv_id чтобы восстановить polling после возврата
+        sessionStorage.setItem('prizeme_pending_inv_id', String(data.inv_id));
+
+        // Открываем форму оплаты
         const tg = window.Telegram?.WebApp;
         if (tg?.openLink) {
             tg.openLink(payUrl, { try_instant_view: false });
@@ -431,6 +434,9 @@ async function initiateCardPayment() {
         }
 
         payBtn.textContent = 'Ожидаем оплату...';
+        payBtn.style.background = 'rgba(255,255,255,0.15)';
+        payBtn.style.color = 'rgba(255,255,255,0.5)';
+        payBtn.style.cursor = 'default';
         payBtn.style.background = 'rgba(255,255,255,0.15)';
         payBtn.style.color = 'rgba(255,255,255,0.5)';
         payBtn.style.cursor = 'default';
@@ -457,6 +463,7 @@ function _startCardPaymentPolling(invId, initData, payBtn) {
 
             if (d.status === 'paid') {
                 clearInterval(timer);
+                sessionStorage.removeItem('prizeme_pending_inv_id');
                 payBtn.disabled = false;
                 payBtn.textContent = 'Перейти к оплате';
                 payBtn.style.background = '';
@@ -465,6 +472,7 @@ function _startCardPaymentPolling(invId, initData, payBtn) {
                 showPaymentSuccessModal();
             } else if (d.status === 'failed' || attempts >= maxAttempts) {
                 clearInterval(timer);
+                sessionStorage.removeItem('prizeme_pending_inv_id');
                 payBtn.disabled = false;
                 payBtn.textContent = 'Перейти к оплате';
                 payBtn.style.background = '';
@@ -585,6 +593,27 @@ function mountTopCheckout(container, onBack, onPaymentSuccess) {
     initAgreeBlock();
     initLegalLinks();
     loadGiveaways();
+
+    // Восстанавливаем polling если пользователь вернулся после оплаты
+    _resumePendingPollingIfNeeded();
+}
+
+function _resumePendingPollingIfNeeded() {
+    const pendingInvId = sessionStorage.getItem('prizeme_pending_inv_id');
+    if (!pendingInvId) return;
+
+    console.log('[TOP_CHECKOUT] Resuming polling for inv_id:', pendingInvId);
+
+    const payBtn = document.getElementById('tc-pay-btn');
+    if (payBtn) {
+        payBtn.disabled = true;
+        payBtn.textContent = 'Ожидаем оплату...';
+        payBtn.style.background = 'rgba(255,255,255,0.15)';
+        payBtn.style.color = 'rgba(255,255,255,0.5)';
+        payBtn.style.cursor = 'default';
+    }
+
+    _startCardPaymentPolling(pendingInvId, '', payBtn);
 }
 
 export { mountTopCheckout };
