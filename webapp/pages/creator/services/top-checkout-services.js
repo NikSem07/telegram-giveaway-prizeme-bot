@@ -543,5 +543,3 @@ export async function mountTopCheckout(container, onBack, onPaymentSuccess) {
     initLegalLinks();
     loadGiveaways();
 }
-
-export { mountTopCheckout };
