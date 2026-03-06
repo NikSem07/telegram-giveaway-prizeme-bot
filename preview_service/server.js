@@ -1979,7 +1979,7 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
 
         // Создаём service_order
         const soRes = await pool.query(
-            `INSERT INTO service_orders (giveaway_id, user_id, service_type, price_rub, status, created_at)
+            `INSERT INTO service_orders (giveaway_id, owner_user_id, service_type, price_rub, status, created_at)
              VALUES ($1, $2, 'top_placement', $3, 'paid', NOW()) RETURNING id`,
             [o.giveaway_id, o.user_id, o.amount_rub]
         );
