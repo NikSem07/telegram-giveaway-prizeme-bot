@@ -3221,8 +3221,8 @@ async def cmd_start(m: Message, state: FSMContext):
             await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
             return
 
-        period_label = "1 день" if order_row["period"] == "day" else "1 неделю"
-        price = order_row["amount_rub"]
+        period_label = "1 день" if order_row[0] == "day" else "1 неделю"
+        price = order_row[1]
 
         # Формируем ссылку на Robokassa
         import hashlib
