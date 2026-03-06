@@ -1835,7 +1835,10 @@ app.post('/api/create_stars_invoice', async (req, res) => {
         }
 
         // Валидация периода
-        const VALID_PERIODS = { day: 150, week: 450 };
+        const VALID_PERIODS = {
+            day:  parseInt(process.env.PRICE_TOP_DAY_STARS  || '149'),
+            week: parseInt(process.env.PRICE_TOP_WEEK_STARS || '499'),
+        };
         if (!VALID_PERIODS[period]) {
             return res.status(400).json({ ok: false, reason: 'invalid_period' });
         }
@@ -1908,7 +1911,10 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
         }
         const userId = Number(parsedInitData.user_parsed.id);
 
-        const VALID_PERIODS = { day: 149, week: 499 };
+        const VALID_PERIODS = {
+            day:  parseInt(process.env.PRICE_TOP_DAY_RUB  || '149'),
+            week: parseInt(process.env.PRICE_TOP_WEEK_RUB || '499'),
+        };
         if (!VALID_PERIODS[period]) {
             return res.status(400).json({ ok: false, reason: 'invalid_period' });
         }
