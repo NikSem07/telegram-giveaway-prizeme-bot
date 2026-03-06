@@ -2,11 +2,11 @@
 
 // Цены в Stars и рублях по методу оплаты
 const TOP_PERIODS = [
-    { id: 'day',  label: '1 День (24 часа)', priceRub: 149, priceStars: 150 },
-    { id: 'week', label: '1 Неделя',          priceRub: 499, priceStars: 450 },
+    { id: 'day',  label: '1 День (24 часа)', priceRub: PRICES.day.rub,  priceStars: PRICES.day.stars  },
+    { id: 'week', label: '1 Неделя',          priceRub: PRICES.week.rub, priceStars: PRICES.week.stars },
 ];
 
-export default function topCheckoutTemplate() {
+export default function topCheckoutTemplate(PRICES = { day: { rub: 149, stars: 149 }, week: { rub: 499, stars: 499 } }) {
     return `
         <!-- Шапка -->
         <div class="tc-header">

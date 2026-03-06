@@ -2,8 +2,8 @@
 import promotionCheckoutTemplate from './promotion-services.template.js';
 
 // ── Цены (меняй здесь в одном месте) ─────────────────────────────────────
-const PROMOTION_PRICE_RUB   = 9990;   // ₽
-const PROMOTION_PRICE_STARS = 9990;   // ⭐
+let PROMOTION_PRICE_RUB   = 9990;
+let PROMOTION_PRICE_STARS = 9990;
 
 // ── Состояние ─────────────────────────────────────────────────────────────
 let _agreed             = false;
@@ -549,7 +549,19 @@ function initPayBtn() {
 }
 
 // ── Монтирование ──────────────────────────────────────────────────────────
-export function mountPromotionCheckout(container, onBack, onSuccess) {
+export async function mountPromotionCheckout(container, onBack, onSuccess) {
+    // Загружаем актуальные цены с сервера
+    try {
+        const resp = await fetch('/api/prices');
+        const data = await resp.json();
+        if (data.ok) {
+            PROMOTION_PRICE_RUB   = data.promotion.rub;
+            PROMOTION_PRICE_STARS = data.promotion.stars;
+        }
+    } catch (e) {
+        console.warn('[PROMO_CHECKOUT] failed to load prices, using defaults');
+    }
+    
     _onPaymentSuccess      = onSuccess || null;
     _agreed                = false;
     _paymentMethod         = 'card';

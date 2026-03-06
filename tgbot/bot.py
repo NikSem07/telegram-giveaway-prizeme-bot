@@ -11041,7 +11041,10 @@ def make_internal_app():
                 kb = InlineKeyboardBuilder()
                 kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
                 kb.adjust(1)
-                price_map = {"1 день": "149", "1 неделю": "499"}
+                price_map = {
+                    "1 день":    str(int(float(os.environ.get("PRICE_TOP_DAY_RUB",  "149")))),
+                    "1 неделю":  str(int(float(os.environ.get("PRICE_TOP_WEEK_RUB", "499")))),
+                }
                 price = price_map.get(period_label, "—")
                 await bot.send_message(
                     user_id,

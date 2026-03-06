@@ -4,8 +4,8 @@ import topCheckoutTemplate from './top-checkout-services.template.js';
 // ── Цены (загружаются с сервера) ──────────────────────────────────────────
 let _prices = {
     top: {
-        day:  { rub: 149, stars: 150 },
-        week: { rub: 499, stars: 450 },
+        day:  { rub: 149, stars: 149 },
+        week: { rub: 499, stars: 499 },
     }
 };
 
@@ -491,11 +491,12 @@ function showPaymentErrorModal(reason) {
 }
 
 // ── Публичный API ─────────────────────────────────────────────────────────
-function mountTopCheckout(container, onBack, onPaymentSuccess) {
+export async function mountTopCheckout(container, onBack, onPaymentSuccess) {
     _agreed = false;
     _onPaymentSuccess = onPaymentSuccess || null;
 
-    container.innerHTML = topCheckoutTemplate();
+    await loadPrices();
+    container.innerHTML = topCheckoutTemplate(_prices.top);
     setShellVisibility(false);
 
     // Системная кнопка Back Telegram
