@@ -1987,9 +1987,9 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
 
         // Создаём top_placement
         await pool.query(
-            `INSERT INTO top_placements (giveaway_id, service_order_id, starts_at, ends_at, is_active)
-             VALUES ($1, $2, $3, $4, true)`,
-            [o.giveaway_id, serviceOrderId, startsAt, endsAt]
+            `INSERT INTO top_placements (giveaway_id, order_id, starts_at, ends_at, is_active, placement_type)
+             VALUES ($1, $2, $3, $4, true, $5)`,
+            [o.giveaway_id, serviceOrderId, startsAt, endsAt, o.period === 'day' ? 'day' : 'week']
         );
 
         // Обновляем статус заказа
