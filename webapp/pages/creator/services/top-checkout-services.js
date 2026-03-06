@@ -397,23 +397,80 @@ async function initiateCardPayment() {
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
-        // Передаём inv_id через URL, остальное страница запросит сама
-        const params = new URLSearchParams({
-            inv_id:   data.inv_id,
-            out_sum:  data.out_sum,
-            desc:     data.description,
-            sig:      data.signature,
-            login:    data.merchant_login,
-            is_test:  data.is_test,
+
+        // Формируем прямую ссылку на Robokassa (без iframe/Render)
+        const isTest = data.is_test ? 1 : 0;
+        const baseUrl = isTest
+            ? 'https://auth.robokassa.ru/Merchant/Index.aspx'
+            : 'https://auth.robokassa.ru/Merchant/Index.aspx';
+        const roboParams = new URLSearchParams({
+            MerchantLogin:  data.merchant_login,
+            OutSum:         data.out_sum,
+            InvId:          data.inv_id,
+            Description:    data.description,
+            SignatureValue: data.signature,
+            IsTest:         isTest,
+            Culture:        'ru',
+            Encoding:       'utf-8',
         });
-        window.open('/miniapp/robokassa_pay?' + params.toString(), '_self');
+        const payUrl = `${baseUrl}?${roboParams.toString()}`;
+
+        console.log('[TOP_CHECKOUT] Opening Robokassa URL:', payUrl);
+
+        // Запускаем polling ДО открытия ссылки
+        _startCardPaymentPolling(data.inv_id, initData, payBtn);
+
+        // Открываем в системном браузере (не внутри WebView)
+        const tg = window.Telegram?.WebApp;
+        if (tg?.openLink) {
+            tg.openLink(payUrl);
+        } else {
+            window.open(payUrl, '_blank');
+        }
+
+        payBtn.textContent = 'Ожидаем оплату...';
+
     } catch (e) {
         console.error('[TOP_CHECKOUT] initiateCardPayment error:', e);
-        showPaymentErrorModal(e.message);
-    } finally {
         payBtn.disabled = false;
         payBtn.textContent = 'Перейти к оплате';
+        showPaymentErrorModal(e.message);
     }
+}
+
+function _startCardPaymentPolling(invId, initData, payBtn) {
+    let attempts = 0;
+    const maxAttempts = 150; // 5 минут (2 сек * 150)
+    const timer = setInterval(async () => {
+        attempts++;
+        try {
+            const r = await fetch(
+                `/api/robokassa_order_status?inv_id=${invId}&init_data=${encodeURIComponent(initData)}`
+            );
+            const d = await r.json();
+            console.log('[TOP_CHECKOUT] poll status:', d.status, 'attempt:', attempts);
+
+            if (d.status === 'paid') {
+                clearInterval(timer);
+                payBtn.disabled = false;
+                payBtn.textContent = 'Перейти к оплате';
+                showPaymentSuccessModal();
+            } else if (d.status === 'failed' || attempts >= maxAttempts) {
+                clearInterval(timer);
+                payBtn.disabled = false;
+                payBtn.textContent = 'Перейти к оплате';
+                if (attempts >= maxAttempts) {
+                    showPaymentErrorModal('Время ожидания оплаты истекло. Если вы оплатили — обратитесь в поддержку.');
+                }
+            }
+        } catch (e) {
+            if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                payBtn.disabled = false;
+                payBtn.textContent = 'Перейти к оплате';
+            }
+        }
+    }, 2000);
 }
 
 // ── Переход на главную участника после успешной оплаты ───────────────────
