@@ -1,6 +1,24 @@
 // webapp/pages/creator/services/top-checkout-services.js
 import topCheckoutTemplate from './top-checkout-services.template.js';
 
+// ── Цены (загружаются с сервера) ──────────────────────────────────────────
+let _prices = {
+    top: {
+        day:  { rub: 149, stars: 150 },
+        week: { rub: 499, stars: 450 },
+    }
+};
+
+async function loadPrices() {
+    try {
+        const resp = await fetch('/api/prices');
+        const data = await resp.json();
+        if (data.ok) _prices = data;
+    } catch (e) {
+        console.warn('[TOP_CHECKOUT] failed to load prices, using defaults');
+    }
+}
+
 // ── Состояние чекаута ─────────────────────────────────────────────────────
 let _agreed             = false;
 let _paymentMethod      = 'card';   // card | stars

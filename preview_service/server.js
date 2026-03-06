@@ -501,6 +501,21 @@ app.get('/health', (req, res) => {
 
 let _cachedBotUsername = null;
 
+// --- GET /api/prices ---
+app.get('/api/prices', (req, res) => {
+    res.json({
+        ok: true,
+        top: {
+            day:  { rub: parseInt(process.env.PRICE_TOP_DAY_RUB  || '149'), stars: parseInt(process.env.PRICE_TOP_DAY_STARS  || '150') },
+            week: { rub: parseInt(process.env.PRICE_TOP_WEEK_RUB || '499'), stars: parseInt(process.env.PRICE_TOP_WEEK_STARS || '450') },
+        },
+        promotion: {
+            rub:   parseInt(process.env.PRICE_PROMOTION_RUB   || '9990'),
+            stars: parseInt(process.env.PRICE_PROMOTION_STARS || '9990'),
+        },
+    });
+});
+
 // --- GET /api/bot_username ---
 app.get('/api/bot_username', async (req, res) => {
   try {
