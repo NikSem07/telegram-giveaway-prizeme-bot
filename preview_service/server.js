@@ -40,7 +40,7 @@ const ROBOKASSA_PASSWORD2 = process.env.ROBOKASSA_PASSWORD2 || '';
 const ROBOKASSA_IS_TEST        = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
 const ROBOKASSA_TEST_PASSWORD1 = process.env.ROBOKASSA_TEST_PASSWORD1 || '';
 const ROBOKASSA_TEST_PASSWORD2 = process.env.ROBOKASSA_TEST_PASSWORD2 || '';
-const ROBOKASSA_PROMOTION_PRICE = 9990;
+const ROBOKASSA_PROMOTION_PRICE = parseInt(process.env.PRICE_PROMOTION_RUB || '9990');
 
 
 // Логируем конфигурацию при запуске
@@ -2288,7 +2288,7 @@ app.post('/api/promotion_checkout_data', async (req, res) => {
 // --- POST /api/create_promotion_stars_invoice ---
 // Создаёт Stars инвойс для сервиса "Продвижение в боте"
 // ЦЕНА: константа, меняется в одном месте
-const PROMOTION_PRICE_STARS = 9990; // ← меняй здесь
+const PROMOTION_PRICE_STARS = parseInt(process.env.PRICE_PROMOTION_STARS || '9990');
 
 app.post('/api/create_promotion_stars_invoice', async (req, res) => {
   try {
