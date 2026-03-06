@@ -10857,10 +10857,12 @@ def make_internal_app():
     async def top_placement_paid(request: web.Request):
         try:
             data = await request.json()
+            logging.info(f"[top_placement_paid] received: {data}")
             user_id     = int(data.get("user_id", 0))
             period_label = data.get("period_label", "")
             payment_type = data.get("payment_type", "")
-
+            logging.info(f"[top_placement_paid] user_id={user_id}, payment_type={payment_type}, period_label={period_label}")
+            
             if user_id and payment_type == "card":
                 miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
                 kb = InlineKeyboardBuilder()
