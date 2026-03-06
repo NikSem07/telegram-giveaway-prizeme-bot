@@ -1946,8 +1946,10 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
 
         // Проверяем подпись
         const p2       = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD2 : ROBOKASSA_PASSWORD2;
-        const expected = _roboMd5(`${OutSum}:${InvId}:${p2}`);
-        if (expected !== String(SignatureValue).toUpperCase()) {
+        const sig = String(SignatureValue).toUpperCase();
+        const expected1 = _roboMd5(`${OutSum}:${InvId}:${p2}`);
+        const expected2 = _roboMd5(`${parseFloat(OutSum).toFixed(2)}:${InvId}:${p2}`);
+        if (expected1 !== sig && expected2 !== sig) {
             console.error('[ROBOKASSA] bad signature');
             return res.status(400).send('bad signature');
         }
