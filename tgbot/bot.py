@@ -3167,6 +3167,76 @@ async def cmd_start(m: Message, state: FSMContext):
         await show_event_card(m.chat.id, gid)
         return
 
+    if start_param.startswith("promo_pay_"):
+        await ensure_user(m.from_user.id, m.from_user.username)
+        inv_id_str = start_param[10:]  # убираем "promo_pay_"
+        try:
+            inv_id = int(inv_id_str)
+        except ValueError:
+            await m.answer("❌ Неверная ссылка оплаты.")
+            return
+
+        try:
+            async with Session() as session:
+                result = await session.execute(
+                    sqlalchemy.text(
+                        "SELECT publish_type, scheduled_at, amount_rub FROM promotion_robokassa_orders WHERE inv_id = :inv_id"
+                    ),
+                    {"inv_id": inv_id}
+                )
+                order_row = result.fetchone()
+        except Exception as e:
+            logging.error(f"[promo_pay_start] db error: {e}")
+            order_row = None
+
+        if not order_row:
+            await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
+            return
+
+        if order_row[2] is not None:
+            status_check = await Session().__aenter__()
+            try:
+                r2 = await status_check.execute(
+                    sqlalchemy.text("SELECT status FROM promotion_robokassa_orders WHERE inv_id = :inv_id"),
+                    {"inv_id": inv_id}
+                )
+                row2 = r2.fetchone()
+                if row2 and row2[0] == 'paid':
+                    await m.answer("✅ Эта заявка уже оплачена! Ожидайте публикации.")
+                    return
+            finally:
+                await status_check.__aexit__(None, None, None)
+
+        import hashlib as _hs
+        robo_login   = os.environ.get("ROBOKASSA_LOGIN", "prizeme")
+        is_test      = os.environ.get("ROBOKASSA_IS_TEST", "1") == "1"
+        p1           = os.environ.get("ROBOKASSA_TEST_PASSWORD1" if is_test else "ROBOKASSA_PASSWORD1", "")
+        out_sum      = f"{float(order_row[2]):.2f}"
+        sig          = _hs.md5(f"{robo_login}:{out_sum}:{inv_id}:{p1}".encode()).hexdigest().upper()
+        is_test_param = "1" if is_test else "0"
+        pay_url = (
+            f"https://auth.robokassa.ru/Merchant/Index.aspx"
+            f"?MerchantLogin={robo_login}"
+            f"&OutSum={out_sum}"
+            f"&InvId={inv_id}"
+            f"&SignatureValue={sig}"
+            f"&IsTest={is_test_param}"
+            f"&Culture=ru&Encoding=utf-8"
+        )
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="💳 Оплатить через Robokassa", url=pay_url)
+        kb.button(text="❌ Отмена", callback_data=f"promo_pay_cancel:{inv_id}")
+        kb.adjust(1)
+        await m.answer(
+            f"💳 <b>Оплата услуги «Продвижение в боте»</b>\n\n"
+            f"Цена: <b>{order_row[2]} ₽</b>\n\n"
+            f"Нажмите «Оплатить через Robokassa» для перехода к оплате.",
+            parse_mode="HTML",
+            reply_markup=kb.as_markup()
+        )
+        return
+
     if start_param.startswith("pay_"):
         await ensure_user(m.from_user.id, m.from_user.username)
         inv_id_str = start_param[4:]  # убираем "pay_"
@@ -3296,6 +3366,20 @@ async def cb_pay_cancel(cq: CallbackQuery):
     kb.adjust(1)
     await cq.message.edit_text(
         "❌ Вы отказались от оплаты услуги «Включение в топ-розыгрыши».\n\n"
+        "Вы можете вернуться обратно к сервисам.",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+
+@dp.callback_query(F.data.startswith("promo_pay_cancel:"))
+async def cb_promo_pay_cancel(cq: CallbackQuery):
+    await cq.answer()
+    miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚀 Вернуться к сервисам", web_app=WebAppInfo(url=miniapp_url))
+    kb.adjust(1)
+    await cq.message.edit_text(
+        "❌ Вы отказались от оплаты услуги «Продвижение в боте».\n\n"
         "Вы можете вернуться обратно к сервисам.",
         parse_mode="HTML",
         reply_markup=kb.as_markup()
@@ -10854,6 +10938,99 @@ def make_internal_app():
             logging.error(f"[internal/csv_export] error: {e}", exc_info=True)
             return web.json_response({"ok": False, "reason": str(e)}, status=500)
 
+    async def promotion_paid(request: web.Request):
+        try:
+            data = await request.json()
+            logging.info(f"[promotion_paid] received: {data}")
+            user_id      = int(data.get("user_id", 0))
+            giveaway_id  = int(data.get("giveaway_id", 0))
+            publish_type = data.get("publish_type", "immediate")
+            scheduled_at = data.get("scheduled_at")
+            amount_rub   = data.get("amount_rub", 9990)
+
+            if not user_id or not giveaway_id:
+                return web.json_response({"ok": False, "reason": "missing fields"})
+
+            scheduled_dt = None
+            if publish_type == "scheduled" and scheduled_at:
+                try:
+                    scheduled_dt = datetime.fromisoformat(str(scheduled_at).replace("Z", "+00:00"))
+                except Exception:
+                    scheduled_dt = None
+
+            # Создаём запись bot_promotions — точно так же как после Stars
+            async with Session() as s:
+                await s.execute(
+                    stext("""
+                        INSERT INTO bot_promotions
+                            (giveaway_id, owner_user_id, status, payment_method,
+                             payment_status, price_rub, publish_type, scheduled_at)
+                        VALUES (:gid, :uid, 'pending', 'card', 'paid', :price, :ptype, :sched)
+                    """),
+                    {
+                        "gid":   giveaway_id,
+                        "uid":   user_id,
+                        "price": int(amount_rub),
+                        "ptype": publish_type,
+                        "sched": scheduled_dt,
+                    }
+                )
+                await s.commit()
+
+            # Уведомляем владельца бота
+            time_label_owner = (
+                "сразу после утверждения"
+                if publish_type == "immediate"
+                else f"в {scheduled_dt.strftime('%d.%m.%Y %H:%M')} (МСК)"
+                if scheduled_dt else "сразу после утверждения"
+            )
+            try:
+                await bot.send_message(
+                    chat_id=BOT_OWNER_ID,
+                    text=(
+                        f"📣 <b>Новая заявка на продвижение!</b>\n\n"
+                        f"Розыгрыш: <b>#{giveaway_id}</b>\n"
+                        f"От пользователя: <b>{user_id}</b>\n"
+                        f"Оплата: Карта 💳 ({amount_rub} ₽)\n"
+                        f"Время публикации: {time_label_owner}\n\n"
+                        f"Перейди в /admin → Управление сервисами → 📣 Продвижение в боте → Заявки на продвижение"
+                    ),
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.warning(f"[promotion_paid] Не удалось уведомить владельца: {e}")
+
+            # Уведомляем пользователя
+            time_label = (
+                "сразу после утверждения администратором (до 8 часов)"
+                if publish_type == "immediate"
+                else f"в запланированное время: {scheduled_dt.strftime('%d.%m.%Y %H:%M')} (МСК)"
+                if scheduled_dt else "сразу после утверждения"
+            )
+            miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+            kb = InlineKeyboardBuilder()
+            kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
+            kb.adjust(1)
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=(
+                        f"✅ <b>Заявка на продвижение принята!</b>\n\n"
+                        f"Розыгрыш <b>#{giveaway_id}</b> будет опубликован в боте {time_label}.\n\n"
+                        f"Ожидайте уведомления после публикации."
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=kb.as_markup()
+                )
+            except Exception as e:
+                logging.warning(f"[promotion_paid] Не удалось уведомить пользователя {user_id}: {e}")
+
+            return web.json_response({"ok": True})
+        except Exception as e:
+            logging.error(f"[internal/promotion_paid] error: {e}", exc_info=True)
+            return web.json_response({"ok": False, "reason": str(e)}, status=500)
+
+
     async def top_placement_paid(request: web.Request):
         try:
             data = await request.json()
@@ -10862,7 +11039,7 @@ def make_internal_app():
             period_label = data.get("period_label", "")
             payment_type = data.get("payment_type", "")
             logging.info(f"[top_placement_paid] user_id={user_id}, payment_type={payment_type}, period_label={period_label}")
-            
+
             if user_id and payment_type == "card":
                 miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
                 kb = InlineKeyboardBuilder()
@@ -10895,6 +11072,7 @@ def make_internal_app():
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/internal/notify_prime", notify_prime)
     app.router.add_post("/internal/top_placement_paid", top_placement_paid)
+    app.router.add_post("/internal/promotion_paid", promotion_paid)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_simple_captcha_and_participate", verify_simple_captcha_and_participate)
     app.router.add_post("/api/create_simple_captcha_session", create_simple_captcha_session)

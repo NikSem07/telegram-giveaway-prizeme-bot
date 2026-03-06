@@ -418,9 +418,44 @@ async function initiateStarsPayment() {
     }
 }
 
-// ── Оплата картой — заглушка ──────────────────────────────────────────────
-function initiateCardPayment() {
-    _showInfoModal('🚧 В разработке', 'Оплата картой скоро будет доступна. Используйте Telegram Stars.');
+// ── Оплата картой через Robokassa ─────────────────────────────────────────
+async function initiateCardPayment() {
+    const payBtn = document.getElementById('promo-pay-btn');
+    payBtn.disabled = true;
+    payBtn.textContent = 'Загрузка...';
+    try {
+        const initData = window.Telegram?.WebApp?.initData
+            || sessionStorage.getItem('prizeme_init_data') || '';
+        const resp = await fetch('/api/create_promotion_robokassa_invoice', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                init_data:    initData,
+                giveaway_id:  _selectedGiveawayId,
+                publish_type: _selectedTimeType,
+                scheduled_at: _scheduledAt,
+                price_rub:    PROMOTION_PRICE_RUB,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.reason || 'Не удалось создать счёт');
+
+        const tg = window.Telegram?.WebApp;
+        const deepLink = `https://t.me/prizeme_official_bot?start=promo_pay_${data.inv_id}`;
+        if (tg?.openTelegramLink) {
+            tg.openTelegramLink(deepLink);
+        } else {
+            window.open(deepLink, '_blank');
+        }
+
+        payBtn.disabled = false;
+        payBtn.textContent = 'Перейти к оплате';
+    } catch (e) {
+        console.error('[PROMO_CHECKOUT] initiateCardPayment error:', e);
+        payBtn.disabled = false;
+        payBtn.textContent = 'Перейти к оплате';
+        showPaymentErrorModal(e.message);
+    }
 }
 
 // ── Модальные окна ────────────────────────────────────────────────────────

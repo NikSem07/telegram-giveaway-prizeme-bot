@@ -40,6 +40,7 @@ const ROBOKASSA_PASSWORD2 = process.env.ROBOKASSA_PASSWORD2 || '';
 const ROBOKASSA_IS_TEST        = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
 const ROBOKASSA_TEST_PASSWORD1 = process.env.ROBOKASSA_TEST_PASSWORD1 || '';
 const ROBOKASSA_TEST_PASSWORD2 = process.env.ROBOKASSA_TEST_PASSWORD2 || '';
+const ROBOKASSA_PROMOTION_PRICE = 9990;
 
 
 // Логируем конфигурацию при запуске
@@ -1938,6 +1939,35 @@ app.post('/api/create_robokassa_invoice', async (req, res) => {
     }
 });
 
+// --- POST /api/create_promotion_robokassa_invoice ---
+app.post('/api/create_promotion_robokassa_invoice', async (req, res) => {
+    try {
+        const { init_data, giveaway_id, publish_type, scheduled_at, price_rub } = req.body;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.json({ ok: false, reason: 'Unauthorized' });
+        }
+        const userId   = parsedInitData.user_parsed.id;
+        const outSum   = parseFloat(price_rub || ROBOKASSA_PROMOTION_PRICE).toFixed(2);
+        const invId    = Date.now() + userId % 10000;
+        const p1       = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD1 : ROBOKASSA_PASSWORD1;
+        const sig      = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${p1}`);
+
+        await pool.query(
+            `INSERT INTO promotion_robokassa_orders
+                (inv_id, user_id, giveaway_id, publish_type, scheduled_at, amount_rub, status)
+             VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+            [invId, userId, giveaway_id, publish_type || 'immediate',
+             scheduled_at || null, Math.round(parseFloat(outSum))]
+        );
+
+        return res.json({ ok: true, inv_id: invId });
+    } catch (e) {
+        console.error('[PROMO_ROBO] create invoice error:', e);
+        return res.json({ ok: false, reason: e.message });
+    }
+});
+
 // --- POST /api/robokassa_result (ResultURL от Robokassa) ---
 app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async (req, res) => {
     try {
@@ -2019,6 +2049,59 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
         return res.send(`OK${invId}`);
     } catch (e) {
         console.error('[ROBOKASSA] result error:', e);
+        return res.status(500).send('error');
+    }
+});
+
+// --- POST /api/robokassa_promotion_result ---
+app.post('/api/robokassa_promotion_result', express.urlencoded({ extended: false }), async (req, res) => {
+    try {
+        const { OutSum, InvId, SignatureValue } = req.body;
+        console.log('[PROMO_ROBO] result:', { OutSum, InvId, SignatureValue });
+
+        const p2  = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD2 : ROBOKASSA_PASSWORD2;
+        const sig = String(SignatureValue).toUpperCase();
+        const expected1 = _roboMd5(`${OutSum}:${InvId}:${p2}`);
+        const expected2 = _roboMd5(`${parseFloat(OutSum).toFixed(2)}:${InvId}:${p2}`);
+        if (expected1 !== sig && expected2 !== sig) {
+            console.error('[PROMO_ROBO] bad signature');
+            return res.status(400).send('bad signature');
+        }
+
+        const invId = Number(InvId);
+        const order = await pool.query(
+            `SELECT * FROM promotion_robokassa_orders WHERE inv_id = $1`, [invId]
+        );
+        if (!order.rows.length) return res.status(400).send('order not found');
+
+        const o = order.rows[0];
+        if (o.status !== 'pending') return res.send(`OK${invId}`);
+
+        await pool.query(
+            `UPDATE promotion_robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
+            [invId]
+        );
+
+        // Уведомляем бота — он создаст bot_promotion запись и отправит уведомления
+        try {
+            await fetch(`${BOT_INTERNAL_URL}/internal/promotion_paid`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    user_id:      o.user_id,
+                    giveaway_id:  o.giveaway_id,
+                    publish_type: o.publish_type,
+                    scheduled_at: o.scheduled_at,
+                    amount_rub:   o.amount_rub,
+                    payment_type: 'card',
+                }),
+            });
+        } catch (_e) { console.log('[PROMO_ROBO] bot notify failed:', _e.message); }
+
+        console.log(`[PROMO_ROBO] ✅ paid inv_id=${invId}`);
+        return res.send(`OK${invId}`);
+    } catch (e) {
+        console.error('[PROMO_ROBO] result error:', e);
         return res.status(500).send('error');
     }
 });
