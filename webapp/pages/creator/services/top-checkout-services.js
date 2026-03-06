@@ -496,6 +496,7 @@ export async function mountTopCheckout(container, onBack, onPaymentSuccess) {
     _onPaymentSuccess = onPaymentSuccess || null;
 
     await loadPrices();
+    console.log('[TOP_CHECKOUT] prices loaded:', JSON.stringify(_prices.top));
     container.innerHTML = topCheckoutTemplate(_prices.top);
     setShellVisibility(false);
 
