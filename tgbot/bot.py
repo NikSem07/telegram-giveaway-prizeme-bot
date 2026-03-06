@@ -3167,6 +3167,93 @@ async def cmd_start(m: Message, state: FSMContext):
         await show_event_card(m.chat.id, gid)
         return
 
+    if start_param.startswith("pay_"):
+        await ensure_user(m.from_user.id, m.from_user.username)
+        inv_id_str = start_param[4:]  # убираем "pay_"
+        try:
+            inv_id = int(inv_id_str)
+        except ValueError:
+            await m.answer("❌ Неверная ссылка оплаты.")
+            return
+
+        # Получаем данные заказа из БД через Node API
+        import aiohttp
+        node_url = os.environ.get("WEBAPP_BASE_URL", "https://prizeme.ru")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{node_url}/api/robokassa_order_status?inv_id={inv_id}"
+                ) as resp:
+                    order_data = await resp.json()
+        except Exception as e:
+            logging.error(f"[pay_start] order fetch error: {e}")
+            order_data = {}
+
+        # Если уже оплачен
+        if order_data.get("status") == "paid":
+            miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+            kb = InlineKeyboardBuilder()
+            kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
+            kb.adjust(1)
+            await m.answer(
+                "✅ <b>Оплата уже прошла успешно!</b>\n\n"
+                "Услуга «Включение в топ-розыгрыши» активирована.",
+                parse_mode="HTML",
+                reply_markup=kb.as_markup()
+            )
+            return
+
+        # Получаем детали заказа из БД напрямую
+        try:
+            async with pool_pg.acquire() as conn:
+                order_row = await conn.fetchrow(
+                    "SELECT period, amount_rub FROM robokassa_orders WHERE inv_id = $1",
+                    inv_id
+                )
+        except Exception as e:
+            logging.error(f"[pay_start] db error: {e}")
+            order_row = None
+
+        if not order_row:
+            await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
+            return
+
+        period_label = "1 день" if order_row["period"] == "day" else "1 неделю"
+        price = order_row["amount_rub"]
+
+        # Формируем ссылку на Robokassa
+        import hashlib
+        robo_login   = os.environ.get("ROBOKASSA_LOGIN", "prizeme")
+        is_test      = os.environ.get("ROBOKASSA_IS_TEST", "1") == "1"
+        p1           = os.environ.get("ROBOKASSA_TEST_PASSWORD1" if is_test else "ROBOKASSA_PASSWORD1", "")
+        out_sum      = f"{float(price):.2f}"
+        sig          = hashlib.md5(f"{robo_login}:{out_sum}:{inv_id}:{p1}".encode()).hexdigest().upper()
+        is_test_param = "1" if is_test else "0"
+        pay_url = (
+            f"https://auth.robokassa.ru/Merchant/Index.aspx"
+            f"?MerchantLogin={robo_login}"
+            f"&OutSum={out_sum}"
+            f"&InvId={inv_id}"
+            f"&SignatureValue={sig}"
+            f"&IsTest={is_test_param}"
+            f"&Culture=ru"
+            f"&Encoding=utf-8"
+        )
+
+        miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+        kb = InlineKeyboardBuilder()
+        kb.button(text="💳 Оплатить через Robokassa", url=pay_url)
+        kb.button(text="❌ Отмена", callback_data=f"pay_cancel:{inv_id}")
+        kb.adjust(1)
+        await m.answer(
+            f"💳 <b>Оплата услуги «Включение в топ-розыгрыши»</b>\n\n"
+            f"Цена: <b>{price} ₽</b> (период: {period_label})\n\n"
+            f"Нажмите «Оплатить через Robokassa», после оплаты вы сможете вернуться в mini-app.",
+            parse_mode="HTML",
+            reply_markup=kb.as_markup()
+        )
+        return
+
     if start_param == "add_channel":
         await ensure_user(m.from_user.id, m.from_user.username)
         await state.update_data(add_channel_from_miniapp=True)
@@ -3196,6 +3283,20 @@ async def cmd_start(m: Message, state: FSMContext):
         "<b>/boost</b> – подписка, сервисы и донат"
     )
     await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
+
+@dp.callback_query(F.data.startswith("pay_cancel:"))
+async def cb_pay_cancel(cq: CallbackQuery):
+    await cq.answer()
+    miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚀 Вернуться к сервисам", web_app=WebAppInfo(url=miniapp_url))
+    kb.adjust(1)
+    await cq.message.edit_text(
+        "❌ Вы отказались от оплаты услуги «Включение в топ-розыгрыши».\n\n"
+        "Вы можете вернуться обратно к сервисам.",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
 
 # ===== Меню "Мои розыгрыши" =====
 def kb_my_events_menu() -> InlineKeyboardMarkup:
@@ -10750,6 +10851,34 @@ def make_internal_app():
             logging.error(f"[internal/csv_export] error: {e}", exc_info=True)
             return web.json_response({"ok": False, "reason": str(e)}, status=500)
 
+    async def top_placement_paid(request: web.Request):
+        try:
+            data = await request.json()
+            user_id     = int(data.get("user_id", 0))
+            period_label = data.get("period_label", "")
+            payment_type = data.get("payment_type", "")
+
+            if user_id and payment_type == "card":
+                miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+                kb = InlineKeyboardBuilder()
+                kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
+                kb.adjust(1)
+                price_map = {"1 день": "149", "1 неделю": "499"}
+                price = price_map.get(period_label, "—")
+                await bot.send_message(
+                    user_id,
+                    f"✅ <b>Оплата прошла успешно!</b>\n\n"
+                    f"Услуга: Включение в топ-розыгрыши\n"
+                    f"Цена: {price} ₽\n\n"
+                    f"<i>Вы можете вернуться обратно в mini-app и выбрать ещё сервисы для продвижения.</i>",
+                    parse_mode="HTML",
+                    reply_markup=kb.as_markup()
+                )
+            return web.json_response({"ok": True})
+        except Exception as e:
+            logging.error(f"[internal/top_placement_paid] error: {e}", exc_info=True)
+            return web.json_response({"ok": False, "reason": str(e)}, status=500)
+
     async def notify_prime(request: web.Request):
         data = await request.json()
         gid = int(data.get("giveaway_id") or 0)
@@ -10760,6 +10889,7 @@ def make_internal_app():
     app.router.add_post("/api/giveaway_info", giveaway_info)
     app.router.add_post("/api/claim_ticket", claim_ticket)
     app.router.add_post("/internal/notify_prime", notify_prime)
+    app.router.add_post("/internal/top_placement_paid", top_placement_paid)
     app.router.add_post("/api/giveaway_results", giveaway_results)
     app.router.add_post("/api/verify_simple_captcha_and_participate", verify_simple_captcha_and_participate)
     app.router.add_post("/api/create_simple_captcha_session", create_simple_captcha_session)
