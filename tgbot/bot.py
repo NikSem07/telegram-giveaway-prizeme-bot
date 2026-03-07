@@ -4375,24 +4375,25 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
         days_left=days_left,
     )
 
-    # Кнопка точно как в канале — WebApp в личке
+    # Кнопка точно как в личке — WebApp
     markup = kb_public_participate(giveaway_id, for_channel=False)
 
-    # Медиа если есть
+    # Медиа если есть — готовим один раз до цикла
     kind, file_id = unpack_media(gw.photo_file_id)
     media_position = gw.media_position or "bottom"
-
-    sent = 0
-    failed = 0
-    # Готовим медиа один раз ДО цикла
     full_text = preview_text
     lp = None
     if file_id:
-        key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id,
-            "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4")
+        key, _s3_url = await file_id_to_public_url_via_s3(
+            bot, file_id,
+            "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4"
+        )
         preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
         hidden_link = f'<a href="{preview_url}"> </a>'
-        full_text = hidden_link + "\n" + preview_text if media_position == "top" else preview_text + "\n\n" + hidden_link
+        if media_position == "top":
+            full_text = hidden_link + "\n" + preview_text
+        else:
+            full_text = preview_text + "\n\n" + hidden_link
         lp = LinkPreviewOptions(
             is_disabled=False,
             prefer_large_media=True,
@@ -4406,42 +4407,22 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
     for uid in user_ids:
         try:
             if lp:
-                await bot.send_message(chat_id=uid, text=full_text,
-                                       parse_mode="HTML", reply_markup=markup,
-                                       link_preview_options=lp)
-            else:
-                await bot.send_message(chat_id=uid, text=full_text,
-                                       parse_mode="HTML", reply_markup=markup)
-            sent += 1
-            await asyncio.sleep(0.05)
-        except Exception as e:
-            logging.warning(f"[PROMO_PUB] uid={uid} error: {e}")
-            failed += 1
-    logging.info(f"[PROMO_PUB] #{giveaway_id}: отправлено {sent}, ошибок {failed}")
-                    "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4")
-                preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
-                hidden_link = f'<a href="{preview_url}"> </a>'
-                full_text = hidden_link + "\n" + preview_text if media_position == "top" else preview_text + "\n\n" + hidden_link
-                lp = LinkPreviewOptions(
-                    is_disabled=False,
-                    prefer_large_media=True,
-                    prefer_small_media=False,
-                    show_above_text=(media_position == "top"),
-                    url=preview_url,
+                await bot.send_message(
+                    chat_id=uid, text=full_text,
+                    parse_mode="HTML", reply_markup=markup,
+                    link_preview_options=lp
                 )
-                await bot.send_message(chat_id=uid, text=full_text,
-                                       parse_mode="HTML", reply_markup=markup,
-                                       link_preview_options=lp)
             else:
-                await bot.send_message(chat_id=uid, text=preview_text,
-                                       parse_mode="HTML", reply_markup=markup)
+                await bot.send_message(
+                    chat_id=uid, text=full_text,
+                    parse_mode="HTML", reply_markup=markup
+                )
             sent += 1
             await asyncio.sleep(0.05)
         except Exception as e:
             logging.warning(f"[PROMO_PUB] uid={uid} error: {e}")
             failed += 1
     logging.info(f"[PROMO_PUB] #{giveaway_id}: отправлено {sent}, ошибок {failed}")
-
 
 # ── Планировщик запланированных публикаций ────────────────────────────────
 async def check_scheduled_promotions():
