@@ -4384,10 +4384,40 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
 
     sent = 0
     failed = 0
+    # Готовим медиа один раз ДО цикла
+    full_text = preview_text
+    lp = None
+    if file_id:
+        key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id,
+            "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4")
+        preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+        hidden_link = f'<a href="{preview_url}"> </a>'
+        full_text = hidden_link + "\n" + preview_text if media_position == "top" else preview_text + "\n\n" + hidden_link
+        lp = LinkPreviewOptions(
+            is_disabled=False,
+            prefer_large_media=True,
+            prefer_small_media=False,
+            show_above_text=(media_position == "top"),
+            url=preview_url,
+        )
+
+    sent = 0
+    failed = 0
     for uid in user_ids:
         try:
-            if file_id:
-                key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id,
+            if lp:
+                await bot.send_message(chat_id=uid, text=full_text,
+                                       parse_mode="HTML", reply_markup=markup,
+                                       link_preview_options=lp)
+            else:
+                await bot.send_message(chat_id=uid, text=full_text,
+                                       parse_mode="HTML", reply_markup=markup)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logging.warning(f"[PROMO_PUB] uid={uid} error: {e}")
+            failed += 1
+    logging.info(f"[PROMO_PUB] #{giveaway_id}: отправлено {sent}, ошибок {failed}")
                     "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4")
                 preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
                 hidden_link = f'<a href="{preview_url}"> </a>'
