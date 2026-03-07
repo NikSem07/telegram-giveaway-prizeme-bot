@@ -694,3 +694,171 @@
     color: rgba(255, 255, 255, 0.35);
     font-style: italic;
 }
+
+
+/* ============================================================
+   СВЕТЛАЯ ТЕМА
+   ============================================================ */
+
+/* ── TOP-FRAME: карточки внутри блока "Топ розыгрыши" ── */
+
+/* Разделитель между карточками — тёмная линия вместо белой */
+:root.theme-light .top-frame .giveaway-card--top + .giveaway-card--top {
+    border-top: 0.5px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Текст и таймер в топ-карточках — тёмные */
+:root.theme-light .top-frame .giveaway-info {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .top-frame .giveaway-timer {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+/* Fade-текст названия канала в топ-карточках */
+:root.theme-light .giveaway-name-fade {
+    color: rgba(0, 0, 0, 0.50);
+    -webkit-mask-image: linear-gradient(
+        to right,
+        rgba(0,0,0,1) 0%,
+        rgba(0,0,0,1) 70%,
+        rgba(0,0,0,0) 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        rgba(0,0,0,1) 0%,
+        rgba(0,0,0,1) 70%,
+        rgba(0,0,0,0) 100%
+    );
+}
+
+/* Стрелка навигации в карточке каталога */
+:root.theme-light .giveaway-card-arrow {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+/* ── ПУСТОЕ СОСТОЯНИЕ ── */
+:root.theme-light .top-empty-text {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── КАТАЛОГ: заголовок и фильтр ── */
+:root.theme-light .catalog-title {
+    color: #000000;
+}
+
+:root.theme-light .catalog-filter {
+    background: rgba(0, 0, 0, 0.07);
+    color: #000000;
+}
+
+:root.theme-light .catalog-filter-label {
+    color: #000000;
+}
+
+:root.theme-light .catalog-filter-chevron {
+    color: #000000;
+}
+
+/* Дропдаун сортировки */
+:root.theme-light .catalog-dropdown {
+    background: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+:root.theme-light .catalog-dropdown-item {
+    color: #000000;
+}
+
+:root.theme-light .catalog-dropdown-item:hover,
+:root.theme-light .catalog-dropdown-item.is-active {
+    background: rgba(0, 122, 255, 0.08);
+    color: #007aff;
+}
+
+/* ── LOADING DOTS ── */
+:root.theme-light .loading-dot {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* ── GIVEAWAY CARD (каталог "Все") — обычные карточки ── */
+:root.theme-light .giveaway-card--all {
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+}
+
+/* Основной текст названия розыгрыша */
+:root.theme-light .giveaway-title {
+    color: #000000;
+}
+
+/* Описание розыгрыша */
+:root.theme-light .giveaway-desc {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+/* Таймер обратного отсчёта */
+:root.theme-light .giveaway-timer {
+    color: rgba(0, 0, 0, 0.65);
+}
+
+/* ── POP-UP: "Хотите перейти к розыгрышу?" ── */
+:root.theme-light .gnav-overlay {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+:root.theme-light .gnav-sheet {
+    background: #ffffff;
+    box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.10);
+}
+
+:root.theme-light .gnav-question {
+    color: #000000;
+}
+
+:root.theme-light .gnav-name {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+/* Кнопка "Отмена" */
+:root.theme-light .gnav-btn--cancel {
+    background: rgba(0, 0, 0, 0.07);
+    color: #000000;
+}
+
+/* Кнопка "Да" / "Перейти" — уже синяя, оставляем */
+
+/* ── POP-UP: список каналов ── */
+:root.theme-light .gnav-channel-card {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: transparent;
+}
+
+:root.theme-light .gnav-channel-card:active {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .gnav-channel-card--active {
+    background: rgba(0, 122, 255, 0.08);
+    border-color: #007aff;
+}
+
+:root.theme-light .gnav-channel-avatar {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+:root.theme-light .gnav-channel-avatar-placeholder {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+:root.theme-light .gnav-channel-name {
+    color: #000000;
+}
+
+/* Кнопка "Выберите канал" (неактивная) */
+:root.theme-light .gnav-btn--go-inactive {
+    background: rgba(0, 0, 0, 0.07);
+    color: rgba(0, 0, 0, 0.30);
+}
