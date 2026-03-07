@@ -34,10 +34,10 @@ function showWipModal() {
 }
 
 // ── Проверка наличия активных розыгрышей ─────────────────────────────────
-async function checkHasActiveGiveaways() {
+async function checkHasActiveGiveaways(endpoint = '/api/top_placement_checkout_data') {
     try {
         const initData = window.Telegram?.WebApp?.initData || '';
-        const resp = await fetch('/api/top_placement_checkout_data', {
+        const resp = await fetch(endpoint, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ init_data: initData }),
@@ -46,7 +46,6 @@ async function checkHasActiveGiveaways() {
         return data.ok && data.items && data.items.length > 0;
     } catch (e) {
         console.error('[SVC] checkHasActiveGiveaways error:', e);
-        // При ошибке пускаем дальше — не блокируем пользователя
         return true;
     }
 }
@@ -125,7 +124,7 @@ function initServiceSelection(main) {
                 }
             );
         } else if (selectedId === 'bot_promotion') {
-            const hasActive = await checkHasActiveGiveaways();
+            const hasActive = await checkHasActiveGiveaways('/api/promotion_checkout_data');
             if (!hasActive) { showNoGiveawaysModal(); return; }
             mountPromotionCheckout(
                 main,
