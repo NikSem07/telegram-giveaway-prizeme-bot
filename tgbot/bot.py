@@ -2518,21 +2518,19 @@ async def is_user_admin_of_chat(bot: Bot, chat_id: int, user_id: int) -> bool:
     except Exception:
         return False
 
-async def check_membership_on_all(bot, user_id:int, giveaway_id:int):
-    async with session_scope() as s:
-        res = await s.execute(
-            text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id = :gid"),
-            {"gid": giveaway_id}
-        )
-        rows = res.all()
-    
+async def check_membership_on_all(bot, user_id:int, giveaway_id:int, channels:list=None):
+    # channels передаём снаружи чтобы не делать N запросов к БД
+    if channels is None:
+        async with session_scope() as s:
+            res = await s.execute(
+                text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id = :gid"),
+                {"gid": giveaway_id}
+            )
+            channels = res.all()
     details = []; all_ok = True
-    for title, chat_id in rows:
-        # 1) Быстрый путь: уже знаем, что он вступил (одобренный join-request)
+    for title, chat_id in channels:
         ok = await is_member_local(int(chat_id), int(user_id))
         status = "local" if ok else "unknown"
-
-        # 2) Если нет локальной отметки — подстрахуемся Bot API
         if not ok:
             try:
                 m = await bot.get_chat_member(chat_id, user_id)
@@ -8729,19 +8727,33 @@ async def finalize_and_draw_job(giveaway_id: int):
             print(f"✅ Розыгрыш {gw.id} завершён без победителей (не было участников)")
             return
 
-        # ---------- 3. Финальная проверка подписок для КАЖДОГО участника ----------
-        eligible_entries = []  # [(user_id, ticket_code)]
-        for row in all_entries:
+        # ---------- 3. Финальная проверка подписок — параллельно (concurrency=50) ----------
+        # Загружаем каналы ОДИН РАЗ для всех участников
+        async with session_scope() as s:
+            ch_res = await s.execute(
+                text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id = :gid"),
+                {"gid": gw.id}
+            )
+            channels = ch_res.all()
+
+        CONCURRENCY = 50
+        semaphore = asyncio.Semaphore(CONCURRENCY)
+
+        async def check_one(row):
             user_id = row[0]
             ticket_code = row[1]
-            is_ok, debug_reason = await check_membership_on_all(bot, user_id, gw.id)
-            print(
+            async with semaphore:
+                is_ok, debug_reason = await check_membership_on_all(
+                    bot, user_id, gw.id, channels=channels
+                )
+            logging.info(
                 f"   • user={user_id} ticket={ticket_code} -> "
                 f"{'OK' if is_ok else 'FAIL'} ({debug_reason})"
             )
+            return (user_id, ticket_code) if is_ok else None
 
-            if is_ok:
-                eligible_entries.append((user_id, ticket_code))
+        results = await asyncio.gather(*[check_one(row) for row in all_entries])
+        eligible_entries = [r for r in results if r is not None]
 
         print(f"✅ Подтверждено участников после финальной проверки: {len(eligible_entries)}")
 
