@@ -884,7 +884,7 @@ async function checkGiveawayAccessAndMaybeTicket({ giveawayId, userId, issueTick
       });
     }
 
-    if (!channelOk && !participantInvalid) {
+    if (!channelOk) {
       isOkOverall = false;
     }
   }
