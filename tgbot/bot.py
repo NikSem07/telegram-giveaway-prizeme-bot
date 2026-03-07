@@ -3867,7 +3867,7 @@ async def cb_admin_promo_requests(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_req_info:"))
 async def cb_admin_promo_req_info(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    promo_id = int(cb.data.split(":")[3])
+    promo_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
         result = await s.execute(stext("""
@@ -3920,7 +3920,7 @@ async def cb_admin_promo_req_info(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_approve:"))
 async def cb_admin_promo_approve(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    promo_id = int(cb.data.split(":")[3])
+    promo_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
         result = await s.execute(stext("""
@@ -4053,7 +4053,7 @@ async def cb_admin_promo_scheduled(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_sched_info:"))
 async def cb_admin_promo_sched_info(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    promo_id = int(cb.data.split(":")[3])
+    promo_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
         result = await s.execute(stext("""
@@ -4105,7 +4105,7 @@ async def cb_admin_promo_sched_info(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_pub_now:"))
 async def cb_admin_promo_pub_now(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    promo_id = int(cb.data.split(":")[3])
+    promo_id = int(cb.data.split(":")[2])
 
     async with Session() as s:
         result = await s.execute(stext(
@@ -4138,7 +4138,7 @@ async def cb_admin_promo_pub_now(cb: CallbackQuery):
 @dp.callback_query(F.data.startswith("adm:promo_cancel_confirm:"))
 async def cb_admin_promo_cancel_confirm(cb: CallbackQuery):
     if not await _admin_guard(cb): return
-    promo_id = int(cb.data.split(":")[3])
+    promo_id = int(cb.data.split(":")[2])
 
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Да, отменить",  callback_data=f"adm:promo_cancel:{promo_id}")
