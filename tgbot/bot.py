@@ -4344,6 +4344,8 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
     async with Session() as s:
         gw_result = await s.execute(stext("""
             SELECT g.id, g.internal_title, g.end_at_utc, g.owner_user_id,
+                   g.public_description, g.photo_file_id, g.winners_count,
+                   g.media_position,
                    array_agg(DISTINCT COALESCE(oc.title, oc.username)) FILTER (WHERE oc.id IS NOT NULL) AS channels
             FROM giveaways g
             LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
@@ -4352,43 +4354,62 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
             GROUP BY g.id
         """), {"gid": giveaway_id})
         gw = gw_result.fetchone()
-
         if not gw:
             logging.warning(f"[PROMO_PUB] Розыгрыш #{giveaway_id} не найден или неактивен")
             return
-
-        # Получаем всех пользователей
         users_result = await s.execute(stext(
             "SELECT user_id FROM users ORDER BY user_id ASC"
         ))
         user_ids = [r.user_id for r in users_result.fetchall()]
 
-    channels_str = ", ".join(gw.channels) if gw.channels else "—"
-    end_str      = gw.end_at_utc.strftime("%d.%m.%Y %H:%M") if gw.end_at_utc else "—"
-
-    text = (
-        f"🎉 <b>Новый розыгрыш!</b>\n\n"
-        f"<b>{gw.internal_title}</b>\n\n"
-        f"📢 <b>Каналы:</b> {channels_str}\n"
-        f"⏰ <b>Завершается:</b> {end_str} UTC\n\n"
-        f"Нажмите «Участвовать», чтобы принять участие!"
+    # Формируем текст точно как в канале
+    end_at_msk_dt  = gw.end_at_utc.astimezone(MSK_TZ)
+    end_at_msk_str = end_at_msk_dt.strftime("%H:%M %d.%m.%Y")
+    now_msk        = datetime.now(MSK_TZ).date()
+    days_left      = max(0, (end_at_msk_dt.date() - now_msk).days)
+    preview_text   = _compose_post_text(
+        "",
+        gw.winners_count,
+        desc_html=(gw.public_description or ""),
+        end_at_msk=end_at_msk_str,
+        days_left=days_left,
     )
 
-    kb = InlineKeyboardBuilder()
-    kb.button(text="🎟 Участвовать", callback_data=f"participate:{giveaway_id}")
-    markup = kb.as_markup()
+    # Кнопка точно как в канале — WebApp в личке
+    markup = kb_public_participate(giveaway_id, for_channel=False)
+
+    # Медиа если есть
+    kind, file_id = unpack_media(gw.photo_file_id)
+    media_position = gw.media_position or "bottom"
 
     sent = 0
     failed = 0
     for uid in user_ids:
         try:
-            await bot.send_message(chat_id=uid, text=text,
-                                   parse_mode="HTML", reply_markup=markup)
+            if file_id:
+                key, _s3_url = await file_id_to_public_url_via_s3(bot, file_id,
+                    "image.jpg" if kind == "photo" else "animation.mp4" if kind == "animation" else "video.mp4")
+                preview_url = _make_preview_url(key, gw.internal_title or "", gw.public_description or "")
+                hidden_link = f'<a href="{preview_url}"> </a>'
+                full_text = hidden_link + "\n" + preview_text if media_position == "top" else preview_text + "\n\n" + hidden_link
+                lp = LinkPreviewOptions(
+                    is_disabled=False,
+                    prefer_large_media=True,
+                    prefer_small_media=False,
+                    show_above_text=(media_position == "top"),
+                    url=preview_url,
+                )
+                await bot.send_message(chat_id=uid, text=full_text,
+                                       parse_mode="HTML", reply_markup=markup,
+                                       link_preview_options=lp)
+            else:
+                await bot.send_message(chat_id=uid, text=preview_text,
+                                       parse_mode="HTML", reply_markup=markup)
             sent += 1
-            await asyncio.sleep(0.05)  # антифлуд
-        except Exception:
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logging.warning(f"[PROMO_PUB] uid={uid} error: {e}")
             failed += 1
-
     logging.info(f"[PROMO_PUB] #{giveaway_id}: отправлено {sent}, ошибок {failed}")
 
 
