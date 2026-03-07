@@ -4376,7 +4376,10 @@ async def _publish_giveaway_to_bot(giveaway_id: int):
     )
 
     # Кнопка точно как в личке — WebApp
-    markup = kb_public_participate(giveaway_id, for_channel=False)
+    # Используем t.me ссылку для полноэкранного открытия
+    _kb = InlineKeyboardBuilder()
+    _kb.button(text="Участвовать", url=f"https://t.me/{BOT_USERNAME}?startapp={giveaway_id}")
+    markup = _kb.as_markup()
 
     # Медиа если есть — готовим один раз до цикла
     kind, file_id = unpack_media(gw.photo_file_id)
