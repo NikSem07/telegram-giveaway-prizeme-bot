@@ -701,12 +701,6 @@
    ============================================================ */
 
 /* ── TOP-FRAME: карточки внутри блока "Топ розыгрыши" ── */
-/* ── TOP-FRAME: белый фон нижней части в светлой теме ── */
-:root.theme-light .top-frame {
-    background: #ffffff;
-    border-radius: 16px;
-    overflow: hidden;
-}
 
 /* Разделитель между карточками — тёмная линия вместо белой */
 :root.theme-light .top-frame .giveaway-card--top + .giveaway-card--top {
@@ -867,4 +861,11 @@
 :root.theme-light .gnav-btn--go-inactive {
     background: rgba(0, 0, 0, 0.07);
     color: rgba(0, 0, 0, 0.30);
+}
+
+/* ── TOP-FRAME: белый фон нижней части в светлой теме ── */
+:root.theme-light .top-frame {
+    background: #ffffff;
+    border-radius: 16px;
+    overflow: hidden;
 }
