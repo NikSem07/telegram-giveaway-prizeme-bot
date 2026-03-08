@@ -5281,6 +5281,23 @@ async def cmd_debug_botuser(m: Message):
                 parse_mode="HTML"
             )
 
+@dp.message(Command("admin_finalize"))
+@owner_only
+async def cmd_admin_finalize(m: Message):
+    """Принудительная финализация розыгрыша. Использование: /admin_finalize 294"""
+    parts = m.text.strip().split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await m.answer("Использование: /admin_finalize <giveaway_id>\nПример: /admin_finalize 294")
+        return
+    gid = int(parts[1])
+    await m.answer(f"🔄 Запускаю финализацию розыгрыша {gid}...")
+    try:
+        await finalize_and_draw_job(gid)
+        await m.answer(f"✅ Финализация розыгрыша {gid} завершена. Проверьте результаты.")
+    except Exception as e:
+        logging.error(f"[ADMIN_FINALIZE] Ошибка: {e}", exc_info=True)
+        await m.answer(f"❌ Ошибка при финализации: {e}")
+
 @dp.message(Command("force_check"))
 async def cmd_force_check(m: Message):
     """Принудительная проверка и обновление статуса"""
