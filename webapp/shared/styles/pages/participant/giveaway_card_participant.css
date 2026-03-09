@@ -764,3 +764,67 @@ body.page-participant-giveaway-card {
   background-color: var(--pgc-blue-chip);
   white-space: nowrap;
 }
+
+/* === LIGHT THEME: карточка розыгрыша — Участник === */
+/* Синий/зелёный/красный фон НЕ трогаем — только серый pgc-frame внутри */
+
+:root.theme-light .pgc-frame {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+:root.theme-light .pgc-info-title {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .pgc-desc-text {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .pgc-desc-text code {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .pgc-desc-text pre {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .pgc-channels-title {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.theme-light .pgc-channel-card {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.theme-light .pgc-channel-avatar {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .pgc-channel-title {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .pgc-channel-btn {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.theme-light .pgc-channel-btn:active {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+:root.theme-light .pgc-channel-modal {
+  background: #ffffff;
+}
+
+:root.theme-light .pgc-channel-modal__text {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .pgc-channel-modal__btn--cancel {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.85);
+}

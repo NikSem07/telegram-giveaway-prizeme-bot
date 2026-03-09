@@ -36,7 +36,7 @@
   border-radius: 20px;
   overflow: hidden;
 
-  background: var(--color-bg-tertiary);
+  background: rgba(46, 46, 46, 1);
   margin-bottom: 12px;
 
   /* чтобы совпасть с creator — убираем боковые паддинги/маржины */
@@ -237,3 +237,56 @@
   pointer-events: none;
 }
 
+/* === LIGHT THEME: раздел Розыгрыши — Участник === */
+:root.theme-light .participant-giveaways__tabs {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .participant-giveaways__tab {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .participant-giveaways__tab.is-active {
+  background: #ffffff;
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+:root.theme-light .participant-giveaways__hint {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.theme-light .participant-giveaways-card {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+:root.theme-light .participant-giveaways-card::after {
+  background: linear-gradient(
+    to left,
+    rgba(255, 255, 255, 1) 35%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+:root.theme-light .participant-giveaways-card__channels {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .participant-giveaways-card__title {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .participant-giveaways-card__meta {
+  color: rgba(0, 0, 0, 0.40);
+}
+
+:root.theme-light .participant-giveaways-card__avatar {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .participant-giveaways-card__arrow img {
+  filter: invert(0%) brightness(0%) opacity(25%);
+}
