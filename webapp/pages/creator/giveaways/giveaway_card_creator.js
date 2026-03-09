@@ -201,33 +201,70 @@ function renderDescription(container, rawText) {
     return;
   }
 
+  // Шаг 1: заменяем <tg-emoji emoji-id="...">ЭМОДЗИ</tg-emoji>
   let html = rawText.replace(
     /<tg-emoji[^>]*>([\s\S]*?)<\/tg-emoji>/gi,
     (_, inner) => inner
   );
 
+  // Шаг 2: временно прячем разрешённые теги форматирования
   const ALLOWED = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre'];
+
   const allowedPattern = new RegExp(
     `<(/?)(?:${ALLOWED.join('|')})(\\s[^>]*)?>`,
     'gi'
   );
 
   const placeholders = [];
+
   html = html.replace(allowedPattern, (match) => {
     const idx = placeholders.length;
     placeholders.push(match);
     return `\x00ALLOWED${idx}\x00`;
   });
 
+  // Шаг 3: обрабатываем <a href="...">текст</a> — только безопасные ссылки
+  html = html.replace(
+    /<a\s+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
+    (match, href, text) => {
+      const safeHref = /^https?:\/\//i.test(href) ? href : '';
+      if (!safeHref) return text;
+      const idx = placeholders.length;
+      placeholders.push(
+        `<a href="${safeHref}" class="pgc-link" data-url="${safeHref}">${text}</a>`
+      );
+      return `\x00ALLOWED${idx}\x00`;
+    }
+  );
+
+  // Шаг 4: экранируем все оставшиеся теги
   html = html
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+  // Шаг 5: возвращаем разрешённые теги обратно
   html = html.replace(/\x00ALLOWED(\d+)\x00/g, (_, idx) => placeholders[Number(idx)]);
+
+  // Шаг 6: переносы строк → <br>
   html = html.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
 
   container.innerHTML = html;
+
+  // Шаг 7: вешаем обработчики на ссылки — открываем через Telegram API
+  container.querySelectorAll('.pgc-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const url = link.dataset.url;
+      if (!url) return;
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openLink) {
+        tg.openLink(url);
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  });
 }
 
 /**

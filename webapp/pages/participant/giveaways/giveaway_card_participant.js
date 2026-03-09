@@ -372,46 +372,70 @@ function renderDescription(container, rawText) {
   }
 
   // Шаг 1: заменяем <tg-emoji emoji-id="...">ЭМОДЗИ</tg-emoji>
-  // Берём только текстовое содержимое внутри тега (обычный эмодзи-символ)
   let html = rawText.replace(
     /<tg-emoji[^>]*>([\s\S]*?)<\/tg-emoji>/gi,
     (_, inner) => inner
   );
 
-  // Шаг 2: разрешаем только безопасные теги форматирования.
-  // Все остальные теги экранируем.
-  // Сначала временно прячем разрешённые теги:
+  // Шаг 2: временно прячем разрешённые теги форматирования
   const ALLOWED = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre'];
 
-  // Маркируем разрешённые теги (открывающие и закрывающие)
   const allowedPattern = new RegExp(
     `<(/?)(?:${ALLOWED.join('|')})(\\s[^>]*)?>`,
     'gi'
   );
 
-  // Временная замена разрешённых тегов на плейсхолдеры
   const placeholders = [];
+
   html = html.replace(allowedPattern, (match) => {
     const idx = placeholders.length;
     placeholders.push(match);
     return `\x00ALLOWED${idx}\x00`;
   });
 
-  // Экранируем ВСЕ оставшиеся теги (потенциально опасные)
+  // Шаг 3: обрабатываем <a href="...">текст</a> — только безопасные ссылки
+  html = html.replace(
+    /<a\s+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
+    (match, href, text) => {
+      // Разрешаем только http/https ссылки
+      const safeHref = /^https?:\/\//i.test(href) ? href : '';
+      if (!safeHref) return text; // если href подозрительный — показываем просто текст
+      const idx = placeholders.length;
+      placeholders.push(
+        `<a href="${safeHref}" class="pgc-link" data-url="${safeHref}">${text}</a>`
+      );
+      return `\x00ALLOWED${idx}\x00`;
+    }
+  );
+
+  // Шаг 4: экранируем все оставшиеся теги
   html = html
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Возвращаем разрешённые теги обратно
+  // Шаг 5: возвращаем разрешённые теги обратно
   html = html.replace(/\x00ALLOWED(\d+)\x00/g, (_, idx) => placeholders[Number(idx)]);
 
-  // Шаг 3: переносы строк → <br>
-  // \n — явный перенос, также обрабатываем \r\n
+  // Шаг 6: переносы строк → <br>
   html = html.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
 
-  // Устанавливаем через innerHTML (безопасно — все посторонние теги экранированы)
   container.innerHTML = html;
+
+  // Шаг 7: вешаем обработчики на ссылки — открываем через Telegram API
+  container.querySelectorAll('.pgc-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const url = link.dataset.url;
+      if (!url) return;
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openLink) {
+        tg.openLink(url);
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  });
 }
 
 function renderGiveawayCardParticipantPage() {

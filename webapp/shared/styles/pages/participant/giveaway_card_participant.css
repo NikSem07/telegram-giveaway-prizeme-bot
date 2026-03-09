@@ -851,3 +851,15 @@ body.page-participant-giveaway-card {
 :root.theme-light .pgc-tickets-title {
   color: #ffffff !important;
 }
+
+/* Гиперссылки внутри описания розыгрыша */
+.pgc-link {
+  color: #4379ff;
+  text-decoration: underline;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+:root.theme-light .pgc-link {
+  color: #007aff;
+}
