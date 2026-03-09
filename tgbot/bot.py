@@ -8746,8 +8746,8 @@ async def finalize_and_draw_job(giveaway_id: int):
 
         # ---------- 3. Финальная проверка подписок — параллельно (concurrency=50) ----------
         # Загружаем каналы ОДИН РАЗ для всех участников
-        async with session_scope() as s:
-            ch_res = await s.execute(
+        async with session_scope() as s2:
+            ch_res = await s2.execute(
                 text("SELECT title, chat_id FROM giveaway_channels WHERE giveaway_id = :gid"),
                 {"gid": gw.id}
             )
