@@ -337,3 +337,9 @@ body.page-creator-giveaway-card .cgcc-badge-text {
   background: rgba(255, 255, 255, 0.75);
   border-top: 0.33px solid rgba(0, 0, 0, 0.10);
 }
+
+/* === Текст на цветном фоне — всегда белый в любой теме === */
+:root.theme-light .cgcc-title,
+:root.theme-light .cgcc-badge-text {
+  color: #ffffff !important;
+}

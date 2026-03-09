@@ -843,3 +843,11 @@ body.page-participant-giveaway-card {
   background: rgba(255, 255, 255, 0.75);
   border-top: 0.33px solid rgba(0, 0, 0, 0.10);
 }
+
+/* === Текст на цветном фоне — всегда белый в любой теме === */
+:root.theme-light .pgc-title,
+:root.theme-light .pgc-badge-text,
+:root.theme-light .pgc-ticket-pill,
+:root.theme-light .pgc-tickets-title {
+  color: #ffffff !important;
+}
