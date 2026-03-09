@@ -259,15 +259,11 @@ body.page-creator-giveaway-card .cgcc-badge-text {
 }
 
 /* === LIGHT THEME: карточка розыгрыша — Создатель === */
-/* Синий фон НЕ трогаем — только серый pgc-frame внутри */
+/* Синий фон НЕ трогаем — только содержимое */
 
-:root.theme-light .pgc-frame {
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-:root.theme-light .pgc-info-title {
-  color: rgba(0, 0, 0, 0.55);
+/* Блок описания — светло-серый фон вместо тёмного */
+:root.theme-light .pgc-desc {
+  background-color: rgba(0, 0, 0, 0.06);
 }
 
 :root.theme-light .pgc-desc-text {
@@ -282,6 +278,16 @@ body.page-creator-giveaway-card .cgcc-badge-text {
 :root.theme-light .pgc-desc-text pre {
   background: rgba(0, 0, 0, 0.04);
   color: rgba(0, 0, 0, 0.85);
+}
+
+/* Серый блок «Информация о розыгрыше» — белый фон */
+:root.theme-light .pgc-frame {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+:root.theme-light .pgc-info-title {
+  color: rgba(0, 0, 0, 0.55);
 }
 
 :root.theme-light .pgc-channels-title {
@@ -309,6 +315,7 @@ body.page-creator-giveaway-card .cgcc-badge-text {
   background: rgba(0, 0, 0, 0.12);
 }
 
+/* Победители */
 :root.theme-light .cgcc-winner-card {
   background: rgba(0, 0, 0, 0.04);
 }
@@ -323,4 +330,10 @@ body.page-creator-giveaway-card .cgcc-badge-text {
 
 :root.theme-light .cgcc-winner-card .winner-position {
   color: rgba(0, 0, 0, 0.85);
+}
+
+/* Подложка под кнопкой внизу — светлая */
+:root.theme-light .pgc-sticky-cta {
+  background: rgba(255, 255, 255, 0.75);
+  border-top: 0.33px solid rgba(0, 0, 0, 0.10);
 }
