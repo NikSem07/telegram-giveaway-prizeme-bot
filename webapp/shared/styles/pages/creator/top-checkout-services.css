@@ -308,3 +308,33 @@
     text-decoration: underline;
     text-underline-offset: 2px;
 }
+
+/* =====================================================
+   LIGHT THEME — Чекаут "Топ-розыгрыши"
+   ===================================================== */
+
+/* Разделитель в итоговой сумме */
+:root.theme-light .tc-summary-divider {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* Чекбокс "Я ознакомлен с офертой" — рамка видна на светлом фоне */
+:root.theme-light .tc-agree-checkbox {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Подложка под кнопкой "Перейти к оплате" — светлая вместо тёмной */
+:root.theme-light #tc-footer-pay {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(242, 242, 247, 0.88) 28%,
+    rgba(242, 242, 247, 0.98) 100%
+  );
+}
+
+/* Неактивная кнопка оплаты в светлой теме */
+:root.theme-light .tc-pay-btn--inactive {
+  background: rgba(0, 0, 0, 0.10) !important;
+  color: rgba(0, 0, 0, 0.30) !important;
+}

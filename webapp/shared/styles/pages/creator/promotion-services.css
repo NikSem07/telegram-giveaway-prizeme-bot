@@ -108,3 +108,34 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
 }
+
+/* =====================================================
+   LIGHT THEME — Чекаут "Продвижение"
+   ===================================================== */
+
+/* Поле ввода даты/времени */
+:root.theme-light .promo-datetime-picker {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.theme-light .promo-datetime-input {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .promo-datetime-input::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.5;
+}
+
+/* Подложка под кнопкой "Перейти к оплате" — светлая вместо тёмной */
+:root.theme-light #promo-footer-pay {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(242, 242, 247, 0.88) 28%,
+    rgba(242, 242, 247, 0.98) 100%
+  );
+}

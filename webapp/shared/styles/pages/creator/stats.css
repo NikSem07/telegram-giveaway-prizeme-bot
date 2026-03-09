@@ -963,3 +963,70 @@ body.page-stats #main-content {
 .st-newsub-accordion { border-bottom: 0.5px solid rgba(255,255,255,0.06); }
 .st-newsub-accordion:last-child { border-bottom: none; }
 :root.theme-light .st-newsub-accordion { border-bottom-color: rgba(0,0,0,0.06); }
+
+/* =====================================================
+   LIGHT THEME — Раздел "Статистика" Создатель
+   ===================================================== */
+
+/* Карточки розыгрышей в списке "Мои розыгрыши" */
+:root.theme-light .st-gw-card {
+  background: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .st-gw-card__channels {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .st-gw-card__title {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.theme-light .st-gw-card__avatar {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.theme-light .st-gw-card__arrow svg {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+/* Внутри карточки детальной статистики */
+
+/* Статусный бейдж с датой/временем — бесцветный в тёмной теме, добавляем фон */
+:root.theme-light .st-detail-badge {
+  /* Переопределяем только бейдж с датой (без цвета статуса).
+     Инлайн-стили на статусных бейджах сильнее — они не затронуты. */
+}
+
+/* Бейдж с датой окончания — задан инлайн rgba(255,255,255,0.06), почти прозрачный.
+   Переопределяем через более специфичный селектор */
+:root.theme-light .st-detail-badges .st-detail-badge:not([style*="34C759"]):not([style*="FF453A"]):not([style*="FF9F0A"]):not([style*="007AFF"]) {
+  background: rgba(0, 0, 0, 0.07) !important;
+  color: rgba(0, 0, 0, 0.55) !important;
+  border-color: rgba(0, 0, 0, 0.10) !important;
+}
+
+/* CSV кнопка — иконка и текст видны в светлой теме.
+   st-m3-card--csv имеет background: var(--color-primary) — синий, иконка белая через инлайн.
+   В светлой теме синий фон остаётся — это нормально, иконка уже белая. НЕ трогаем. */
+
+/* st-m3-card обычные — белый фон уже есть через :root.theme-light .st-m3-card выше.
+   Убеждаемся что текст виден */
+:root.theme-light .st-m3-val {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .st-m3-lbl {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* Победители */
+:root.theme-light .st-win-rank {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* Разделитель аккордеона подписчиков */
+:root.theme-light .st-newsub-accordion {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
