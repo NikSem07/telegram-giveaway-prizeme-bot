@@ -1,0 +1,722 @@
+/* webapp/shared/styles/pages/creator/task-services.css */
+
+/* ── Основной контейнер ───────────────────────────────────────────────────── */
+.ts-screen {
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 16px;
+}
+
+/* ── Секции ───────────────────────────────────────────────────────────────── */
+.ts-section {
+    padding: 16px 16px 0;
+}
+
+.ts-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 8px 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ts-tasks-count {
+    font-weight: 600;
+    color: var(--color-primary, #007AFF);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+}
+
+/* ── Карточка-контейнер ───────────────────────────────────────────────────── */
+.ts-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    margin-bottom: 8px;
+}
+
+/* ── Textarea описания ────────────────────────────────────────────────────── */
+.ts-textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--color-text);
+    font-size: 15px;
+    font-family: inherit;
+    resize: none;
+    line-height: 1.5;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.ts-textarea::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+}
+
+/* ── Счётчик символов ─────────────────────────────────────────────────────── */
+.ts-char-counter {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    text-align: right;
+    margin-top: 6px;
+    opacity: 0.7;
+}
+
+/* ── Медиа ────────────────────────────────────────────────────────────────── */
+.ts-media-wrap {
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.ts-media-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--card-bg);
+    border: 1.5px dashed rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s, opacity 0.15s;
+}
+
+.ts-media-btn:active {
+    opacity: 0.75;
+}
+
+.ts-media-preview {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.ts-media-preview img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    border-radius: var(--radius-lg);
+}
+
+.ts-media-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Лимит выполнений ─────────────────────────────────────────────────────── */
+.ts-limit-card {
+    padding: 10px;
+}
+
+.ts-limit-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.ts-limit-btn {
+    flex: 1;
+    padding: 10px 8px;
+    background: transparent;
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: calc(var(--radius-lg) - 2px);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    text-align: center;
+}
+
+.ts-limit-btn--active {
+    background: var(--color-primary, #007AFF);
+    border-color: var(--color-primary, #007AFF);
+    color: #fff;
+}
+
+.ts-limit-input-wrap {
+    margin-top: 10px;
+}
+
+/* ── Общий input ──────────────────────────────────────────────────────────── */
+.ts-input {
+    width: 100%;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: calc(var(--radius-lg) - 2px);
+    color: var(--color-text);
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+}
+
+.ts-input::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+}
+
+.ts-input:focus {
+    border-color: var(--color-primary, #007AFF);
+}
+
+/* Убираем стрелки у number input */
+.ts-input[type="number"]::-webkit-inner-spin-button,
+.ts-input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ── Список готовых заданий ───────────────────────────────────────────────── */
+.ts-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.ts-task-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 12px 10px 12px 14px;
+}
+
+.ts-task-item-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 122, 255, 0.15);
+    color: var(--color-primary, #007AFF);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ts-task-item-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ts-task-item-icon {
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.ts-task-item-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.ts-task-item-reward {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary, #007AFF);
+    background: rgba(0, 122, 255, 0.12);
+    padding: 3px 7px;
+    border-radius: 20px;
+}
+
+.ts-task-item-delete {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 59, 48, 0.12);
+    color: #FF3B30;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s;
+}
+
+.ts-task-item-delete:active {
+    background: rgba(255, 59, 48, 0.22);
+}
+
+/* ── Форма нового задания ─────────────────────────────────────────────────── */
+.ts-task-form {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    margin-bottom: 8px;
+}
+
+.ts-task-form--open {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.ts-task-form-card {
+    padding: 16px;
+}
+
+/* ── Группы типов ─────────────────────────────────────────────────────────── */
+.ts-type-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.ts-type-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 8px 2px;
+}
+
+.ts-type-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ts-type-chip {
+    padding: 7px 13px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    color: var(--color-text);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.ts-type-chip--active {
+    background: var(--color-primary, #007AFF);
+    border-color: var(--color-primary, #007AFF);
+    color: #fff;
+}
+
+/* ── Поля формы задания ───────────────────────────────────────────────────── */
+.ts-field {
+    margin-bottom: 14px;
+}
+
+.ts-field:last-of-type {
+    margin-bottom: 0;
+}
+
+.ts-field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+}
+
+.ts-hint {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    margin: 6px 0 0 2px;
+    line-height: 1.4;
+}
+
+/* ── Секретный код ────────────────────────────────────────────────────────── */
+.ts-field--secret {
+    margin-bottom: 14px;
+}
+
+.ts-secret-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--color-primary, #007AFF);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 4px 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.ts-secret-input-wrap {
+    margin-top: 10px;
+}
+
+/* ── Награда ──────────────────────────────────────────────────────────────── */
+.ts-reward-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.ts-reward-chip {
+    flex-shrink: 0;
+    width: 48px;
+    height: 42px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: calc(var(--radius-lg) - 2px);
+    color: var(--color-text);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ts-reward-chip--active {
+    background: var(--color-primary, #007AFF);
+    border-color: var(--color-primary, #007AFF);
+    color: #fff;
+}
+
+.ts-reward-input {
+    flex: 1;
+    padding: 10px 12px;
+}
+
+/* ── Кнопка «Добавить задание» внутри формы ──────────────────────────────── */
+.ts-add-task-btn {
+    display: block;
+    width: 100%;
+    margin-top: 18px;
+    padding: 13px;
+    background: var(--color-primary, #007AFF);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+}
+
+.ts-add-task-btn:active {
+    opacity: 0.82;
+}
+
+/* ── Кнопка «+ Добавить задание» (вне формы) ─────────────────────────────── */
+.ts-new-task-btn {
+    display: block;
+    width: 100%;
+    padding: 13px;
+    background: transparent;
+    border: 1.5px dashed rgba(0, 122, 255, 0.45);
+    border-radius: var(--radius-lg);
+    color: var(--color-primary, #007AFF);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, opacity 0.15s;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.ts-new-task-btn:active {
+    background: rgba(0, 122, 255, 0.06);
+}
+
+/* ── Pop-up удаления ──────────────────────────────────────────────────────── */
+.ts-delete-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    transition: background 0.25s ease;
+}
+
+.ts-delete-overlay--visible {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.ts-delete-sheet {
+    width: 100%;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ts-delete-sheet--visible {
+    transform: translateY(0);
+}
+
+.ts-delete-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0 0 8px;
+    text-align: center;
+}
+
+.ts-delete-text {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin: 0 0 20px;
+    text-align: center;
+}
+
+.ts-delete-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.ts-delete-btn {
+    flex: 1;
+    padding: 13px;
+    border-radius: var(--radius-lg);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+}
+
+.ts-delete-btn:active {
+    opacity: 0.8;
+}
+
+.ts-delete-btn--cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text);
+}
+
+.ts-delete-btn--confirm {
+    background: #FF3B30;
+    color: #fff;
+}
+
+/* ── Toast / ошибки ───────────────────────────────────────────────────────── */
+.ts-toast {
+    position: fixed;
+    bottom: calc(var(--navbar-height, 80px) + 70px);
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: #1c1c1e;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 11px 18px;
+    border-radius: 20px;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: calc(100vw - 48px);
+    text-align: center;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.ts-toast--visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.ts-toast--error {
+    background: #FF3B30;
+}
+
+/* ── Отступ под кнопку ────────────────────────────────────────────────────── */
+.ts-bottom-spacer {
+    height: 80px;
+}
+
+/* ── Фиксированная кнопка «К оформлению» ─────────────────────────────────── */
+.ts-footer {
+    position: fixed;
+    bottom: calc(var(--navbar-height, 80px) + 8px);
+    left: 0;
+    right: 0;
+    padding: 0 16px;
+    z-index: 50;
+}
+
+.ts-checkout-btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    background: var(--color-primary, #007AFF);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+}
+
+.ts-checkout-btn:active:not(.ts-checkout-btn--inactive) {
+    opacity: 0.82;
+}
+
+.ts-checkout-btn--inactive {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.35);
+    cursor: default;
+}
+
+/* ── Светлая тема ─────────────────────────────────────────────────────────── */
+:root.theme-light .ts-card {
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .ts-textarea {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .ts-textarea::placeholder {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+:root.theme-light .ts-section-label {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+:root.theme-light .ts-media-btn {
+    background: #f5f5f7;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: rgba(0, 0, 0, 0.5);
+}
+
+:root.theme-light .ts-limit-btn {
+    border-color: rgba(0, 0, 0, 0.12);
+    color: rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .ts-input {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .ts-input::placeholder {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+:root.theme-light .ts-type-chip {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+:root.theme-light .ts-reward-chip {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+:root.theme-light .ts-task-item {
+    background: #ffffff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.06);
+}
+
+:root.theme-light .ts-task-item-title {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .ts-delete-sheet {
+    background: #f2f2f7;
+}
+
+:root.theme-light .ts-delete-title {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .ts-delete-text {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+:root.theme-light .ts-delete-btn--cancel {
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.75);
+}
+
+:root.theme-light .ts-checkout-btn--inactive {
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.3);
+}
+
+:root.theme-light .ts-field-label {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+:root.theme-light .ts-hint {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+:root.theme-light .ts-char-counter {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+:root.theme-light .ts-type-group-label {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+:root.theme-light .ts-new-task-btn {
+    border-color: rgba(0, 122, 255, 0.35);
+}
+
+:root.theme-light .ts-toast {
+    background: rgba(0, 0, 0, 0.82);
+}

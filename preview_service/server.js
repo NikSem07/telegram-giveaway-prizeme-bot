@@ -5,6 +5,11 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
+  const multer = require('multer');
+  const multerUpload = multer({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 8 * 1024 * 1024 }
+  });
 
 // ЯВНОЕ ПОДКЛЮЧЕНИЕ .env ФАЙЛА
 require('dotenv').config({ path: '/root/telegram-giveaway-prizeme-bot/.env' });
@@ -1688,6 +1693,77 @@ app.get('/api/giveaway_media/:giveawayId', async (req, res) => {
     console.error('[API giveaway_media] error:', error);
     return res.status(500).end();
   }
+});
+
+// --- POST /api/task_upload_media ---
+app.post('/api/task_upload_media', multerUpload.single('media'), async (req, res) => {
+    try {
+        // Проверка авторизации
+        const initData = req.body?.init_data || '';
+        const parsedInitData = _tgCheckMiniAppInitData(initData);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const userId = Number(parsedInitData.user_parsed.id);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+        }
+
+        // Проверка файла
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ ok: false, reason: 'no_file' });
+        }
+
+        // Разрешённые типы
+        const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (!ALLOWED_TYPES.includes(file.mimetype)) {
+            return res.status(400).json({ ok: false, reason: 'invalid_file_type' });
+        }
+
+        // Размер не более 8 МБ (multer.limits уже ловит, но перестрахуемся)
+        if (file.size > 8 * 1024 * 1024) {
+            return res.status(400).json({ ok: false, reason: 'file_too_large' });
+        }
+
+        // Генерируем уникальное имя файла
+        const ext = file.mimetype === 'image/png' ? 'png' : 'jpg';
+        const randomSuffix = crypto.randomBytes(8).toString('hex');
+        const fileName = `task_media/${userId}_${Date.now()}_${randomSuffix}.${ext}`;
+        const s3Path = `/${S3_BUCKET}/${fileName}`;
+
+        // Подпись S3
+        const signedHeaders = signS3Request('PUT', s3Path);
+
+        // Загружаем в S3
+        const s3Url = `${S3_ENDPOINT}${s3Path}`;
+        const uploadResp = await fetch(s3Url, {
+            method: 'PUT',
+            headers: {
+                'Host': 's3.twcstorage.ru',
+                'Content-Type': file.mimetype,
+                'Content-Length': String(file.size),
+                ...signedHeaders,
+            },
+            body: file.buffer,
+        });
+
+        if (!uploadResp.ok) {
+            const errText = await uploadResp.text().catch(() => '');
+            console.error('[TASK_MEDIA] S3 upload failed:', uploadResp.status, errText);
+            return res.status(500).json({ ok: false, reason: 's3_upload_failed' });
+        }
+
+        // Возвращаем URL через наш прокси (как в giveaway_media)
+        const proxyUrl = `/uploads/${fileName}`;
+        console.log(`[TASK_MEDIA] ✅ Uploaded: ${fileName} (user ${userId})`);
+
+        return res.json({ ok: true, url: proxyUrl });
+
+    } catch (error) {
+        console.error('[TASK_MEDIA] error:', error);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + error.message });
+    }
 });
 
 
