@@ -131,6 +131,8 @@ function initServiceSelection(main) {
                 () => renderServicesPage(),
                 () => { AppState.setMode('creator'); }
             );
+        } else if (selectedId === 'tasks') {
+            Router.navigate('task_services_preview');
         } else {
             showWipModal();
         }

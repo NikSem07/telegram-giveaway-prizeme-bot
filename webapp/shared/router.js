@@ -15,6 +15,7 @@ import { renderServicesPage } from '../pages/creator/services/services.js';
 import { renderGiveawaysPage as renderCreatorGiveaways } from '../pages/creator/giveaways/giveaways.js';
 import { renderGiveawayCardCreatorPage } from '../pages/creator/giveaways/giveaway_card_creator.js';
 import { renderStatsPage } from '../pages/creator/stats/stats.js';
+import { renderTaskServicesPreviewPage } from '../pages/creator/services/task-services-preview.js';
 
 // --- Mode page mapping (keep section when switching modes) ---
 const MODE_PAGE_MAP = {
@@ -51,7 +52,8 @@ const Router = {
         services: renderServicesPage,
         giveaways: renderCreatorGiveaways,
         giveaway_card_creator: renderGiveawayCardCreatorPage,
-        stats: renderStatsPage
+        stats: renderStatsPage,
+        task_services_preview: renderTaskServicesPreviewPage
         }
     },
     

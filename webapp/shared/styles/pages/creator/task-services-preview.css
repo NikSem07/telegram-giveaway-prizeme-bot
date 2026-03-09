@@ -1,0 +1,159 @@
+/* webapp/shared/styles/pages/creator/task-services-preview.css */
+
+/* ── Основной контейнер ───────────────────────────────────────────────────── */
+.tsp-screen {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 16px;
+}
+
+/* ── Герой ────────────────────────────────────────────────────────────────── */
+.tsp-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 24px 16px 20px;
+}
+
+.tsp-hero-icon {
+    font-size: 56px;
+    line-height: 1;
+    margin-bottom: 16px;
+}
+
+.tsp-hero-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+}
+
+.tsp-hero-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    max-width: 300px;
+    margin: 0;
+}
+
+/* ── Блок инструкции ──────────────────────────────────────────────────────── */
+.tsp-steps-card {
+    margin: 0 0 12px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+}
+
+.tsp-steps-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 14px;
+    padding-left: 2px;
+}
+
+.tsp-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ── Один шаг ─────────────────────────────────────────────────────────────── */
+.tsp-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.tsp-step-num {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(0, 122, 255, 0.15);
+    color: var(--color-primary, #007AFF);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+
+.tsp-step-text {
+    font-size: 14px;
+    color: var(--color-text);
+    line-height: 1.5;
+    margin: 0;
+    flex: 1;
+}
+
+/* Последний шаг (цена) — выделяем чуть ярче */
+.tsp-step:last-child .tsp-step-text {
+    font-weight: 600;
+    color: var(--color-primary, #007AFF);
+}
+
+.tsp-step:last-child .tsp-step-num {
+    background: rgba(0, 122, 255, 0.22);
+}
+
+/* ── Отступ под кнопку ────────────────────────────────────────────────────── */
+.tsp-bottom-spacer {
+    height: 80px;
+}
+
+/* ── Фиксированная кнопка «Продолжить» ───────────────────────────────────── */
+.tsp-footer {
+    position: fixed;
+    bottom: calc(var(--navbar-height, 80px) + 8px);
+    left: 0;
+    right: 0;
+    padding: 0 16px;
+    z-index: 50;
+}
+
+.tsp-continue-btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    background: var(--color-primary, #007AFF);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.tsp-continue-btn:active {
+    opacity: 0.82;
+}
+
+/* ── Светлая тема ─────────────────────────────────────────────────────────── */
+:root.theme-light .tsp-steps-card {
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
+}
+
+:root.theme-light .tsp-step-text {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .tsp-hero-title {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .tsp-hero-subtitle {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .tsp-steps-label {
+    color: rgba(0, 0, 0, 0.45);
+}
