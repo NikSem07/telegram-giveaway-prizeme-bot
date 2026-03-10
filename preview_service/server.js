@@ -3734,6 +3734,287 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
     }
 }
 
+// ── POST /api/participant_task_giveaways ──────────────────────────────────
+// Розыгрыши участника у которых есть активный пулл заданий + прогресс
+app.post('/api/participant_task_giveaways', async (req, res) => {
+    try {
+        const { init_data } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        const result = await pool.query(`
+            SELECT
+                g.id,
+                g.internal_title                          AS title,
+                g.end_at_utc,
+                tp.id                                     AS pool_id,
+                tp.task_count,
+                COUNT(tc.id) FILTER (
+                    WHERE tc.user_id = $1 AND tc.status = 'completed'
+                )::int                                    AS completed_count,
+                (
+                    SELECT ch.username
+                    FROM giveaway_channels gc2
+                    JOIN channels ch ON ch.id = gc2.channel_id
+                    WHERE gc2.giveaway_id = g.id
+                    ORDER BY gc2.id
+                    LIMIT 1
+                )                                         AS first_channel_username,
+                (
+                    SELECT ch.avatar_url
+                    FROM giveaway_channels gc2
+                    JOIN channels ch ON ch.id = gc2.channel_id
+                    WHERE gc2.giveaway_id = g.id
+                    ORDER BY gc2.id
+                    LIMIT 1
+                )                                         AS first_channel_avatar_url,
+                (
+                    SELECT array_agg(ch.username ORDER BY gc2.id)
+                    FROM giveaway_channels gc2
+                    JOIN channels ch ON ch.id = gc2.channel_id
+                    WHERE gc2.giveaway_id = g.id
+                )                                         AS channels
+            FROM giveaways g
+            JOIN task_pool_giveaways tpg ON tpg.giveaway_id = g.id AND tpg.status = 'active'
+            JOIN task_pools tp           ON tp.id = tpg.pool_id
+            JOIN participations p        ON p.giveaway_id = g.id AND p.user_id = $1
+            LEFT JOIN tasks t            ON t.pool_id = tp.id AND t.is_active = true
+            LEFT JOIN task_completions tc ON tc.task_id = t.id AND tc.user_id = $1
+            WHERE g.status = 'active'
+            GROUP BY g.id, g.internal_title, g.end_at_utc, tp.id, tp.task_count
+            ORDER BY g.end_at_utc ASC
+        `, [userId]);
+
+        const items = result.rows.map(r => ({
+            id:                     r.id,
+            title:                  r.title,
+            end_at_utc:             r.end_at_utc,
+            pool_id:                r.pool_id,
+            task_count:             r.task_count,
+            completed_count:        r.completed_count,
+            first_channel_avatar_url: r.first_channel_avatar_url || null,
+            channels:               r.channels || [],
+        }));
+
+        return res.json({ ok: true, items });
+
+    } catch (e) {
+        console.error('[API participant_task_giveaways] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
+
+// ── POST /api/participant_tasks ───────────────────────────────────────────
+// Задания конкретного розыгрыша + статус выполнения участником
+app.post('/api/participant_tasks', async (req, res) => {
+    try {
+        const { init_data, giveaway_id } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        if (!giveaway_id) return res.status(400).json({ ok: false, reason: 'missing_giveaway_id' });
+
+        // Проверяем что у розыгрыша есть активный пулл
+        const poolRes = await pool.query(`
+            SELECT tp.id AS pool_id
+            FROM task_pool_giveaways tpg
+            JOIN task_pools tp ON tp.id = tpg.pool_id
+            WHERE tpg.giveaway_id = $1 AND tpg.status = 'active'
+            LIMIT 1
+        `, [giveaway_id]);
+
+        if (!poolRes.rows.length) return res.status(404).json({ ok: false, reason: 'no_active_pool' });
+
+        const poolId = poolRes.rows[0].pool_id;
+
+        // Задания
+        const tasksRes = await pool.query(`
+            SELECT
+                t.id,
+                t.type,
+                t.title,
+                t.link,
+                t.secret_enabled,
+                t.reward_tickets
+            FROM tasks t
+            WHERE t.pool_id = $1 AND t.is_active = true
+            ORDER BY t.sort_order ASC, t.id ASC
+        `, [poolId]);
+
+        // Выполненные задания
+        const completedRes = await pool.query(`
+            SELECT task_id
+            FROM task_completions
+            WHERE user_id = $1 AND giveaway_id = $2 AND status = 'completed'
+        `, [userId, giveaway_id]);
+
+        const completedTaskIds = completedRes.rows.map(r => r.task_id);
+
+        // Проверяем уже получена ли награда
+        const rewardRes = await pool.query(`
+            SELECT id FROM task_completions
+            WHERE user_id = $1 AND giveaway_id = $2 AND status = 'reward_claimed'
+            LIMIT 1
+        `, [userId, giveaway_id]);
+
+        return res.json({
+            ok:                 true,
+            tasks:              tasksRes.rows,
+            completed_task_ids: completedTaskIds,
+            reward_claimed:     rewardRes.rows.length > 0,
+        });
+
+    } catch (e) {
+        console.error('[API participant_tasks] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
+
+// ── POST /api/complete_task ───────────────────────────────────────────────
+// Отметить задание выполненным (с проверкой секретного кода если нужно)
+app.post('/api/complete_task', async (req, res) => {
+    try {
+        const { init_data, task_id, giveaway_id, secret_code } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        if (!task_id || !giveaway_id) return res.status(400).json({ ok: false, reason: 'missing_params' });
+
+        // Получаем задание
+        const taskRes = await pool.query(`
+            SELECT t.id, t.secret_enabled, t.secret_code, t.reward_tickets, t.pool_id
+            FROM tasks t
+            WHERE t.id = $1 AND t.is_active = true
+        `, [task_id]);
+
+        if (!taskRes.rows.length) return res.status(404).json({ ok: false, reason: 'task_not_found' });
+
+        const task = taskRes.rows[0];
+
+        // Проверяем секретный код
+        if (task.secret_enabled) {
+            if (!secret_code) return res.json({ ok: false, reason: 'secret_required' });
+            if ((task.secret_code || '').trim().toLowerCase() !== secret_code.trim().toLowerCase()) {
+                return res.json({ ok: false, reason: 'wrong_secret' });
+            }
+        }
+
+        // Проверяем не выполнено ли уже
+        const existingRes = await pool.query(`
+            SELECT id FROM task_completions
+            WHERE user_id = $1 AND task_id = $2 AND giveaway_id = $3
+        `, [userId, task_id, giveaway_id]);
+
+        if (existingRes.rows.length) return res.json({ ok: true, already_completed: true });
+
+        // Записываем выполнение
+        await pool.query(`
+            INSERT INTO task_completions (user_id, task_id, giveaway_id, status, completed_at)
+            VALUES ($1, $2, $3, 'completed', NOW())
+        `, [userId, task_id, giveaway_id]);
+
+        return res.json({ ok: true });
+
+    } catch (e) {
+        console.error('[API complete_task] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
+
+// ── POST /api/claim_task_reward ───────────────────────────────────────────
+// Начислить билеты за выполнение всех заданий
+app.post('/api/claim_task_reward', async (req, res) => {
+    try {
+        const { init_data, giveaway_id } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        if (!giveaway_id) return res.status(400).json({ ok: false, reason: 'missing_params' });
+
+        // Получаем активный пулл
+        const poolRes = await pool.query(`
+            SELECT tp.id AS pool_id
+            FROM task_pool_giveaways tpg
+            JOIN task_pools tp ON tp.id = tpg.pool_id
+            WHERE tpg.giveaway_id = $1 AND tpg.status = 'active'
+            LIMIT 1
+        `, [giveaway_id]);
+
+        if (!poolRes.rows.length) return res.status(404).json({ ok: false, reason: 'no_active_pool' });
+        const poolId = poolRes.rows[0].pool_id;
+
+        // Проверяем уже получена ли награда
+        const alreadyRes = await pool.query(`
+            SELECT id FROM task_completions
+            WHERE user_id = $1 AND giveaway_id = $2 AND status = 'reward_claimed'
+        `, [userId, giveaway_id]);
+
+        if (alreadyRes.rows.length) return res.json({ ok: false, reason: 'already_claimed' });
+
+        // Считаем все активные задания и выполненные
+        const tasksRes = await pool.query(`
+            SELECT t.id, t.reward_tickets
+            FROM tasks t
+            WHERE t.pool_id = $1 AND t.is_active = true
+        `, [poolId]);
+
+        const allTaskIds = tasksRes.rows.map(t => t.id);
+
+        const completedRes = await pool.query(`
+            SELECT task_id FROM task_completions
+            WHERE user_id = $1 AND giveaway_id = $2 AND status = 'completed'
+        `, [userId, giveaway_id]);
+
+        const completedIds = new Set(completedRes.rows.map(r => r.task_id));
+
+        // Проверяем что все задания выполнены
+        const allDone = allTaskIds.every(id => completedIds.has(id));
+        if (!allDone) return res.json({ ok: false, reason: 'not_all_completed' });
+
+        // Считаем сумму билетов
+        const ticketsToAdd = tasksRes.rows.reduce((sum, t) => sum + (t.reward_tickets || 1), 0);
+
+        // Транзакция: записываем reward_claimed + начисляем билеты
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Запись о получении награды
+            await client.query(`
+                INSERT INTO task_completions (user_id, task_id, giveaway_id, status, completed_at)
+                VALUES ($1, 0, $2, 'reward_claimed', NOW())
+            `, [userId, giveaway_id]);
+
+            // Начисляем дополнительные билеты в participations
+            await client.query(`
+                UPDATE participations
+                SET tickets = tickets + $1
+                WHERE user_id = $2 AND giveaway_id = $3
+            `, [ticketsToAdd, userId, giveaway_id]);
+
+            await client.query('COMMIT');
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+
+        return res.json({ ok: true, tickets_added: ticketsToAdd });
+
+    } catch (e) {
+        console.error('[API claim_task_reward] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);
