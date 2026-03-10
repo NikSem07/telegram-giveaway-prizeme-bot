@@ -150,13 +150,13 @@ export default function promotionCheckoutTemplate() {
       </div>
 
       <div class="svc-bottom-spacer"></div>
-    </div>
 
-    <!-- Кнопка «Перейти к оплате» — те же классы что в топ-чекауте -->
-    <div class="svc-footer tc-footer--hidden" id="promo-footer-pay">
-      <button class="svc-continue-btn tc-pay-btn--inactive" id="promo-pay-btn" type="button">
-        Перейти к оплате
-      </button>
+      <!-- Кнопка «Перейти к оплате» — те же классы что в топ-чекауте -->
+      <div class="svc-footer tc-footer--hidden" id="promo-footer-pay">
+        <button class="svc-continue-btn tc-pay-btn--inactive" id="promo-pay-btn" type="button">
+          Перейти к оплате
+        </button>
+      </div>
     </div>
   `;
 }

@@ -1,5 +1,10 @@
 /* webapp/shared/styles/pages/creator/top-checkout-services.css */
 
+/* ── Обёртка экрана — горизонтальные отступы */
+.tc-screen {
+    padding: 20px 20px 0;
+}
+
 /* ── Шапка ────────────────────────────────────────────────────────────── */
 .tc-header {
     padding: 0 0 20px;

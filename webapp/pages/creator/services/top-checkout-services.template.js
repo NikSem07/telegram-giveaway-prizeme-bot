@@ -8,6 +8,7 @@ export default function topCheckoutTemplate(PRICES = { day: { rub: 149, stars: 1
         { id: 'week', label: '1 Неделя',          priceRub: PRICES.week.rub, priceStars: PRICES.week.stars },
     ];
     return `
+        <div class="tc-screen">
         <!-- Шапка -->
         <div class="tc-header">
             <div class="tc-header-info">
@@ -138,6 +139,7 @@ export default function topCheckoutTemplate(PRICES = { day: { rub: 149, stars: 1
             <button class="svc-continue-btn tc-pay-btn--inactive" id="tc-pay-btn" type="button">
                 Перейти к оплате
             </button>
+        </div>
         </div>
     `;
 }

@@ -2,6 +2,7 @@
 
 export default function taskCheckoutTemplate({ taskCount, description, priceRub, priceStars }) {
     return `
+        <div class="tc-screen">
         <!-- Шапка -->
         <div class="tc-header">
             <div class="tc-header-info">
@@ -129,6 +130,7 @@ export default function taskCheckoutTemplate({ taskCount, description, priceRub,
             <button class="svc-continue-btn tc-pay-btn--inactive" id="tsc-pay-btn" type="button">
                 Перейти к оплате
             </button>
+        </div>
         </div>
     `;
 }

@@ -3407,7 +3407,6 @@ app.post('/api/task_checkout_data', async (req, res) => {
               AND g.id NOT IN (
                   SELECT tpg.giveaway_id
                   FROM task_pool_giveaways tpg
-                  JOIN task_pools tp ON tp.id = tpg.task_pool_id
                   WHERE tpg.status IN ('pending', 'active')
               )
             GROUP BY g.id
