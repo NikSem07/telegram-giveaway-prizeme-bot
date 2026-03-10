@@ -1,0 +1,58 @@
+/* webapp/shared/styles/pages/creator/task-services-checkout.css */
+
+/*
+ * Большинство стилей переиспользуется из top-checkout-services.css:
+ * .tc-header, .tc-title, .tc-subtitle, .tc-section, .tc-section--hidden,
+ * .tc-section-label, .tc-giveaway-card, .tc-giveaway-check,
+ * .tc-payment-list, .tc-payment-card, .tc-payment-icon, .tc-payment-label,
+ * .tc-payment-check, .tc-summary-card, .tc-summary-row, .tc-summary-label,
+ * .tc-summary-price, .tc-summary-divider, .tc-agree-block, .tc-agree-checkbox,
+ * .tc-agree-check, .tc-agree-text, .tc-legal-link, .tc-footer--hidden,
+ * .tc-pay-btn--inactive, .tc-pay-btn--shake, .tc-empty, .tc-loading,
+ * .tc-disclaimer, .tc-disclaimer-text, .tc-disclaimer-link
+ * — всё это уже есть в top-checkout-services.css и подключено глобально.
+ */
+
+/* ── Карточка сводки заказа (сверху) ────────────────────────────────────── */
+/* Немного мягче визуально — выделяем синей левой полосой */
+.tsc-order-card {
+    border-left: 3px solid var(--color-primary, #007AFF);
+    margin-bottom: 0;
+}
+
+/* ── Цена за задание — цветная ───────────────────────────────────────────── */
+.tsc-price-per-task {
+    color: var(--color-primary, #007AFF) !important;
+    font-weight: 600 !important;
+}
+
+/* ── Пустое состояние — уточняющий текст ─────────────────────────────────── */
+.tc-empty-text {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ── Кнопка оплаты — специфичный id для task checkout ────────────────────── */
+#tsc-footer-pay {
+    bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding-top: 12px;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(15, 17, 21, 0.88) 28%,
+        rgba(15, 17, 21, 0.98) 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* ── Светлая тема ────────────────────────────────────────────────────────── */
+:root.theme-light #tsc-footer-pay {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(242, 242, 247, 0.88) 28%,
+        rgba(242, 242, 247, 0.98) 100%
+    );
+}

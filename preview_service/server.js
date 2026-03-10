@@ -46,6 +46,8 @@ const ROBOKASSA_IS_TEST        = process.env.ROBOKASSA_IS_TEST === '1' ? 1 : 0;
 const ROBOKASSA_TEST_PASSWORD1 = process.env.ROBOKASSA_TEST_PASSWORD1 || '';
 const ROBOKASSA_TEST_PASSWORD2 = process.env.ROBOKASSA_TEST_PASSWORD2 || '';
 const ROBOKASSA_PROMOTION_PRICE = parseInt(process.env.PRICE_PROMOTION_RUB || '9990');
+const PRICE_TASK_RUB   = parseInt(process.env.PRICE_TASK_RUB   || '199');
+const PRICE_TASK_STARS = parseInt(process.env.PRICE_TASK_STARS || '199');
 
 
 // Логируем конфигурацию при запуске
@@ -517,6 +519,10 @@ app.get('/api/prices', (req, res) => {
         promotion: {
             rub:   parseInt(process.env.PRICE_PROMOTION_RUB   || '9990'),
             stars: parseInt(process.env.PRICE_PROMOTION_STARS || '9990'),
+        },
+        task: {
+            rub:   parseInt(process.env.PRICE_TASK_RUB   || '199'),
+            stars: parseInt(process.env.PRICE_TASK_STARS || '199'),
         },
     });
 });
@@ -2093,34 +2099,43 @@ app.post('/api/robokassa_result', express.urlencoded({ extended: false }), async
             const promoOrder = await pool.query(
                 `SELECT * FROM promotion_robokassa_orders WHERE inv_id = $1`, [invId]
             );
-            if (!promoOrder.rows.length) {
-                return res.status(400).send('order not found');
+            if (promoOrder.rows.length) {
+                // Обрабатываем промо-заказ
+                const o = promoOrder.rows[0];
+                if (o.status !== 'pending') return res.send(`OK${invId}`);
+
+                await pool.query(
+                    `UPDATE promotion_robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
+                    [invId]
+                );
+                try {
+                    await fetch(`${BOT_INTERNAL_URL}/internal/promotion_paid`, {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body:    JSON.stringify({
+                            user_id:      o.user_id,
+                            giveaway_id:  o.giveaway_id,
+                            publish_type: o.publish_type,
+                            scheduled_at: o.scheduled_at,
+                            amount_rub:   o.amount_rub,
+                            payment_type: 'card',
+                        }),
+                    });
+                } catch (_e) { console.log('[PROMO_ROBO] bot notify failed:', _e.message); }
+
+                console.log(`[PROMO_ROBO] ✅ paid inv_id=${invId}`);
+                return res.send(`OK${invId}`);
             }
-            // Обрабатываем промо-заказ
-            const o = promoOrder.rows[0];
-            if (o.status !== 'pending') return res.send(`OK${invId}`);
 
-            await pool.query(
-                `UPDATE promotion_robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
-                [invId]
+            // Если не promo — проверяем task-заказ
+            const taskOrder = await pool.query(
+                `SELECT * FROM task_robokassa_orders WHERE inv_id = $1`, [invId]
             );
-            try {
-                await fetch(`${BOT_INTERNAL_URL}/internal/promotion_paid`, {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({
-                        user_id:      o.user_id,
-                        giveaway_id:  o.giveaway_id,
-                        publish_type: o.publish_type,
-                        scheduled_at: o.scheduled_at,
-                        amount_rub:   o.amount_rub,
-                        payment_type: 'card',
-                    }),
-                });
-            } catch (_e) { console.log('[PROMO_ROBO] bot notify failed:', _e.message); }
+            if (taskOrder.rows.length) {
+                return _handleTaskRobokassaPaid(taskOrder.rows[0], invId, res);
+            }
 
-            console.log(`[PROMO_ROBO] ✅ paid inv_id=${invId}`);
-            return res.send(`OK${invId}`);
+            return res.status(400).send('order not found');
         }
 
         const o = order.rows[0];
@@ -3351,6 +3366,366 @@ app.post('/api/stats/request_csv', async (req, res) => {
     res.status(500).json({ ok: false, reason: 'server_error' });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ЗАДАНИЯ ДЛЯ УЧАСТНИКОВ
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Цена за одно задание — читается из .env (PRICE_TASK_RUB, PRICE_TASK_STARS)
+// Константы уже объявлены выше в файле через process.env
+
+// ── POST /api/task_checkout_data ──────────────────────────────────────────
+// Возвращает активные розыгрыши создателя, у которых нет активного пулла
+// заданий (status IN ('pending','active')).
+app.post('/api/task_checkout_data', async (req, res) => {
+    try {
+        const { init_data } = req.body;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const userId = Number(parsedInitData.user_parsed.id);
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ ok: false, reason: 'bad_user_id' });
+        }
+
+        const result = await pool.query(`
+            SELECT
+                g.id,
+                g.internal_title,
+                g.end_at_utc,
+                array_remove(
+                    array_agg(DISTINCT COALESCE(gc.title, oc.title, oc.username)),
+                    NULL
+                ) AS channels,
+                (array_agg(gc.chat_id ORDER BY gc.id))[1] AS first_channel_chat_id
+            FROM giveaways g
+            LEFT JOIN giveaway_channels gc ON gc.giveaway_id = g.id
+            LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
+            WHERE g.owner_user_id = $1
+              AND g.status = 'active'
+              AND g.id NOT IN (
+                  SELECT tpg.giveaway_id
+                  FROM task_pool_giveaways tpg
+                  JOIN task_pools tp ON tp.id = tpg.task_pool_id
+                  WHERE tpg.status IN ('pending', 'active')
+              )
+            GROUP BY g.id
+            ORDER BY g.id DESC
+        `, [userId]);
+
+        return res.json({
+            ok:    true,
+            items: (result.rows || []).map(row => ({
+                id:                      row.id,
+                title:                   row.internal_title,
+                end_at_utc:              row.end_at_utc,
+                channels:                row.channels || [],
+                first_channel_avatar_url: row.first_channel_chat_id
+                    ? `/api/chat_avatar/${row.first_channel_chat_id}`
+                    : null,
+            })),
+        });
+
+    } catch (e) {
+        console.error('[API task_checkout_data] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + e.message });
+    }
+});
+
+
+// ── POST /api/task_create_robokassa_invoice ───────────────────────────────
+// Создаёт Robokassa счёт для пулла заданий. Сохраняет пулл в task_robokassa_orders.
+app.post('/api/task_create_robokassa_invoice', async (req, res) => {
+    try {
+        const { init_data, giveaway_id, price_rub, task_pool } = req.body;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const userId = Number(parsedInitData.user_parsed.id);
+
+        // Проверяем розыгрыш
+        const gw = await pool.query(
+            `SELECT id, internal_title FROM giveaways
+             WHERE id = $1 AND owner_user_id = $2 AND status = 'active'`,
+            [giveaway_id, userId]
+        );
+        if (!gw.rows.length) {
+            return res.status(400).json({ ok: false, reason: 'giveaway_not_found' });
+        }
+
+        const tasks      = (task_pool?.tasks || []);
+        const taskCount  = tasks.length;
+        if (taskCount === 0) {
+            return res.status(400).json({ ok: false, reason: 'no_tasks' });
+        }
+
+        const expectedRub = taskCount * PRICE_TASK_RUB;
+        const outSum      = expectedRub.toFixed(2);
+        const invId       = Date.now() * 1000 + (userId % 1000);
+        const description = `Задания для розыгрыша «${gw.rows[0].internal_title}» (${taskCount} шт.)`;
+        const p1          = ROBOKASSA_IS_TEST ? ROBOKASSA_TEST_PASSWORD1 : ROBOKASSA_PASSWORD1;
+        const signature   = _roboMd5(`${ROBOKASSA_LOGIN}:${outSum}:${invId}:${p1}`);
+
+        // Сохраняем заказ с полным снапшотом пулла
+        await pool.query(
+            `INSERT INTO task_robokassa_orders
+             (inv_id, giveaway_id, user_id, task_count, amount_rub, status, task_pool_snapshot)
+             VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+            [invId, giveaway_id, userId, taskCount, outSum, JSON.stringify(task_pool)]
+        );
+
+        return res.json({
+            ok:             true,
+            merchant_login: ROBOKASSA_LOGIN,
+            out_sum:        outSum,
+            inv_id:         invId,
+            description,
+            signature,
+            is_test:        ROBOKASSA_IS_TEST,
+            price_rub:      outSum,
+        });
+
+    } catch (e) {
+        console.error('[API task_create_robokassa_invoice] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + e.message });
+    }
+});
+
+
+// ── POST /api/task_create_stars_invoice ──────────────────────────────────
+// Создаёт Telegram Stars инвойс для пулла заданий.
+app.post('/api/task_create_stars_invoice', async (req, res) => {
+    try {
+        const { init_data, giveaway_id, stars, task_pool } = req.body;
+        const parsedInitData = _tgCheckMiniAppInitData(init_data);
+        if (!parsedInitData?.user_parsed) {
+            return res.status(400).json({ ok: false, reason: 'bad_initdata' });
+        }
+        const userId = Number(parsedInitData.user_parsed.id);
+
+        const gw = await pool.query(
+            `SELECT id, internal_title FROM giveaways
+             WHERE id = $1 AND owner_user_id = $2 AND status = 'active'`,
+            [giveaway_id, userId]
+        );
+        if (!gw.rows.length) {
+            return res.status(400).json({ ok: false, reason: 'giveaway_not_found' });
+        }
+
+        const tasks     = (task_pool?.tasks || []);
+        const taskCount = tasks.length;
+        if (taskCount === 0) {
+            return res.status(400).json({ ok: false, reason: 'no_tasks' });
+        }
+
+        const starsAmount    = taskCount * PRICE_TASK_STARS;
+        const giveawayTitle  = gw.rows[0].internal_title;
+
+        const botToken = process.env.BOT_TOKEN;
+        const invoiceResp = await fetch(
+            `https://api.telegram.org/bot${botToken}/createInvoiceLink`,
+            {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    title:          'Задания для участников',
+                    description:    `${taskCount} заданий для розыгрыша «${giveawayTitle}»`,
+                    payload:        JSON.stringify({
+                        type:        'task_pool',
+                        giveaway_id: Number(giveaway_id),
+                        user_id:     userId,
+                        task_pool,
+                    }),
+                    currency:       'XTR',
+                    prices:         [{ label: `${taskCount} заданий`, amount: starsAmount }],
+                    provider_token: '',
+                }),
+            }
+        );
+
+        const invoiceData = await invoiceResp.json();
+        if (!invoiceData.ok) {
+            console.error('[API task_create_stars_invoice] Telegram error:', invoiceData);
+            return res.status(500).json({ ok: false, reason: 'telegram_api_error' });
+        }
+
+        return res.json({ ok: true, invoice_link: invoiceData.result });
+
+    } catch (e) {
+        console.error('[API task_create_stars_invoice] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + e.message });
+    }
+});
+
+
+// ── POST /api/task_after_payment ─────────────────────────────────────────
+// Вызывается Python-ботом после successful_payment Stars.
+// Создаёт task_pool → tasks → task_pool_giveaway → task_pool_payment.
+app.post('/api/task_after_payment', async (req, res) => {
+    try {
+        const { giveaway_id, user_id, task_pool, price_stars } = req.body;
+        const client = await pool.connect();
+
+        try {
+            await client.query('BEGIN');
+
+            // 1. Создаём task_pool
+            const poolRes = await client.query(
+                `INSERT INTO task_pools (owner_user_id, title, description, limit_mode, limit_value, created_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
+                [
+                    Number(user_id),
+                    task_pool?.title || '',
+                    task_pool?.description || '',
+                    task_pool?.limitMode || 'unlimited',
+                    task_pool?.limitValue || null,
+                ]
+            );
+            const taskPoolId = poolRes.rows[0].id;
+
+            // 2. Создаём задания
+            for (const task of (task_pool?.tasks || [])) {
+                await client.query(
+                    `INSERT INTO tasks
+                     (task_pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+                    [
+                        taskPoolId,
+                        task.type,
+                        task.title,
+                        task.link || null,
+                        task.secretEnabled || false,
+                        task.secret || null,
+                        task.reward || 1,
+                    ]
+                );
+            }
+
+            // 3. Привязываем к розыгрышу
+            await client.query(
+                `INSERT INTO task_pool_giveaways (task_pool_id, giveaway_id, status, created_at)
+                 VALUES ($1, $2, 'active', NOW())`,
+                [taskPoolId, Number(giveaway_id)]
+            );
+
+            // 4. Записываем оплату
+            await client.query(
+                `INSERT INTO task_pool_payments
+                 (task_pool_id, payment_method, price_rub, price_stars, status, paid_at)
+                 VALUES ($1, 'stars', NULL, $2, 'paid', NOW())`,
+                [taskPoolId, Number(price_stars) || 0]
+            );
+
+            await client.query('COMMIT');
+            console.log(`[TASK_AFTER_PAYMENT] ✅ task_pool_id=${taskPoolId}, gid=${giveaway_id}`);
+            return res.json({ ok: true, task_pool_id: taskPoolId });
+
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+
+    } catch (e) {
+        console.error('[API task_after_payment] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error: ' + e.message });
+    }
+});
+
+
+// ── Хук в POST /api/robokassa_result ────────────────────────────────────
+// После проверки подписи добавить в секцию "проверяем оба типа заказов"
+// следующий блок (после проверки promotion_robokassa_orders):
+//
+//   if (!order.rows.length) {
+//       const taskOrder = await pool.query(
+//           `SELECT * FROM task_robokassa_orders WHERE inv_id = $1`, [invId]
+//       );
+//       if (taskOrder.rows.length) {
+//           return _handleTaskRobokasskaPaid(taskOrder.rows[0], invId, res);
+//       }
+//       return res.status(400).send('order not found');
+//   }
+//
+// И добавить функцию-обработчик:
+
+async function _handleTaskRobokassaPaid(o, invId, res) {
+    if (o.status !== 'pending') return res.send(`OK${invId}`);
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const taskPool = o.task_pool_snapshot;
+
+        // 1. task_pool
+        const poolRes = await client.query(
+            `INSERT INTO task_pools (owner_user_id, title, description, limit_mode, limit_value, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
+            [
+                o.user_id,
+                taskPool?.title || '',
+                taskPool?.description || '',
+                taskPool?.limitMode || 'unlimited',
+                taskPool?.limitValue || null,
+            ]
+        );
+        const taskPoolId = poolRes.rows[0].id;
+
+        // 2. tasks
+        for (const task of (taskPool?.tasks || [])) {
+            await client.query(
+                `INSERT INTO tasks
+                 (task_pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+                [
+                    taskPoolId,
+                    task.type,
+                    task.title,
+                    task.link || null,
+                    task.secretEnabled || false,
+                    task.secret || null,
+                    task.reward || 1,
+                ]
+            );
+        }
+
+        // 3. task_pool_giveaway
+        await client.query(
+            `INSERT INTO task_pool_giveaways (task_pool_id, giveaway_id, status, created_at)
+             VALUES ($1, $2, 'active', NOW())`,
+            [taskPoolId, o.giveaway_id]
+        );
+
+        // 4. task_pool_payment
+        await client.query(
+            `INSERT INTO task_pool_payments
+             (task_pool_id, payment_method, price_rub, price_stars, status, paid_at)
+             VALUES ($1, 'card', $2, NULL, 'paid', NOW())`,
+            [taskPoolId, Number(o.amount_rub) || 0]
+        );
+
+        // 5. Обновляем статус заказа
+        await client.query(
+            `UPDATE task_robokassa_orders SET status = 'paid', paid_at = NOW() WHERE inv_id = $1`,
+            [invId]
+        );
+
+        await client.query('COMMIT');
+        console.log(`[TASK_ROBO] ✅ paid inv_id=${invId}, task_pool_id=${taskPoolId}`);
+        return res.send(`OK${invId}`);
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error('[TASK_ROBO] rollback error:', e);
+        return res.status(500).send('error');
+    } finally {
+        client.release();
+    }
+}
 
 // Start server
 app.listen(PORT, () => {
