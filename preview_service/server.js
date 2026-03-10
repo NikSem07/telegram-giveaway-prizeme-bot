@@ -3764,13 +3764,13 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
                     WHERE tc.user_id = $1 AND tc.status = 'completed'
                 )::int                                    AS completed_count,
                 (
-                    SELECT oc.avatar_url
+                    SELECT oc.chat_id
                     FROM giveaway_channels gc2
                     JOIN organizer_channels oc ON oc.id = gc2.channel_id
                     WHERE gc2.giveaway_id = g.id
                     ORDER BY gc2.id
                     LIMIT 1
-                )                                         AS first_channel_avatar_url,
+                )                                         AS first_channel_chat_id,
                 (
                     SELECT array_agg(oc.username ORDER BY gc2.id)
                     FROM giveaway_channels gc2
@@ -3795,7 +3795,7 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
             pool_id:                r.pool_id,
             task_count:             r.task_count,
             completed_count:        r.completed_count,
-            first_channel_avatar_url: r.first_channel_avatar_url || null,
+            first_channel_avatar_url: r.first_channel_chat_id ? `/api/chat_avatar/${r.first_channel_chat_id}` : null,
             channels:               r.channels || [],
         }));
 
