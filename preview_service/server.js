@@ -3590,17 +3590,18 @@ app.post('/api/task_after_payment', async (req, res) => {
             const taskPoolId = poolRes.rows[0].id;
 
             // 2. Создаём задания
+            let orderNum = 1;
             for (const task of (task_pool?.tasks || [])) {
                 await client.query(
                     `INSERT INTO tasks
-                     (pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                     (pool_id, order_num, type, title, link, secret_code, reward_tickets, created_at)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                     [
                         taskPoolId,
+                        orderNum++,
                         task.type,
                         task.title,
                         task.link || null,
-                        task.secretEnabled || false,
                         task.secret || null,
                         task.reward || 1,
                     ]
@@ -3608,18 +3609,19 @@ app.post('/api/task_after_payment', async (req, res) => {
             }
 
             // 3. Привязываем к розыгрышу
-            await client.query(
+            const tpgRes = await client.query(
                 `INSERT INTO task_pool_giveaways (pool_id, giveaway_id, status, created_at)
-                 VALUES ($1, $2, 'active', NOW())`,
+                 VALUES ($1, $2, 'active', NOW()) RETURNING id`,
                 [taskPoolId, Number(giveaway_id)]
             );
+            const tpgId = tpgRes.rows[0].id;
 
             // 4. Записываем оплату
             await client.query(
                 `INSERT INTO task_pool_payments
-                 (task_pool_id, payment_method, price_rub, price_stars, status, paid_at)
-                 VALUES ($1, 'stars', NULL, $2, 'paid', NOW())`,
-                [taskPoolId, Number(price_stars) || 0]
+                 (pool_giveaway_id, owner_user_id, payment_method, amount_stars, payment_status, paid_at)
+                 VALUES ($1, $2, 'stars', $3, 'paid', NOW())`,
+                [tpgId, Number(user_id), Number(price_stars) || 0]
             );
 
             await client.query('COMMIT');
@@ -3674,17 +3676,18 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
         const taskPoolId = poolRes.rows[0].id;
 
         // 2. tasks
+        let orderNum = 1;
         for (const task of (taskPool?.tasks || [])) {
             await client.query(
                 `INSERT INTO tasks
-                 (pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                 (pool_id, order_num, type, title, link, secret_code, reward_tickets, created_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                 [
                     taskPoolId,
+                    orderNum++,
                     task.type,
                     task.title,
                     task.link || null,
-                    task.secretEnabled || false,
                     task.secret || null,
                     task.reward || 1,
                 ]
@@ -3692,18 +3695,19 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
         }
 
         // 3. task_pool_giveaway
-        await client.query(
+        const tpgRes = await client.query(
             `INSERT INTO task_pool_giveaways (pool_id, giveaway_id, status, created_at)
-             VALUES ($1, $2, 'active', NOW())`,
+             VALUES ($1, $2, 'active', NOW()) RETURNING id`,
             [taskPoolId, o.giveaway_id]
         );
+        const tpgId = tpgRes.rows[0].id;
 
         // 4. task_pool_payment
         await client.query(
             `INSERT INTO task_pool_payments
-             (task_pool_id, payment_method, price_rub, price_stars, status, paid_at)
-             VALUES ($1, 'card', $2, NULL, 'paid', NOW())`,
-            [taskPoolId, Number(o.amount_rub) || 0]
+             (pool_giveaway_id, owner_user_id, payment_method, amount_rub, payment_status, paid_at)
+             VALUES ($1, $2, 'card', $3, 'paid', NOW())`,
+            [tpgId, o.user_id, Number(o.amount_rub) || 0]
         );
 
         // 5. Обновляем статус заказа
