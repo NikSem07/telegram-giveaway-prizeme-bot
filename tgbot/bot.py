@@ -9963,9 +9963,10 @@ async def handle_successful_payment(message: Message):
         charge_id    = payment.telegram_payment_charge_id
 
         try:
+            node_url = os.environ.get("WEBAPP_BASE_URL", "https://prizeme.ru")
             async with aiohttp.ClientSession() as http:
                 resp = await http.post(
-                    f"{NODE_SERVER_URL}/api/task_after_payment",
+                    f"{node_url}/api/task_after_payment",
                     json={
                         "giveaway_id": giveaway_id,
                         "user_id":     user_id,
