@@ -3713,6 +3713,26 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
 
         await client.query('COMMIT');
         console.log(`[TASK_ROBO] ✅ paid inv_id=${invId}, task_pool_id=${taskPoolId}`);
+
+        // Уведомляем пользователя в Telegram
+        const taskCount = taskPool?.tasks?.length || 0;
+        try {
+            await fetch(
+                `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+                {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id:    o.user_id,
+                        text:       `✅ <b>Задания успешно подключены!</b>\n\n<b>${taskCount}</b> заданий привязаны к розыгрышу <b>#${o.giveaway_id}</b>.\nУчастники уже могут видеть задания в разделе «Задания».\n\nОплачено: <b>${o.amount_rub} ₽</b>`,
+                        parse_mode: 'HTML',
+                    }),
+                }
+            );
+        } catch (e) {
+            console.error('[TASK_ROBO] notify error:', e);
+        }
+
         return res.send(`OK${invId}`);
 
     } catch (e) {
