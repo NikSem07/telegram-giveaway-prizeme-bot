@@ -3992,7 +3992,7 @@ app.post('/api/claim_task_reward', async (req, res) => {
             // Запись о получении награды
             await client.query(`
                 INSERT INTO task_completions (user_id, task_id, giveaway_id, status, completed_at)
-                VALUES ($1, 0, $2, 'reward_claimed', NOW())
+                VALUES ($1, NULL, $2, 'reward_claimed', NOW())
             `, [userId, giveaway_id]);
 
             // Начисляем дополнительные билеты — добавляем записи в entries
