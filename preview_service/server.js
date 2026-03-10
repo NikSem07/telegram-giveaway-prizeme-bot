@@ -3580,14 +3580,11 @@ app.post('/api/task_after_payment', async (req, res) => {
 
             // 1. Создаём task_pool
             const poolRes = await client.query(
-                `INSERT INTO task_pools (owner_user_id, title, description, limit_mode, limit_value, created_at)
-                 VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
+                `INSERT INTO task_pools (creator_user_id, description, created_at)
+                VALUES ($1, $2, NOW()) RETURNING id`,
                 [
                     Number(user_id),
-                    task_pool?.title || '',
                     task_pool?.description || '',
-                    task_pool?.limitMode || 'unlimited',
-                    task_pool?.limitValue || null,
                 ]
             );
             const taskPoolId = poolRes.rows[0].id;
@@ -3596,7 +3593,7 @@ app.post('/api/task_after_payment', async (req, res) => {
             for (const task of (task_pool?.tasks || [])) {
                 await client.query(
                     `INSERT INTO tasks
-                     (task_pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                     (pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                     [
                         taskPoolId,
@@ -3612,7 +3609,7 @@ app.post('/api/task_after_payment', async (req, res) => {
 
             // 3. Привязываем к розыгрышу
             await client.query(
-                `INSERT INTO task_pool_giveaways (task_pool_id, giveaway_id, status, created_at)
+                `INSERT INTO task_pool_giveaways (pool_id, giveaway_id, status, created_at)
                  VALUES ($1, $2, 'active', NOW())`,
                 [taskPoolId, Number(giveaway_id)]
             );
@@ -3670,15 +3667,9 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
 
         // 1. task_pool
         const poolRes = await client.query(
-            `INSERT INTO task_pools (owner_user_id, title, description, limit_mode, limit_value, created_at)
-             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
-            [
-                o.user_id,
-                taskPool?.title || '',
-                taskPool?.description || '',
-                taskPool?.limitMode || 'unlimited',
-                taskPool?.limitValue || null,
-            ]
+            `INSERT INTO task_pools (creator_user_id, description, created_at)
+            VALUES ($1, $2, NOW()) RETURNING id`,
+            [o.user_id, taskPool?.description || '']
         );
         const taskPoolId = poolRes.rows[0].id;
 
@@ -3686,7 +3677,7 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
         for (const task of (taskPool?.tasks || [])) {
             await client.query(
                 `INSERT INTO tasks
-                 (task_pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
+                 (pool_id, type, title, link, secret_enabled, secret_code, reward_tickets, created_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                 [
                     taskPoolId,
@@ -3702,7 +3693,7 @@ async function _handleTaskRobokassaPaid(o, invId, res) {
 
         // 3. task_pool_giveaway
         await client.query(
-            `INSERT INTO task_pool_giveaways (task_pool_id, giveaway_id, status, created_at)
+            `INSERT INTO task_pool_giveaways (pool_id, giveaway_id, status, created_at)
              VALUES ($1, $2, 'active', NOW())`,
             [taskPoolId, o.giveaway_id]
         );
