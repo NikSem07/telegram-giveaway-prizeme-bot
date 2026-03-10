@@ -118,12 +118,16 @@
     right: 0;
     padding: 0 16px;
     z-index: 50;
-
     /* Скрыта по умолчанию */
     opacity: 0;
     transform: translateY(12px);
     pointer-events: none;
     transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.page-checkout-services .svc-footer {
+    bottom: 0;
+    padding: 0 16px;
 }
 
 .svc-footer.is-visible {
