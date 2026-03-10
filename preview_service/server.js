@@ -3404,11 +3404,6 @@ app.post('/api/task_checkout_data', async (req, res) => {
             LEFT JOIN organizer_channels oc ON oc.id = gc.channel_id
             WHERE g.owner_user_id = $1
               AND g.status = 'active'
-              AND g.id NOT IN (
-                  SELECT tpg.giveaway_id
-                  FROM task_pool_giveaways tpg
-                  WHERE tpg.status IN ('pending', 'active')
-              )
             GROUP BY g.id
             ORDER BY g.id DESC
         `, [userId]);
@@ -3773,7 +3768,7 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
             FROM giveaways g
             JOIN task_pool_giveaways tpg ON tpg.giveaway_id = g.id AND tpg.status = 'active'
             JOIN task_pools tp           ON tp.id = tpg.pool_id
-            JOIN participations p        ON p.giveaway_id = g.id AND p.user_id = $1
+            JOIN entries p        ON p.giveaway_id = g.id AND p.user_id = $1
             LEFT JOIN tasks t            ON t.pool_id = tp.id AND t.is_active = true
             LEFT JOIN task_completions tc ON tc.task_id = t.id AND tc.user_id = $1
             WHERE g.status = 'active'
@@ -3987,12 +3982,23 @@ app.post('/api/claim_task_reward', async (req, res) => {
                 VALUES ($1, 0, $2, 'reward_claimed', NOW())
             `, [userId, giveaway_id]);
 
-            // Начисляем дополнительные билеты в participations
-            await client.query(`
-                UPDATE participations
-                SET tickets = tickets + $1
-                WHERE user_id = $2 AND giveaway_id = $3
-            `, [ticketsToAdd, userId, giveaway_id]);
+            // Начисляем дополнительные билеты — добавляем записи в entries
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const srcRes = await client.query(
+                `SELECT chat_id FROM giveaway_channels WHERE giveaway_id = $1 ORDER BY id LIMIT 1`,
+                [giveaway_id]
+            );
+            const sourceChannelId = srcRes.rows[0]?.chat_id || null;
+            for (let i = 0; i < ticketsToAdd; i++) {
+                const code = Array.from({ length: 6 }, () =>
+                    alphabet[Math.floor(Math.random() * alphabet.length)]
+                ).join('');
+                await client.query(
+                    `INSERT INTO entries (giveaway_id, user_id, ticket_code, prelim_ok, prelim_checked_at, source_channel_id)
+                     VALUES ($1, $2, $3, true, NOW(), $4)`,
+                    [giveaway_id, userId, code, sourceChannelId]
+                );
+            }
 
             await client.query('COMMIT');
         } catch (e) {
