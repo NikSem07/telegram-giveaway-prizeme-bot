@@ -3789,7 +3789,7 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
             JOIN task_pool_giveaways tpg ON tpg.giveaway_id = g.id AND tpg.status = 'active'
             JOIN task_pools tp           ON tp.id = tpg.pool_id
             JOIN entries p        ON p.giveaway_id = g.id AND p.user_id = $1
-            LEFT JOIN tasks t            ON t.pool_id = tp.id AND t.is_active = true
+            LEFT JOIN tasks t            ON t.pool_id = tp.id
             LEFT JOIN task_completions tc ON tc.task_id = t.id AND tc.user_id = $1
             WHERE g.status = 'active'
             GROUP BY g.id, g.internal_title, g.end_at_utc, tp.id, tp.task_count
@@ -3847,10 +3847,10 @@ app.post('/api/participant_tasks', async (req, res) => {
                 t.type,
                 t.title,
                 t.link,
-                t.secret_enabled,
+                (t.secret_code IS NOT NULL) AS secret_enabled,
                 t.reward_tickets
             FROM tasks t
-            WHERE t.pool_id = $1 AND t.is_active = true
+            WHERE t.pool_id = $1
             ORDER BY t.sort_order ASC, t.id ASC
         `, [poolId]);
 
@@ -3897,9 +3897,10 @@ app.post('/api/complete_task', async (req, res) => {
 
         // Получаем задание
         const taskRes = await pool.query(`
-            SELECT t.id, t.secret_enabled, t.secret_code, t.reward_tickets, t.pool_id
+            SELECT t.id, t.secret_code, t.reward_tickets, t.pool_id,
+                   (t.secret_code IS NOT NULL) AS secret_enabled
             FROM tasks t
-            WHERE t.id = $1 AND t.is_active = true
+            WHERE t.id = $1
         `, [task_id]);
 
         if (!taskRes.rows.length) return res.status(404).json({ ok: false, reason: 'task_not_found' });
@@ -3972,7 +3973,7 @@ app.post('/api/claim_task_reward', async (req, res) => {
         const tasksRes = await pool.query(`
             SELECT t.id, t.reward_tickets
             FROM tasks t
-            WHERE t.pool_id = $1 AND t.is_active = true
+            WHERE t.pool_id = $1
         `, [poolId]);
 
         const allTaskIds = tasksRes.rows.map(t => t.id);
