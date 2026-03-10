@@ -3843,7 +3843,7 @@ app.post('/api/participant_tasks', async (req, res) => {
                 t.reward_tickets
             FROM tasks t
             WHERE t.pool_id = $1
-            ORDER BY t.sort_order ASC, t.id ASC
+            ORDER BY t.order_num ASC, t.id ASC
         `, [poolId]);
 
         // Выполненные задания
