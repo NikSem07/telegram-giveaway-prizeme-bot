@@ -3231,6 +3231,84 @@ async def cmd_start(m: Message, state: FSMContext):
         )
         return
 
+    if start_param.startswith("pay_TASK_"):
+        await ensure_user(m.from_user.id, m.from_user.username)
+        inv_id_str = start_param[9:]  # убираем "pay_TASK_"
+        try:
+            inv_id = int(inv_id_str)
+        except ValueError:
+            await m.answer("❌ Неверная ссылка оплаты.")
+            return
+
+        # Получаем детали заказа из БД напрямую
+        try:
+            async with Session() as session:
+                result = await session.execute(
+                    sqlalchemy.text(
+                        "SELECT task_count, amount_rub, status FROM task_robokassa_orders WHERE inv_id = :inv_id"
+                    ),
+                    {"inv_id": inv_id}
+                )
+                order_row = result.fetchone()
+        except Exception as e:
+            logging.error(f"[pay_TASK_start] db error: {e}")
+            order_row = None
+
+        if not order_row:
+            await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
+            return
+
+        # Если уже оплачен
+        if order_row[2] == "paid":
+            miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+            kb = InlineKeyboardBuilder()
+            kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
+            kb.adjust(1)
+            await m.answer(
+                "✅ <b>Оплата уже прошла успешно!</b>\n\n"
+                "Задания подключены к розыгрышу.",
+                parse_mode="HTML",
+                reply_markup=kb.as_markup()
+            )
+            return
+
+        task_count = order_row[0]
+        price      = order_row[1]
+
+        # Формируем ссылку на Robokassa
+        import hashlib
+        robo_login    = os.environ.get("ROBOKASSA_LOGIN", "prizeme")
+        is_test       = os.environ.get("ROBOKASSA_IS_TEST", "1") == "1"
+        p1            = os.environ.get("ROBOKASSA_TEST_PASSWORD1" if is_test else "ROBOKASSA_PASSWORD1", "")
+        out_sum       = f"{float(price):.2f}"
+        sig           = hashlib.md5(f"{robo_login}:{out_sum}:{inv_id}:{p1}".encode()).hexdigest().upper()
+        is_test_param = "1" if is_test else "0"
+        pay_url = (
+            f"https://auth.robokassa.ru/Merchant/Index.aspx"
+            f"?MerchantLogin={robo_login}"
+            f"&OutSum={out_sum}"
+            f"&InvId={inv_id}"
+            f"&SignatureValue={sig}"
+            f"&IsTest={is_test_param}"
+            f"&Culture=ru"
+            f"&Encoding=utf-8"
+        )
+
+        miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+        kb = InlineKeyboardBuilder()
+        kb.button(text="💳 Оплатить через Robokassa", url=pay_url)
+        kb.button(text="❌ Отмена", callback_data=f"task_pay_cancel:{inv_id}")
+        kb.adjust(1)
+        await m.answer(
+            f"💳 <b>Оплата услуги «Задания для участников»</b>\n\n"
+            f"Количество заданий: <b>{task_count} шт.</b>\n"
+            f"Итого: <b>{price} ₽</b>\n\n"
+            f"Нажмите «Оплатить через Robokassa», после оплаты задания будут автоматически подключены к розыгрышу.",
+            parse_mode="HTML",
+            reply_markup=kb.as_markup()
+        )
+        return
+
     if start_param.startswith("pay_"):
         await ensure_user(m.from_user.id, m.from_user.username)
         inv_id_str = start_param[4:]  # убираем "pay_"
@@ -3350,6 +3428,18 @@ async def cmd_start(m: Message, state: FSMContext):
         "<b>/boost</b> – подписка, сервисы и донат"
     )
     await m.answer(text, parse_mode="HTML", reply_markup=reply_main_kb())
+
+@dp.callback_query(F.data.startswith("task_pay_cancel:"))
+async def cb_task_pay_cancel(cq: CallbackQuery):
+    await cq.answer()
+    miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚀 Вернуться к сервисам", web_app=WebAppInfo(url=miniapp_url))
+    kb.adjust(1)
+    await cq.message.edit_text(
+        "❌ Оплата отменена.",
+        reply_markup=kb.as_markup()
+    )
 
 @dp.callback_query(F.data.startswith("pay_cancel:"))
 async def cb_pay_cancel(cq: CallbackQuery):
