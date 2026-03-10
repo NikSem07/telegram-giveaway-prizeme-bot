@@ -3245,7 +3245,7 @@ async def cmd_start(m: Message, state: FSMContext):
             async with Session() as session:
                 result = await session.execute(
                     sqlalchemy.text(
-                        "SELECT task_count, amount_rub, status FROM task_robokassa_orders WHERE inv_id = :inv_id"
+                        "SELECT task_count, amount_rub, status, giveaway_id FROM task_robokassa_orders WHERE inv_id = :inv_id"
                     ),
                     {"inv_id": inv_id}
                 )
@@ -3258,15 +3258,18 @@ async def cmd_start(m: Message, state: FSMContext):
             await m.answer("❌ Заказ не найден. Попробуйте оформить заново.")
             return
 
-        # Если уже оплачен
+        miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
+        kb = InlineKeyboardBuilder()
+        kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
+        kb.adjust(1)
+
+        # Если уже оплачен — показываем успех
         if order_row[2] == "paid":
-            miniapp_url = f"{WEBAPP_BASE_URL}/miniapp/?tgWebAppStartParam=page_services"
-            kb = InlineKeyboardBuilder()
-            kb.button(text="🚀 К сервисам", web_app=WebAppInfo(url=miniapp_url))
-            kb.adjust(1)
             await m.answer(
-                "✅ <b>Оплата уже прошла успешно!</b>\n\n"
-                "Задания подключены к розыгрышу.",
+                f"✅ <b>Задания успешно подключены!</b>\n\n"
+                f"<b>{order_row[0]} шт.</b> заданий привязаны к розыгрышу <b>#{order_row[3]}</b>.\n"
+                f"Участники уже могут видеть задания в разделе «Задания».\n\n"
+                f"Оплачено: <b>{order_row[1]} ₽</b>",
                 parse_mode="HTML",
                 reply_markup=kb.as_markup()
             )
