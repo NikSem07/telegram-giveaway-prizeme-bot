@@ -9954,6 +9954,54 @@ async def handle_successful_payment(message: Message):
             logging.warning(f"[STARS] Не удалось уведомить пользователя {user_id}: {e}")
         return
 
+    # ── task_pool ─────────────────────────────────────────────────────────
+    if payload_type == "task_pool":
+        giveaway_id  = payload["giveaway_id"]
+        user_id      = payload["user_id"]
+        task_pool    = payload.get("task_pool", {})
+        stars_amount = payment.total_amount
+        charge_id    = payment.telegram_payment_charge_id
+
+        try:
+            async with aiohttp.ClientSession() as http:
+                resp = await http.post(
+                    f"{NODE_SERVER_URL}/api/task_after_payment",
+                    json={
+                        "giveaway_id": giveaway_id,
+                        "user_id":     user_id,
+                        "task_pool":   task_pool,
+                        "price_stars": stars_amount,
+                    }
+                )
+                result = await resp.json()
+                if not result.get("ok"):
+                    logging.error(f"[STARS] task_after_payment failed: {result}")
+        except Exception as e:
+            logging.error(f"[STARS] task_after_payment error: {e}")
+
+        task_count = len(task_pool.get("tasks", []))
+
+        logging.info(
+            f"[STARS] task_pool оплачен: giveaway={giveaway_id}, "
+            f"tasks={task_count}, user={user_id}, charge_id={charge_id}"
+        )
+
+        try:
+            await bot.send_message(
+                chat_id=user_id,
+                text=(
+                    f"✅ <b>Задания успешно подключены!</b>\n\n"
+                    f"<b>{task_count}</b> заданий привязаны к розыгрышу <b>#{giveaway_id}</b>.\n"
+                    f"Участники уже могут видеть задания в разделе «Задания».\n\n"
+                    f"Оплачено: <b>{stars_amount} ⭐</b>"
+                ),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"[STARS] Не удалось уведомить пользователя {user_id}: {e}")
+
+        return
+
     if payload_type != "top_placement":
         return
 
