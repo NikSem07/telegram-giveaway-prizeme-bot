@@ -512,10 +512,16 @@ function _initHandlers() {
 }
 
 // ── BackButton ────────────────────────────────────────────────────────────
+// hide() сбрасывает ВСЕ обработчики onClick — это важно, чтобы не накапливались
+// старые колбэки от предыдущих страниц (напр. preview → services)
 function _showBackButton(onBack) {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
-    try { tg.BackButton.show(); tg.BackButton.onClick(onBack); } catch (e) {}
+    try {
+        tg.BackButton.hide();      // сбрасываем все старые обработчики
+        tg.BackButton.onClick(onBack);
+        tg.BackButton.show();
+    } catch (e) {}
 }
 
 function _hideBackButton(onBack) {
