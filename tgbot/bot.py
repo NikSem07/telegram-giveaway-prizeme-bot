@@ -10048,9 +10048,26 @@ async def handle_successful_payment(message: Message):
     if payload_type == "task_pool":
         giveaway_id  = payload["giveaway_id"]
         user_id      = payload["user_id"]
-        task_pool    = payload.get("task_pool", {})
         stars_amount = payment.total_amount
         charge_id    = payment.telegram_payment_charge_id
+
+        # Читаем снапшот пулла из task_robokassa_orders по giveaway_id + user_id
+        task_pool = {}
+        try:
+            async with Session() as session:
+                result = await session.execute(
+                    sqlalchemy.text("""
+                        SELECT task_pool_snapshot FROM task_robokassa_orders
+                        WHERE giveaway_id = :gid AND user_id = :uid
+                        ORDER BY created_at DESC LIMIT 1
+                    """),
+                    {"gid": giveaway_id, "uid": user_id}
+                )
+                row = result.fetchone()
+                if row:
+                    task_pool = row[0] if isinstance(row[0], dict) else {}
+        except Exception as e:
+            logging.error(f"[STARS] task_pool snapshot fetch error: {e}")
 
         try:
             node_url = os.environ.get("WEBAPP_BASE_URL", "https://prizeme.ru")

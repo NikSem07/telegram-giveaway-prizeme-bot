@@ -3522,6 +3522,15 @@ app.post('/api/task_create_stars_invoice', async (req, res) => {
         const starsAmount    = taskCount * PRICE_TASK_STARS;
         const giveawayTitle  = gw.rows[0].internal_title;
 
+        // Сохраняем снапшот пулла — чтобы бот мог прочитать его после successful_payment
+        const starsInvId = Date.now() * 1000 + (userId % 1000);
+        await pool.query(
+            `INSERT INTO task_robokassa_orders
+             (inv_id, giveaway_id, user_id, task_count, amount_rub, status, task_pool_snapshot)
+             VALUES ($1, $2, $3, $4, 0, 'stars_pending', $5)`,
+            [starsInvId, giveaway_id, userId, taskCount, JSON.stringify(task_pool)]
+        );
+
         const botToken = process.env.BOT_TOKEN;
         const invoiceResp = await fetch(
             `https://api.telegram.org/bot${botToken}/createInvoiceLink`,
@@ -3535,7 +3544,6 @@ app.post('/api/task_create_stars_invoice', async (req, res) => {
                         type:        'task_pool',
                         giveaway_id: Number(giveaway_id),
                         user_id:     userId,
-                        task_pool,
                     }),
                     currency:       'XTR',
                     prices:         [{ label: `${taskCount} заданий`, amount: starsAmount }],
