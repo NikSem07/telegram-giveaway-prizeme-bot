@@ -127,7 +127,7 @@
 
 .page-checkout-services .svc-footer {
     bottom: 0;
-    padding: 0 16px;
+    padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
 }
 
 .svc-footer.is-visible {
