@@ -3759,39 +3759,30 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
                 g.internal_title                          AS title,
                 g.end_at_utc,
                 tp.id                                     AS pool_id,
-                COUNT(t2.id)::int                         AS task_count,
-                COUNT(tc.id) FILTER (
+                COUNT(DISTINCT t2.id)::int                AS task_count,
+                COUNT(DISTINCT tc.id) FILTER (
                     WHERE tc.user_id = $1 AND tc.status = 'completed'
                 )::int                                    AS completed_count,
                 (
-                    SELECT ch.username
+                    SELECT oc.avatar_url
                     FROM giveaway_channels gc2
-                    JOIN channels ch ON ch.id = gc2.channel_id
-                    WHERE gc2.giveaway_id = g.id
-                    ORDER BY gc2.id
-                    LIMIT 1
-                )                                         AS first_channel_username,
-                (
-                    SELECT ch.avatar_url
-                    FROM giveaway_channels gc2
-                    JOIN channels ch ON ch.id = gc2.channel_id
+                    JOIN organizer_channels oc ON oc.id = gc2.channel_id
                     WHERE gc2.giveaway_id = g.id
                     ORDER BY gc2.id
                     LIMIT 1
                 )                                         AS first_channel_avatar_url,
                 (
-                    SELECT array_agg(ch.username ORDER BY gc2.id)
+                    SELECT array_agg(oc.username ORDER BY gc2.id)
                     FROM giveaway_channels gc2
-                    JOIN channels ch ON ch.id = gc2.channel_id
+                    JOIN organizer_channels oc ON oc.id = gc2.channel_id
                     WHERE gc2.giveaway_id = g.id
                 )                                         AS channels
             FROM giveaways g
             JOIN task_pool_giveaways tpg ON tpg.giveaway_id = g.id AND tpg.status = 'active'
             JOIN task_pools tp           ON tp.id = tpg.pool_id
             LEFT JOIN tasks t2           ON t2.pool_id = tp.id
-            JOIN entries p        ON p.giveaway_id = g.id AND p.user_id = $1
-            LEFT JOIN tasks t            ON t.pool_id = tp.id
-            LEFT JOIN task_completions tc ON tc.task_id = t.id AND tc.user_id = $1
+            JOIN entries p              ON p.giveaway_id = g.id AND p.user_id = $1
+            LEFT JOIN task_completions tc ON tc.task_id = t2.id AND tc.user_id = $1
             WHERE g.status = 'active'
             GROUP BY g.id, g.internal_title, g.end_at_utc, tp.id
             ORDER BY g.end_at_utc ASC
