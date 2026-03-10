@@ -4,12 +4,12 @@
 .ts-screen {
     display: flex;
     flex-direction: column;
-    padding: 0 0 16px;
+    padding: 0 16px 16px;
 }
 
 /* ── Секции ───────────────────────────────────────────────────────────────── */
 .ts-section {
-    padding: 16px 16px 0;
+    padding: 16px 0 0;
 }
 
 .ts-section-label {
@@ -67,65 +67,6 @@
     text-align: right;
     margin-top: 6px;
     opacity: 0.7;
-}
-
-/* ── Медиа ────────────────────────────────────────────────────────────────── */
-.ts-media-wrap {
-    margin-top: 4px;
-    margin-bottom: 8px;
-}
-
-.ts-media-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 12px 14px;
-    background: var(--card-bg);
-    border: 1.5px dashed rgba(255, 255, 255, 0.18);
-    border-radius: var(--radius-lg);
-    color: var(--color-text-secondary);
-    font-size: 14px;
-    font-family: inherit;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: border-color 0.15s, opacity 0.15s;
-}
-
-.ts-media-btn:active {
-    opacity: 0.75;
-}
-
-.ts-media-preview {
-    position: relative;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-}
-
-.ts-media-preview img {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-    display: block;
-    border-radius: var(--radius-lg);
-}
-
-.ts-media-remove {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    font-size: 13px;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
 }
 
 /* ── Лимит выполнений ─────────────────────────────────────────────────────── */
@@ -423,11 +364,36 @@
     padding: 10px 12px;
 }
 
-/* ── Кнопка «Добавить задание» внутри формы ──────────────────────────────── */
-.ts-add-task-btn {
-    display: block;
-    width: 100%;
+/* ── Кнопки действий в форме задания ─────────────────────────────────────── */
+.ts-form-actions {
+    display: flex;
+    gap: 10px;
     margin-top: 18px;
+}
+
+.ts-cancel-task-btn {
+    flex: 0 0 auto;
+    padding: 13px 18px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+}
+
+.ts-cancel-task-btn:active {
+    opacity: 0.7;
+}
+
+.ts-add-task-btn {
+    flex: 1;
+    display: block;
     padding: 13px;
     background: var(--color-primary, #007AFF);
     color: #fff;
@@ -546,7 +512,7 @@
 /* ── Toast / ошибки ───────────────────────────────────────────────────────── */
 .ts-toast {
     position: fixed;
-    bottom: calc(var(--navbar-height, 80px) + 70px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 90px);
     left: 50%;
     transform: translateX(-50%) translateY(12px);
     background: #1c1c1e;
@@ -582,11 +548,22 @@
 /* ── Фиксированная кнопка «К оформлению» ─────────────────────────────────── */
 .ts-footer {
     position: fixed;
-    bottom: calc(var(--navbar-height, 80px) + 8px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
     left: 0;
     right: 0;
     padding: 0 16px;
     z-index: 50;
+    /* Скрываем когда активна клавиатура — iOS поднимает viewport */
+    transition: transform 0.25s ease;
+}
+
+/* Когда фокус на input/textarea — прячем кнопку под клавиатуру */
+.ts-screen:has(input:focus) ~ .ts-footer,
+.ts-screen:has(textarea:focus) ~ .ts-footer,
+#main-content:has(input:focus) .ts-footer,
+#main-content:has(textarea:focus) .ts-footer {
+    transform: translateY(200px);
+    pointer-events: none;
 }
 
 .ts-checkout-btn {
@@ -631,12 +608,6 @@
 
 :root.theme-light .ts-section-label {
     color: rgba(0, 0, 0, 0.45);
-}
-
-:root.theme-light .ts-media-btn {
-    background: #f5f5f7;
-    border-color: rgba(0, 0, 0, 0.15);
-    color: rgba(0, 0, 0, 0.5);
 }
 
 :root.theme-light .ts-limit-btn {
@@ -715,6 +686,11 @@
 
 :root.theme-light .ts-new-task-btn {
     border-color: rgba(0, 122, 255, 0.35);
+}
+
+:root.theme-light .ts-cancel-task-btn {
+    background: rgba(0, 0, 0, 0.07);
+    color: rgba(0, 0, 0, 0.55);
 }
 
 :root.theme-light .ts-toast {

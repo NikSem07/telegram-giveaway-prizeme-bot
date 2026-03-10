@@ -375,56 +375,6 @@ function _initHandlers() {
         });
     }
 
-    // --- Медиа: кнопка выбора ---
-    document.getElementById('ts-media-btn')?.addEventListener('click', () => {
-        document.getElementById('ts-media-input')?.click();
-    });
-
-    // --- Медиа: выбор файла ---
-    document.getElementById('ts-media-input')?.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Проверяем тип
-        if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
-            _showFormError('Допустимые форматы: JPG, JPEG, PNG');
-            e.target.value = '';
-            return;
-        }
-
-        // Показываем превью локально
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const img = document.getElementById('ts-media-img');
-            if (img) img.src = ev.target.result;
-            document.getElementById('ts-media-btn').style.display = 'none';
-            document.getElementById('ts-media-preview').style.display = '';
-        };
-        reader.readAsDataURL(file);
-
-        // Загружаем на сервер
-        _state.mediaFile = file;
-        try {
-            _state.mediaUrl = await _uploadMedia(file);
-        } catch (_) {
-            _showFormError('Не удалось загрузить изображение. Попробуйте ещё раз.');
-            // Сбрасываем превью
-            document.getElementById('ts-media-btn').style.display = '';
-            document.getElementById('ts-media-preview').style.display = 'none';
-            _state.mediaFile = null;
-            _state.mediaUrl  = null;
-        }
-    });
-
-    // --- Медиа: удалить ---
-    document.getElementById('ts-media-remove')?.addEventListener('click', () => {
-        _state.mediaFile = null;
-        _state.mediaUrl  = null;
-        document.getElementById('ts-media-input').value = '';
-        document.getElementById('ts-media-preview').style.display = 'none';
-        document.getElementById('ts-media-btn').style.display = '';
-    });
-
     // --- Лимит: переключение ---
     document.getElementById('ts-limit-unlimited')?.addEventListener('click', () => {
         _state.limitMode = 'unlimited';
@@ -539,6 +489,11 @@ function _initHandlers() {
     // --- Подтвердить добавление задания ---
     document.getElementById('ts-add-task-confirm')?.addEventListener('click', _confirmAddTask);
 
+    // --- Отменить форму (кнопка «Отмена» внутри формы) ---
+    document.getElementById('ts-cancel-task-form')?.addEventListener('click', () => {
+        _closeTaskForm();
+    });
+
     // --- Pop-up удаления ---
     document.getElementById('ts-delete-cancel')?.addEventListener('click', _closeDeleteConfirm);
     document.getElementById('ts-delete-confirm')?.addEventListener('click', _confirmDelete);
@@ -556,10 +511,24 @@ function _initHandlers() {
     });
 }
 
+// ── Управление шапкой и навбаром ─────────────────────────────────────────
+function _setShellVisibility(visible) {
+    const topHeader = document.querySelector('.top-header');
+    if (topHeader) topHeader.style.display = visible ? '' : 'none';
+    if (visible) {
+        document.body.classList.remove('page-checkout-services');
+    } else {
+        document.body.classList.add('page-checkout-services');
+    }
+}
+
 // ── Основной рендер ───────────────────────────────────────────────────────
 export function renderTaskServicesPage() {
     const main = document.getElementById('main-content');
     if (!main) return;
+
+    // Скрываем шапку и навбар
+    _setShellVisibility(false);
 
     // Каждый раз создаём свежее состояние
     _state = _freshState();

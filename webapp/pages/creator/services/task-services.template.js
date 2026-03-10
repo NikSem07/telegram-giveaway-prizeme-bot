@@ -32,26 +32,6 @@ export default function taskServicesTemplate() {
                         <span id="ts-desc-count">0</span>/150
                     </div>
                 </div>
-
-                <!-- Медиа -->
-                <div class="ts-media-wrap" id="ts-media-wrap">
-                    <button type="button" class="ts-media-btn" id="ts-media-btn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        Добавить изображение (16:9)
-                    </button>
-                    <input type="file" id="ts-media-input" accept="image/jpeg,image/jpg,image/png"
-                           style="display:none">
-                    <div class="ts-media-preview" id="ts-media-preview" style="display:none">
-                        <img id="ts-media-img" src="" alt="">
-                        <button type="button" class="ts-media-remove" id="ts-media-remove"
-                                aria-label="Удалить изображение">✕</button>
-                    </div>
-                </div>
             </div>
 
             <!-- ── Блок 2: Лимит выполнений ──────────────────────────── -->
@@ -81,7 +61,7 @@ export default function taskServicesTemplate() {
 
             <!-- ── Блок 3: Список заданий ─────────────────────────────── -->
             <div class="ts-section">
-                <p class="ts-section-label">Задания <span class="ts-tasks-count" id="ts-tasks-count">0/7</span></p>
+                <p class="ts-section-label">Задания</p>
 
                 <!-- Свёрнутые задания -->
                 <div class="ts-tasks-list" id="ts-tasks-list"></div>
@@ -165,10 +145,15 @@ export default function taskServicesTemplate() {
                             <p class="ts-hint">Дополнительных билетов за выполнение (не более 10)</p>
                         </div>
 
-                        <!-- Кнопка добавления -->
-                        <button type="button" class="ts-add-task-btn" id="ts-add-task-confirm">
-                            Добавить задание
-                        </button>
+                        <!-- Кнопки формы -->
+                        <div class="ts-form-actions">
+                            <button type="button" class="ts-cancel-task-btn" id="ts-cancel-task-form">
+                                Отмена
+                            </button>
+                            <button type="button" class="ts-add-task-btn" id="ts-add-task-confirm">
+                                Добавить задание
+                            </button>
+                        </div>
                     </div>
                 </div>
 

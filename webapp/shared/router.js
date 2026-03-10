@@ -171,6 +171,15 @@ const Router = {
         
         try {
             console.log(`[ROUTER] Rendering: ${mode}/${page}`);
+            // Страницы, которые сами управляют шапкой/навбаром через page-checkout-services
+            const SHELL_MANAGED_PAGES = ['task_services_preview', 'task_services', 'task_services_checkout'];
+
+            // Если уходим на любую "нормальную" страницу — восстанавливаем шапку и навбар
+            if (!SHELL_MANAGED_PAGES.includes(page)) {
+                const topHeader = document.querySelector('.top-header');
+                if (topHeader) topHeader.style.display = '';
+                document.body.classList.remove('page-checkout-services');
+            }
             if (mode === 'creator' && page === 'stats') {
                 document.body.classList.add('page-stats');
             } else {
