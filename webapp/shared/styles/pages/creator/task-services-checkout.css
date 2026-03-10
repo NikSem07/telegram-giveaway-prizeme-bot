@@ -34,21 +34,14 @@
 
 /* ── Кнопка оплаты — специфичный id для task checkout ────────────────────── */
 #tsc-footer-pay {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-    padding-top: 12px;
-    padding-left: 16px;
-    padding-right: 16px;
-    z-index: 100;
+    bottom: 0 !important;
+    padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
     background: linear-gradient(
         to bottom,
         transparent 0%,
         rgba(15, 17, 21, 0.88) 28%,
         rgba(15, 17, 21, 0.98) 100%
-    );
+    ) !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
 }
@@ -60,5 +53,5 @@
         transparent 0%,
         rgba(242, 242, 247, 0.88) 28%,
         rgba(242, 242, 247, 0.98) 100%
-    );
+    ) !important;
 }
