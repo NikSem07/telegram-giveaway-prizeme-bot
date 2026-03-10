@@ -128,6 +128,23 @@
 .page-checkout-services .svc-footer {
     bottom: 0;
     padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(15, 17, 21, 0.88) 28%,
+        rgba(15, 17, 21, 0.98) 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+:root.theme-light .page-checkout-services .svc-footer {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(242, 242, 247, 0.88) 28%,
+        rgba(242, 242, 247, 0.98) 100%
+    );
 }
 
 .svc-footer.is-visible {
