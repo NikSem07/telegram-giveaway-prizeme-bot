@@ -394,3 +394,94 @@
     padding-bottom: 24px;
     text-align: center;
 }
+
+/* ── Модальное окно заданий ───────────────────────────────────────────────── */
+.pt-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: flex-end;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.pt-modal-overlay.is-visible {
+    opacity: 1;
+}
+
+.pt-modal-sheet {
+    width: 100%;
+    background: var(--color-bg, #0f1115);
+    border-radius: 20px 20px 0 0;
+    max-height: 85vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+
+:root.theme-light .pt-modal-sheet {
+    background: #f2f2f7;
+}
+
+.pt-modal-overlay.is-visible .pt-modal-sheet {
+    transform: translateY(0);
+}
+
+.pt-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 16px;
+    position: sticky;
+    top: 0;
+    background: var(--color-bg, #0f1115);
+    z-index: 1;
+}
+
+:root.theme-light .pt-modal-header {
+    background: #f2f2f7;
+}
+
+.pt-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--color-text);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 12px;
+}
+
+.pt-modal-close {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.10);
+    border: none;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s;
+}
+
+.pt-modal-close:active {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+:root.theme-light .pt-modal-close {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+.pt-modal-body {
+    padding-bottom: 8px;
+}

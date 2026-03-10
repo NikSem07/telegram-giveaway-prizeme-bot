@@ -14,7 +14,7 @@ export function tasksListTemplate() {
     `;
 }
 
-export function taskDetailTemplate({ giveawayTitle, tasks, completedIds }) {
+export function taskDetailTemplate({ giveawayTitle, tasks, completedIds, rewardClaimed = false }) {
     const total     = tasks.length;
     const completed = tasks.filter(t => completedIds.has(t.id)).length;
     const allDone   = completed === total && total > 0;
@@ -123,11 +123,13 @@ export function taskDetailTemplate({ giveawayTitle, tasks, completedIds }) {
 
             <!-- Кнопка получить награду -->
             <div class="pt-claim-wrap" id="pt-claim-wrap">
-                <button class="pt-claim-btn ${allDone ? '' : 'pt-claim-btn--inactive'}"
-                        id="pt-claim-btn" type="button" ${allDone ? '' : 'disabled'}>
-                    ${allDone
-                        ? '🎉 Забрать награду'
-                        : `Выполните все задания (осталось ${total - completed})`
+                <button class="pt-claim-btn ${allDone && !rewardClaimed ? '' : 'pt-claim-btn--inactive'}"
+                        id="pt-claim-btn" type="button" ${allDone && !rewardClaimed ? '' : 'disabled'}>
+                    ${rewardClaimed
+                        ? 'Награда уже получена'
+                        : allDone
+                            ? '🎉 Забрать награду'
+                            : `Выполните все задания (осталось ${total - completed})`
                     }
                 </button>
             </div>

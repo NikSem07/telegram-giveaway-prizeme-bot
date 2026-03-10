@@ -119,14 +119,32 @@ async function _loadGiveaways() {
 
 // ── Экран 2: задания розыгрыша ────────────────────────────────────────────
 async function _openDetail(giveawayId, giveawayTitle) {
-    const main = document.getElementById('main-content');
-    if (!main) return;
-
     _currentGiveawayId = giveawayId;
 
-    // Показываем загрузку
-    main.innerHTML = `<div class="pt-page"><div class="pt-loading">Загрузка заданий...</div></div>`;
+    // Создаём оверлей модалки
+    const overlay = document.createElement('div');
+    overlay.className = 'pt-modal-overlay';
+    overlay.id = 'pt-modal-overlay';
+    overlay.innerHTML = `<div class="pt-modal-sheet" id="pt-modal-sheet">
+        <div class="pt-modal-header">
+            <div class="pt-modal-title">${giveawayTitle}</div>
+            <button class="pt-modal-close" id="pt-modal-close" type="button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+        <div class="pt-modal-body" id="pt-modal-body">
+            <div class="pt-loading">Загрузка заданий...</div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('is-visible'));
 
+    // Закрытие по крестику
+    document.getElementById('pt-modal-close').addEventListener('click', () => _closeModal());
+
+    // Загружаем данные
     try {
         const resp = await fetch('/api/participant_tasks', {
             method:  'POST',
@@ -134,31 +152,34 @@ async function _openDetail(giveawayId, giveawayTitle) {
             body:    JSON.stringify({ init_data: getInitData(), giveaway_id: giveawayId }),
         });
         const data = await resp.json();
-
         if (!data.ok) throw new Error(data.reason);
 
-        _currentTasks = data.tasks || [];
-        _completedIds = new Set((data.completed_task_ids || []).map(Number));
+        _currentTasks  = data.tasks || [];
+        _completedIds  = new Set((data.completed_task_ids || []).map(Number));
+        const rewardClaimed = !!data.reward_claimed;
 
-        main.innerHTML = taskDetailTemplate({
+        document.getElementById('pt-modal-body').innerHTML = taskDetailTemplate({
             giveawayTitle,
             tasks:        _currentTasks,
             completedIds: _completedIds,
+            rewardClaimed,
         });
 
         _initDetailBindings(giveawayTitle);
 
     } catch (e) {
-        main.innerHTML = `<div class="pt-page"><div class="pt-empty"><div class="pt-empty-text">Ошибка загрузки заданий.</div></div></div>`;
+        document.getElementById('pt-modal-body').innerHTML =
+            `<div class="pt-empty"><div class="pt-empty-text">Ошибка загрузки заданий.</div></div>`;
         console.error('[TASKS] openDetail error:', e);
     }
+}
 
-    // BackButton → список
-    _backFromDetailHandler = () => {
-        _hideBackButton(_backFromDetailHandler);
-        renderTasksPage();
-    };
-    _showBackButton(_backFromDetailHandler);
+function _closeModal() {
+    const overlay = document.getElementById('pt-modal-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('is-visible');
+    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+    _loadGiveaways(); // обновляем список после закрытия
 }
 
 // ── Привязка событий на экране заданий ────────────────────────────────────
@@ -267,13 +288,14 @@ async function _completeTask(taskId, secretCode, giveawayTitle) {
 
 // ── Обновление UI после выполнения задания ────────────────────────────────
 function _refreshDetailUI(giveawayTitle) {
-    const main = document.getElementById('main-content');
-    if (!main) return;
+    const body = document.getElementById('pt-modal-body');
+    if (!body) return;
 
-    main.innerHTML = taskDetailTemplate({
+    body.innerHTML = taskDetailTemplate({
         giveawayTitle,
         tasks:        _currentTasks,
         completedIds: _completedIds,
+        rewardClaimed: false,
     });
 
     _initDetailBindings(giveawayTitle);
@@ -327,7 +349,7 @@ function _showRewardModal(ticketsAdded) {
         modal.classList.remove('is-visible');
         modal.addEventListener('transitionend', () => {
             modal.remove();
-            renderTasksPage();
+            _closeModal();
         }, { once: true });
     });
 }
