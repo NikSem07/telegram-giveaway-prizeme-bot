@@ -511,6 +511,19 @@ function _initHandlers() {
     });
 }
 
+// ── BackButton ────────────────────────────────────────────────────────────
+function _showBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try { tg.BackButton.show(); tg.BackButton.onClick(onBack); } catch (e) {}
+}
+
+function _hideBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try { tg.BackButton.offClick(onBack); tg.BackButton.hide(); } catch (e) {}
+}
+
 // ── Управление шапкой и навбаром ─────────────────────────────────────────
 function _setShellVisibility(visible) {
     const topHeader = document.querySelector('.top-header');
@@ -536,6 +549,13 @@ export function renderTaskServicesPage() {
     window.scrollTo({ top: 0, behavior: 'auto' });
 
     main.innerHTML = taskServicesTemplate();
+
+    // BackButton → возврат на превью
+    const handleBack = () => {
+        _hideBackButton(handleBack);
+        Router.navigate('task_services_preview');
+    };
+    _showBackButton(handleBack);
 
     _initHandlers();
     _updateDescCounter();

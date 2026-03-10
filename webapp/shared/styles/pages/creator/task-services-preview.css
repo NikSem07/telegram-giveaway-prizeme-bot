@@ -7,6 +7,11 @@
     padding-bottom: 16px;
 }
 
+/* Сбрасываем отступы обёртки .wrap когда активны task-страницы */
+.page-checkout-services .wrap {
+    padding: 0 !important;
+}
+
 /* ── Герой ────────────────────────────────────────────────────────────────── */
 .tsp-hero {
     display: flex;

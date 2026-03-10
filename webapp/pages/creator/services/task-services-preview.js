@@ -13,6 +13,19 @@ function _setShellVisibility(visible) {
     }
 }
 
+// ── BackButton ────────────────────────────────────────────────────────────
+function _showBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try { tg.BackButton.show(); tg.BackButton.onClick(onBack); } catch (e) {}
+}
+
+function _hideBackButton(onBack) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try { tg.BackButton.offClick(onBack); tg.BackButton.hide(); } catch (e) {}
+}
+
 // ── Основной рендер ───────────────────────────────────────────────────────
 export function renderTaskServicesPreviewPage() {
     const main = document.getElementById('main-content');
@@ -25,9 +38,18 @@ export function renderTaskServicesPreviewPage() {
 
     main.innerHTML = taskServicesPreviewTemplate();
 
+    // BackButton → возврат в Сервисы
+    const handleBack = () => {
+        _hideBackButton(handleBack);
+        _setShellVisibility(true);
+        Router.navigate('services');
+    };
+    _showBackButton(handleBack);
+
     // Кнопка «Продолжить» → переход к форме создания заданий
     document.getElementById('tsp-continue-btn')
         ?.addEventListener('click', () => {
+            _hideBackButton(handleBack);
             Router.navigate('task_services');
         });
 }
