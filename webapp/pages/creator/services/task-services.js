@@ -369,9 +369,14 @@ function _initHandlers() {
     const descInput = document.getElementById('ts-description');
     if (descInput) {
         descInput.addEventListener('input', () => {
-            _state.description = descInput.value.slice(0, 150);
+            // Убираем переносы строк
+            const clean = descInput.value.replace(/[\r\n]+/g, ' ');
+            _state.description = clean.slice(0, 150);
             descInput.value = _state.description;
             _updateDescCounter();
+        });
+        descInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); descInput.blur(); }
         });
     }
 
@@ -395,6 +400,9 @@ function _initHandlers() {
     document.getElementById('ts-limit-value')?.addEventListener('input', (e) => {
         const val = parseInt(e.target.value);
         _state.limitValue = (Number.isFinite(val) && val >= 1) ? val : null;
+    });
+    document.getElementById('ts-limit-value')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     });
 
     // --- Открытие формы нового задания ---
@@ -427,14 +435,21 @@ function _initHandlers() {
 
     // --- Название задания ---
     document.getElementById('ts-task-title')?.addEventListener('input', (e) => {
-        _state.form.title = e.target.value.slice(0, 30);
+        const clean = e.target.value.replace(/[\r\n]+/g, ' ');
+        _state.form.title = clean.slice(0, 30);
         e.target.value = _state.form.title;
         _updateTitleCounter();
+    });
+    document.getElementById('ts-task-title')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     });
 
     // --- Ссылка ---
     document.getElementById('ts-task-link')?.addEventListener('input', (e) => {
         _state.form.link = e.target.value;
+    });
+    document.getElementById('ts-task-link')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     });
 
     // --- Секретный код: toggle ---
@@ -460,6 +475,9 @@ function _initHandlers() {
         _state.form.secret = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
         e.target.value = _state.form.secret;
     });
+    document.getElementById('ts-task-secret')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    });
 
     // --- Награда: чипы ---
     document.querySelectorAll('.ts-reward-chip').forEach(chip => {
@@ -484,6 +502,9 @@ function _initHandlers() {
         } else {
             _state.form.reward = null;
         }
+    });
+    document.getElementById('ts-reward-custom')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     });
 
     // --- Подтвердить добавление задания ---

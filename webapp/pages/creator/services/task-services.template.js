@@ -27,6 +27,7 @@ export default function taskServicesTemplate() {
                         placeholder="Кратко опишите задания для участников..."
                         maxlength="150"
                         rows="3"
+                        enterkeyhint="done"
                     ></textarea>
                     <div class="ts-char-counter">
                         <span id="ts-desc-count">0</span>/150
@@ -54,7 +55,8 @@ export default function taskServicesTemplate() {
                     </div>
                     <div class="ts-limit-input-wrap" id="ts-limit-input-wrap" style="display:none">
                         <input type="number" id="ts-limit-value" class="ts-input"
-                               placeholder="Например: 100" min="1" max="999999">
+                               placeholder="Например: 100" min="1" max="999999"
+                               enterkeyhint="done">
                     </div>
                 </div>
             </div>
@@ -101,7 +103,7 @@ export default function taskServicesTemplate() {
                             <label class="ts-field-label" for="ts-task-title">Название задания</label>
                             <input type="text" id="ts-task-title" class="ts-input"
                                    placeholder="Например: Подписаться на канал"
-                                   maxlength="30">
+                                   maxlength="30" enterkeyhint="done">
                             <div class="ts-char-counter">
                                 <span id="ts-title-count">0</span>/30
                             </div>
@@ -111,7 +113,7 @@ export default function taskServicesTemplate() {
                         <div class="ts-field" id="ts-field-link">
                             <label class="ts-field-label" for="ts-task-link">Ссылка на задание</label>
                             <input type="url" id="ts-task-link" class="ts-input"
-                                   placeholder="https://...">
+                                   placeholder="https://..." enterkeyhint="done">
                         </div>
 
                         <!-- Секретный код (только для external и custom) -->
@@ -127,7 +129,7 @@ export default function taskServicesTemplate() {
                             <div class="ts-secret-input-wrap" id="ts-secret-input-wrap" style="display:none">
                                 <input type="text" id="ts-task-secret" class="ts-input"
                                        placeholder="Например: ABC123"
-                                       maxlength="10">
+                                       maxlength="10" enterkeyhint="done">
                                 <p class="ts-hint">Код должен быть легко находим для участников — например, указан в ролике на YouTube.</p>
                             </div>
                         </div>
@@ -140,7 +142,7 @@ export default function taskServicesTemplate() {
                                 <button type="button" class="ts-reward-chip" data-reward="2">+2</button>
                                 <button type="button" class="ts-reward-chip" data-reward="3">+3</button>
                                 <input type="number" id="ts-reward-custom" class="ts-input ts-reward-input"
-                                       placeholder="1–10" min="1" max="10">
+                                       placeholder="1–10" min="1" max="10" enterkeyhint="done">
                             </div>
                             <p class="ts-hint">Дополнительных билетов за выполнение (не более 10)</p>
                         </div>
