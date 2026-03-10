@@ -4,7 +4,7 @@
 .tsp-screen {
     display: flex;
     flex-direction: column;
-    padding: 0 16px 16px;
+    padding: 0 20px 20px;
 }
 
 /* Сбрасываем отступы обёртки .wrap когда активны task-страницы */
