@@ -77,6 +77,7 @@ async function _loadGiveaways() {
             return `
                 <article class="participant-giveaways-card pt-giveaway-card"
                          data-giveaway-id="${g.id}"
+                         data-pool-id="${g.pool_id}"
                          data-giveaway-title="${g.title}"
                          role="button" tabindex="0">
                     <div class="participant-giveaways-card__left">
@@ -106,8 +107,9 @@ async function _loadGiveaways() {
         listEl.querySelectorAll('.pt-giveaway-card').forEach(card => {
             card.addEventListener('click', () => {
                 const gid   = Number(card.dataset.giveawayId);
+                const pid   = Number(card.dataset.poolId);
                 const title = card.dataset.giveawayTitle || '';
-                _openDetail(gid, title);
+                _openDetail(gid, pid, title);
             });
         });
 
@@ -118,7 +120,7 @@ async function _loadGiveaways() {
 }
 
 // ── Экран 2: задания розыгрыша ────────────────────────────────────────────
-async function _openDetail(giveawayId, giveawayTitle) {
+async function _openDetail(giveawayId, poolId, giveawayTitle) {
     _currentGiveawayId = giveawayId;
 
     // Создаём оверлей модалки
@@ -149,7 +151,7 @@ async function _openDetail(giveawayId, giveawayTitle) {
         const resp = await fetch('/api/participant_tasks', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ init_data: getInitData(), giveaway_id: giveawayId }),
+            body:    JSON.stringify({ init_data: getInitData(), giveaway_id: giveawayId, pool_id: poolId }),
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.reason);

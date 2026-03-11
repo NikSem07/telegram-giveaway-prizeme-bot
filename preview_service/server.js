@@ -3758,6 +3758,7 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
                 g.id,
                 g.internal_title                          AS title,
                 g.end_at_utc,
+                tpg.id                                    AS pool_giveaway_id,
                 tp.id                                     AS pool_id,
                 COUNT(DISTINCT t2.id)::int                AS task_count,
                 COUNT(DISTINCT tc.id) FILTER (
@@ -3779,12 +3780,13 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
                 )                                         AS channels
             FROM giveaways g
             JOIN task_pool_giveaways tpg ON tpg.giveaway_id = g.id AND tpg.status = 'active'
+                                        AND tpg.created_at > NOW() - INTERVAL '24 hours'
             JOIN task_pools tp           ON tp.id = tpg.pool_id
             LEFT JOIN tasks t2           ON t2.pool_id = tp.id
             JOIN entries p              ON p.giveaway_id = g.id AND p.user_id = $1
             LEFT JOIN task_completions tc ON tc.task_id = t2.id AND tc.user_id = $1
             WHERE g.status = 'active'
-            GROUP BY g.id, g.internal_title, g.end_at_utc, tp.id
+            GROUP BY g.id, g.internal_title, g.end_at_utc, tpg.id, tp.id
             ORDER BY g.end_at_utc ASC
         `, [userId]);
 
@@ -3793,6 +3795,7 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
             title:                  r.title,
             end_at_utc:             r.end_at_utc,
             pool_id:                r.pool_id,
+            pool_giveaway_id:       r.pool_giveaway_id,
             task_count:             r.task_count,
             completed_count:        r.completed_count,
             first_channel_avatar_url: r.first_channel_chat_id ? `/api/chat_avatar/${r.first_channel_chat_id}` : null,
@@ -3812,25 +3815,29 @@ app.post('/api/participant_task_giveaways', async (req, res) => {
 // Задания конкретного розыгрыша + статус выполнения участником
 app.post('/api/participant_tasks', async (req, res) => {
     try {
-        const { init_data, giveaway_id } = req.body;
+        const { init_data, giveaway_id, pool_id } = req.body;
         const parsed = _tgCheckMiniAppInitData(init_data);
         if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
         const userId = parsed.user_parsed.id;
 
         if (!giveaway_id) return res.status(400).json({ ok: false, reason: 'missing_giveaway_id' });
 
-        // Проверяем что у розыгрыша есть активный пулл
-        const poolRes = await pool.query(`
-            SELECT tp.id AS pool_id
-            FROM task_pool_giveaways tpg
-            JOIN task_pools tp ON tp.id = tpg.pool_id
-            WHERE tpg.giveaway_id = $1 AND tpg.status = 'active'
-            LIMIT 1
-        `, [giveaway_id]);
-
-        if (!poolRes.rows.length) return res.status(404).json({ ok: false, reason: 'no_active_pool' });
-
-        const poolId = poolRes.rows[0].pool_id;
+        // Если pool_id передан явно — используем его, иначе берём первый активный
+        let poolId;
+        if (pool_id) {
+            poolId = parseInt(pool_id);
+        } else {
+            const poolRes = await pool.query(`
+                SELECT tp.id AS pool_id
+                FROM task_pool_giveaways tpg
+                JOIN task_pools tp ON tp.id = tpg.pool_id
+                WHERE tpg.giveaway_id = $1 AND tpg.status = 'active'
+                ORDER BY tpg.id ASC
+                LIMIT 1
+            `, [giveaway_id]);
+            if (!poolRes.rows.length) return res.status(404).json({ ok: false, reason: 'no_active_pool' });
+            poolId = poolRes.rows[0].pool_id;
+        }
 
         // Задания
         const tasksRes = await pool.query(`
