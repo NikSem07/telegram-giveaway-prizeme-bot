@@ -189,11 +189,27 @@ function _initDetailBindings(giveawayTitle) {
     // Кнопки «Начать»
     document.querySelectorAll('.pt-task-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const taskId     = Number(btn.dataset.taskId);
-            const link       = btn.dataset.taskLink;
-            const hasSecret  = btn.dataset.secret === '1';
+            const taskId    = Number(btn.dataset.taskId);
+            const link      = btn.dataset.taskLink;
+            const hasSecret = btn.dataset.secret === '1';
+            const taskType  = btn.dataset.taskType || '';
 
-            // Открываем ссылку если есть
+            if (taskType === 'telegram_subscribe') {
+                // Открываем канал напрямую в Telegram без браузера
+                if (link) {
+                    const tg = window.Telegram?.WebApp;
+                    let tgLink = link.trim();
+                    if (tgLink.startsWith('@')) tgLink = `https://t.me/${tgLink.slice(1)}`;
+                    if (tg?.openTelegramLink) tg.openTelegramLink(tgLink);
+                    else window.open(tgLink, '_blank');
+                }
+                // Показываем кнопку «Проверить подписку»
+                const checkBlock = document.getElementById(`pt-checksub-${taskId}`);
+                if (checkBlock) checkBlock.classList.remove('pt-secret-block--hidden');
+                return;
+            }
+
+            // Остальные типы — стандартное поведение
             if (link) {
                 const tg = window.Telegram?.WebApp;
                 if (tg?.openLink) tg.openLink(link);
@@ -201,14 +217,12 @@ function _initDetailBindings(giveawayTitle) {
             }
 
             if (hasSecret) {
-                // Показываем поле ввода секретного кода
                 const secretBlock = document.getElementById(`pt-secret-${taskId}`);
                 if (secretBlock) {
                     secretBlock.classList.remove('pt-secret-block--hidden');
                     document.getElementById(`pt-secret-input-${taskId}`)?.focus();
                 }
             } else {
-                // Без секретного кода — сразу отмечаем выполненным
                 _completeTask(taskId, null, giveawayTitle);
             }
         });
@@ -237,6 +251,55 @@ function _initDetailBindings(giveawayTitle) {
                 const taskId = Number(input.id.replace('pt-secret-input-', ''));
                 const code   = input.value.trim();
                 if (code) _completeTask(taskId, code, giveawayTitle);
+            }
+        });
+    });
+
+    // Кнопки «Проверить подписку» (telegram_subscribe)
+    document.querySelectorAll('.pt-checksub-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const taskId = Number(btn.dataset.taskId);
+            const hint   = document.getElementById(`pt-checksub-hint-${taskId}`);
+
+            btn.disabled    = true;
+            btn.textContent = 'Проверяем...';
+            if (hint) hint.textContent = '';
+
+            try {
+                const resp = await fetch('/api/check_subscription', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({
+                        init_data:   getInitData(),
+                        task_id:     taskId,
+                        giveaway_id: _currentGiveawayId,
+                    }),
+                });
+                const data = await resp.json();
+
+                if (!data.ok) {
+                    btn.disabled    = false;
+                    btn.textContent = '✅ Проверить подписку';
+                    if (hint) {
+                        hint.textContent = data.reason === 'not_subscribed'
+                            ? '❌ Вы не подписаны. Подпишитесь и нажмите снова.'
+                            : '❌ Ошибка проверки. Попробуйте ещё раз.';
+                        hint.style.color = '#ff4444';
+                    }
+                    return;
+                }
+
+                _completedIds.add(taskId);
+                _refreshDetailUI(giveawayTitle);
+
+            } catch (e) {
+                console.error('[TASKS] checkSubscription error:', e);
+                btn.disabled    = false;
+                btn.textContent = '✅ Проверить подписку';
+                if (hint) {
+                    hint.textContent = '❌ Ошибка сети. Попробуйте ещё раз.';
+                    hint.style.color = '#ff4444';
+                }
             }
         });
     });

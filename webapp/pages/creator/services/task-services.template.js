@@ -111,9 +111,19 @@ export default function taskServicesTemplate() {
 
                         <!-- Ссылка -->
                         <div class="ts-field" id="ts-field-link">
-                            <label class="ts-field-label" for="ts-task-link">Ссылка на задание</label>
-                            <input type="url" id="ts-task-link" class="ts-input"
+                            <label class="ts-field-label" for="ts-task-link" id="ts-field-link-label">Ссылка на задание</label>
+                            <input type="text" id="ts-task-link" class="ts-input"
                                    placeholder="https://..." enterkeyhint="done">
+                        </div>
+
+                        <!-- Подключение бота (только для telegram_subscribe) -->
+                        <div class="ts-field" id="ts-field-bot-connect" style="display:none">
+                            <div style="background:rgba(255,165,0,0.1);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:12px;">
+                                <p class="ts-hint" style="margin:0 0 10px;">⚠️ Для проверки подписки необходимо добавить бота в канал как администратора</p>
+                                <button type="button" class="ts-add-task-btn" id="ts-bot-connect-btn" style="width:100%;">
+                                    🤖 Подключить бота к каналу
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Секретный код (только для external и custom) -->

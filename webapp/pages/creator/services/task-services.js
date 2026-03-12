@@ -265,12 +265,20 @@ function _validateForm() {
         _showFormError('Введите ссылку на задание');
         return false;
     }
-    // Простая проверка URL
-    try {
-        new URL(f.link.trim());
-    } catch (_) {
-        _showFormError('Ссылка должна начинаться с https://');
-        return false;
+    // Проверка ссылки — для telegram_subscribe принимаем @username
+    const linkVal = f.link.trim();
+    if (f.type === 'telegram_subscribe') {
+        if (!linkVal.startsWith('@') && !linkVal.match(/(?:https?:\/\/)?t\.me\/[a-zA-Z0-9_]+/)) {
+            _showFormError('Введите ссылку в формате https://t.me/channel или @username');
+            return false;
+        }
+    } else {
+        try {
+            new URL(linkVal);
+        } catch (_) {
+            _showFormError('Ссылка должна начинаться с https://');
+            return false;
+        }
     }
     if (f.secretEnabled && !f.secret.trim()) {
         _showFormError('Введите секретный код или отключите его');
@@ -430,6 +438,19 @@ function _initHandlers() {
             } else {
                 secretField.style.display = '';
             }
+
+            // Блок подключения бота и label ссылки — только для telegram_subscribe
+            const botConnectField = document.getElementById('ts-field-bot-connect');
+            const linkLabel = document.getElementById('ts-field-link-label');
+            if (typeId === 'telegram_subscribe') {
+                if (botConnectField) botConnectField.style.display = '';
+                if (linkLabel) linkLabel.textContent = 'Ссылка на канал или @username';
+                document.getElementById('ts-task-link').placeholder = 'https://t.me/channel или @username';
+            } else {
+                if (botConnectField) botConnectField.style.display = 'none';
+                if (linkLabel) linkLabel.textContent = 'Ссылка на задание';
+                document.getElementById('ts-task-link').placeholder = 'https://...';
+            }
         });
     });
 
@@ -448,6 +469,15 @@ function _initHandlers() {
     document.getElementById('ts-task-link')?.addEventListener('input', (e) => {
         _state.form.link = e.target.value;
     });
+
+    // --- Кнопка подключения бота к каналу ---
+    document.getElementById('ts-bot-connect-btn')?.addEventListener('click', () => {
+        const tg = window.Telegram?.WebApp;
+        const botUrl = 'https://t.me/prizeme_official_bot?start=add_channel';
+        if (tg?.openTelegramLink) tg.openTelegramLink(botUrl);
+        else window.open(botUrl, '_blank');
+    });
+
     document.getElementById('ts-task-link')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     });

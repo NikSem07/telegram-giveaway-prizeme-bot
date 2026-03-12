@@ -77,6 +77,7 @@ export function taskDetailTemplate({ giveawayTitle, tasks, completedIds, rewardC
                         : `<button class="pt-task-btn" type="button"
                                    data-task-id="${task.id}"
                                    data-task-link="${task.link || ''}"
+                                   data-task-type="${task.type || ''}"
                                    data-secret="${task.secret_enabled ? '1' : '0'}">
                                Начать
                            </button>`
@@ -92,6 +93,14 @@ export function taskDetailTemplate({ giveawayTitle, tasks, completedIds, rewardC
                 <button class="pt-secret-submit" type="button" data-task-id="${task.id}">
                     Подтвердить
                 </button>
+            </div>
+            ` : ''}
+            ${task.type === 'telegram_subscribe' && !done ? `
+            <div class="pt-secret-block pt-secret-block--hidden" id="pt-checksub-${task.id}">
+                <button class="pt-secret-submit pt-checksub-btn" type="button" data-task-id="${task.id}">
+                    ✅ Проверить подписку
+                </button>
+                <p class="pt-checksub-hint" id="pt-checksub-hint-${task.id}" style="margin:6px 0 0; font-size:13px;"></p>
             </div>
             ` : ''}
         `;

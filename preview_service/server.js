@@ -3896,7 +3896,7 @@ app.post('/api/complete_task', async (req, res) => {
 
         // Получаем задание
         const taskRes = await pool.query(`
-            SELECT t.id, t.secret_code, t.reward_tickets, t.pool_id,
+            SELECT t.id, t.type, t.secret_code, t.reward_tickets, t.pool_id,
                    (t.secret_code IS NOT NULL) AS secret_enabled
             FROM tasks t
             WHERE t.id = $1
@@ -3905,6 +3905,11 @@ app.post('/api/complete_task', async (req, res) => {
         if (!taskRes.rows.length) return res.status(404).json({ ok: false, reason: 'task_not_found' });
 
         const task = taskRes.rows[0];
+
+        // Подписка на канал проверяется через /api/check_subscription
+        if (task.type === 'telegram_subscribe') {
+            return res.json({ ok: false, reason: 'use_check_subscription' });
+        }
 
         // Проверяем секретный код
         if (task.secret_enabled) {
@@ -3936,6 +3941,72 @@ app.post('/api/complete_task', async (req, res) => {
     }
 });
 
+// ── POST /api/check_subscription ─────────────────────────────────────────
+// Проверяет реальную подписку участника на Telegram-канал
+app.post('/api/check_subscription', async (req, res) => {
+    try {
+        const { init_data, task_id, giveaway_id } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        if (!task_id || !giveaway_id) return res.status(400).json({ ok: false, reason: 'missing_params' });
+
+        // Получаем задание
+        const taskRes = await pool.query(`
+            SELECT t.id, t.type, t.link FROM tasks t WHERE t.id = $1
+        `, [task_id]);
+
+        if (!taskRes.rows.length) return res.status(404).json({ ok: false, reason: 'task_not_found' });
+
+        const task = taskRes.rows[0];
+        if (task.type !== 'telegram_subscribe') {
+            return res.status(400).json({ ok: false, reason: 'wrong_task_type' });
+        }
+
+        // Нормализуем ссылку → @username
+        const rawLink = (task.link || '').trim();
+        let channelRef;
+        if (rawLink.startsWith('@')) {
+            channelRef = rawLink;
+        } else {
+            const match = rawLink.match(/(?:https?:\/\/)?t\.me\/([a-zA-Z0-9_]+)/);
+            channelRef = match ? `@${match[1]}` : rawLink;
+        }
+
+        if (!channelRef) {
+            return res.json({ ok: false, reason: 'invalid_channel_link' });
+        }
+
+        // Проверяем подписку через Telegram API
+        const memberCheck = await tgGetChatMember(channelRef, userId);
+        console.log(`[CHECK_SUB] user=${userId} channel=${channelRef} result:`, memberCheck);
+
+        if (!memberCheck.ok) {
+            return res.json({ ok: false, reason: 'not_subscribed' });
+        }
+
+        // Проверяем не выполнено ли уже
+        const existingRes = await pool.query(`
+            SELECT id FROM task_completions
+            WHERE user_id = $1 AND task_id = $2 AND giveaway_id = $3
+        `, [userId, task_id, giveaway_id]);
+
+        if (existingRes.rows.length) return res.json({ ok: true, already_completed: true });
+
+        // Записываем выполнение
+        await pool.query(`
+            INSERT INTO task_completions (user_id, task_id, giveaway_id, status, completed_at)
+            VALUES ($1, $2, $3, 'completed', NOW())
+        `, [userId, task_id, giveaway_id]);
+
+        return res.json({ ok: true });
+
+    } catch (e) {
+        console.error('[API check_subscription] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
 
 // ── POST /api/claim_task_reward ───────────────────────────────────────────
 // Начислить билеты за выполнение всех заданий
