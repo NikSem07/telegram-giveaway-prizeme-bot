@@ -4118,7 +4118,7 @@ app.post('/api/creator_active_giveaways_count', async (req, res) => {
         const result = await pool.query(`
             SELECT COUNT(*) AS count
             FROM giveaways
-            WHERE creator_id = $1
+            WHERE owner_user_id = $1
               AND status = 'active'
         `, [userId]);
 
