@@ -212,8 +212,17 @@ function _openTaskForm() {
     if (secretInput) secretInput.value = '';
     if (rewardInput) rewardInput.value = '';
 
-    // Сбрасываем чипы типов
-    document.querySelectorAll('.ts-type-chip').forEach(c => c.classList.remove('ts-type-chip--active'));
+    // Сбрасываем селектор группы и чипы
+    const groupSelectLabel = document.getElementById('ts-group-select-label');
+    const groupSelectBtn   = document.getElementById('ts-group-select-btn');
+    const chipsBlock       = document.getElementById('ts-type-chips-block');
+    const chipsContainer   = document.getElementById('ts-type-chips-container');
+    if (groupSelectLabel) groupSelectLabel.textContent = 'Выберите тип задания';
+    if (groupSelectBtn)   groupSelectBtn.classList.remove('ts-group-select-btn--selected');
+    if (chipsBlock)       chipsBlock.classList.remove('ts-type-chips-block--visible');
+    if (chipsContainer)   chipsContainer.innerHTML = '';
+    document.getElementById('ts-group-dropdown')?.classList.remove('ts-group-dropdown--open');
+    document.getElementById('ts-group-select-arrow')?.classList.remove('ts-group-select-arrow--open');
     // Сбрасываем чипы награды
     document.querySelectorAll('.ts-reward-chip').forEach(c => c.classList.remove('ts-reward-chip--active'));
     // Скрываем секретный код
@@ -419,40 +428,113 @@ function _initHandlers() {
         _openTaskForm();
     });
 
-    // --- Тип задания ---
-    document.querySelectorAll('.ts-type-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            const typeId = chip.dataset.type;
-            _state.form.type = typeId;
+    // --- Тип задания: выпадающий список групп ---
+    const groupSelectBtn    = document.getElementById('ts-group-select-btn');
+    const groupSelectLabel  = document.getElementById('ts-group-select-label');
+    const groupSelectArrow  = document.getElementById('ts-group-select-arrow');
+    const groupDropdown     = document.getElementById('ts-group-dropdown');
+    const chipsBlock        = document.getElementById('ts-type-chips-block');
+    const chipsContainer    = document.getElementById('ts-type-chips-container');
 
-            // Визуал
-            document.querySelectorAll('.ts-type-chip').forEach(c => c.classList.remove('ts-type-chip--active'));
-            chip.classList.add('ts-type-chip--active');
+    const GROUP_CHIPS = {
+        telegram: [
+            { id: 'telegram_subscribe', label: 'Подписка на канал' },
+            { id: 'telegram_comment',   label: 'Комментарий' },
+            { id: 'telegram_post',      label: 'Просмотр поста' },
+        ],
+        external: [
+            { id: 'external_video',     label: 'Просмотр видео' },
+            { id: 'external_post',      label: 'Пост в соцсетях' },
+            { id: 'external_subscribe', label: 'Подписка на соцсети' },
+        ],
+        custom: [
+            { id: 'custom', label: 'Своё задание' },
+        ],
+    };
 
-            // Секретный код — только для external и custom
-            const secretField = document.getElementById('ts-field-secret');
-            if (_isTelegramType(typeId)) {
-                secretField.style.display = 'none';
-                _state.form.secretEnabled = false;
-                document.getElementById('ts-secret-input-wrap').style.display = 'none';
-            } else {
-                secretField.style.display = '';
-            }
+    const GROUP_LABELS = {
+        telegram: 'В Telegram',
+        external: 'На внешних ресурсах',
+        custom:   'Кастомное',
+    };
 
-            // Блок подключения бота и label ссылки — только для telegram_subscribe
-            const botConnectField = document.getElementById('ts-field-bot-connect');
-            const linkLabel = document.getElementById('ts-field-link-label');
-            if (typeId === 'telegram_subscribe') {
-                if (botConnectField) botConnectField.style.display = '';
-                if (linkLabel) linkLabel.textContent = 'Ссылка на канал или @username';
-                document.getElementById('ts-task-link').placeholder = 'https://t.me/channel или @username';
-            } else {
-                if (botConnectField) botConnectField.style.display = 'none';
-                if (linkLabel) linkLabel.textContent = 'Ссылка на задание';
-                document.getElementById('ts-task-link').placeholder = 'https://...';
-            }
+    let _dropdownOpen = false;
+
+    function _toggleDropdown(open) {
+        _dropdownOpen = open;
+        groupDropdown.classList.toggle('ts-group-dropdown--open', open);
+        groupSelectArrow.classList.toggle('ts-group-select-arrow--open', open);
+    }
+
+    function _selectGroup(groupId) {
+        // Обновляем кнопку-селектор
+        groupSelectLabel.textContent = GROUP_LABELS[groupId];
+        groupSelectBtn.classList.add('ts-group-select-btn--selected');
+        _toggleDropdown(false);
+
+        // Сбрасываем выбранный тип задания
+        _state.form.type = null;
+
+        // Рендерим чипы
+        const chips = GROUP_CHIPS[groupId] || [];
+        chipsContainer.innerHTML = chips.map(c =>
+            `<button type="button" class="ts-type-chip" data-type="${c.id}">${c.label}</button>`
+        ).join('');
+
+        // Показываем блок чипов с анимацией
+        chipsBlock.classList.add('ts-type-chips-block--visible');
+
+        // Вешаем обработчики на новые чипы
+        chipsContainer.querySelectorAll('.ts-type-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const typeId = chip.dataset.type;
+                _state.form.type = typeId;
+
+                chipsContainer.querySelectorAll('.ts-type-chip').forEach(c => c.classList.remove('ts-type-chip--active'));
+                chip.classList.add('ts-type-chip--active');
+
+                // Секретный код — только для external и custom
+                const secretField = document.getElementById('ts-field-secret');
+                if (_isTelegramType(typeId)) {
+                    secretField.style.display = 'none';
+                    _state.form.secretEnabled = false;
+                    document.getElementById('ts-secret-input-wrap').style.display = 'none';
+                } else {
+                    secretField.style.display = '';
+                }
+
+                // Блок подключения бота и label ссылки
+                const botConnectField = document.getElementById('ts-field-bot-connect');
+                const linkLabel = document.getElementById('ts-field-link-label');
+                if (typeId === 'telegram_subscribe') {
+                    if (botConnectField) botConnectField.style.display = '';
+                    if (linkLabel) linkLabel.textContent = 'Ссылка на канал или @username';
+                    document.getElementById('ts-task-link').placeholder = 'https://t.me/channel или @username';
+                } else {
+                    if (botConnectField) botConnectField.style.display = 'none';
+                    if (linkLabel) linkLabel.textContent = 'Ссылка на задание';
+                    document.getElementById('ts-task-link').placeholder = 'https://...';
+                }
+            });
+        });
+    }
+
+    groupSelectBtn?.addEventListener('click', () => {
+        _toggleDropdown(!_dropdownOpen);
+    });
+
+    groupDropdown?.querySelectorAll('.ts-group-option').forEach(option => {
+        option.addEventListener('click', () => {
+            _selectGroup(option.dataset.group);
         });
     });
+
+    // Закрытие дропдауна при клике вне
+    document.addEventListener('click', (e) => {
+        if (_dropdownOpen && !groupSelectBtn.contains(e.target) && !groupDropdown.contains(e.target)) {
+            _toggleDropdown(false);
+        }
+    }, { capture: true });
 
     // --- Название задания ---
     document.getElementById('ts-task-title')?.addEventListener('input', (e) => {

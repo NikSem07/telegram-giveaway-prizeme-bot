@@ -4107,6 +4107,29 @@ app.post('/api/claim_task_reward', async (req, res) => {
     }
 });
 
+// ── POST /api/creator_active_giveaways_count ──────────────────────────────
+app.post('/api/creator_active_giveaways_count', async (req, res) => {
+    try {
+        const { init_data } = req.body;
+        const parsed = _tgCheckMiniAppInitData(init_data);
+        if (!parsed) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+        const userId = parsed.user_parsed.id;
+
+        const result = await pool.query(`
+            SELECT COUNT(*) AS count
+            FROM giveaways
+            WHERE creator_id = $1
+              AND status = 'active'
+        `, [userId]);
+
+        const count = parseInt(result.rows[0].count);
+        return res.json({ ok: true, count });
+    } catch (e) {
+        console.error('[API creator_active_giveaways_count] error:', e);
+        return res.status(500).json({ ok: false, reason: 'server_error' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🎯 PrizeMe Node.js backend running on port ${PORT}`);

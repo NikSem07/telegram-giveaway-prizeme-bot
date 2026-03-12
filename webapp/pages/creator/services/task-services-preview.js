@@ -27,18 +27,60 @@ function _hideBackButton(onBack) {
 }
 
 // ── Основной рендер ───────────────────────────────────────────────────────
+function _getInitData() {
+    return window.Telegram?.WebApp?.initData
+        || sessionStorage.getItem('prizeme_init_data') || '';
+}
+
+async function _hasActiveGiveaway() {
+    try {
+        const resp = await fetch('/api/creator_active_giveaways_count', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_data: _getInitData() }),
+        });
+        const data = await resp.json();
+        return data.ok && data.count > 0;
+    } catch (e) {
+        console.error('[TSP] hasActiveGiveaway error:', e);
+        // При ошибке сети — пускаем дальше, чтобы не блокировать пользователя
+        return true;
+    }
+}
+
+function _openNoGiveawayPopup() {
+    const overlay = document.getElementById('tsp-no-giveaway-overlay');
+    const sheet   = document.getElementById('tsp-no-giveaway-sheet');
+    if (!overlay || !sheet) return;
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        overlay.classList.add('tsp-popup-overlay--visible');
+        sheet.classList.add('tsp-popup-sheet--visible');
+    });
+}
+
+function _closeNoGiveawayPopup() {
+    const overlay = document.getElementById('tsp-no-giveaway-overlay');
+    const sheet   = document.getElementById('tsp-no-giveaway-sheet');
+    if (!overlay || !sheet) return;
+
+    overlay.classList.remove('tsp-popup-overlay--visible');
+    sheet.classList.remove('tsp-popup-sheet--visible');
+    sheet.addEventListener('transitionend', () => {
+        overlay.style.display = 'none';
+    }, { once: true });
+}
+
 export function renderTaskServicesPreviewPage() {
     const main = document.getElementById('main-content');
     if (!main) return;
 
-    // Скрываем шапку и навбар
     _setShellVisibility(false);
-
     window.scrollTo({ top: 0, behavior: 'auto' });
 
     main.innerHTML = taskServicesPreviewTemplate();
 
-    // BackButton → возврат в Сервисы
     const handleBack = () => {
         _hideBackButton(handleBack);
         _setShellVisibility(true);
@@ -46,10 +88,27 @@ export function renderTaskServicesPreviewPage() {
     };
     _showBackButton(handleBack);
 
-    // Кнопка «Продолжить» → переход к форме создания заданий
-    document.getElementById('tsp-continue-btn')
-        ?.addEventListener('click', () => {
-            _hideBackButton(handleBack);
-            Router.navigate('task_services');
-        });
+    // Кнопка «Продолжить»
+    document.getElementById('tsp-continue-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('tsp-continue-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Проверяем...'; }
+
+        const hasActive = await _hasActiveGiveaway();
+
+        if (btn) { btn.disabled = false; btn.textContent = 'Продолжить'; }
+
+        if (!hasActive) {
+            _openNoGiveawayPopup();
+            return;
+        }
+
+        _hideBackButton(handleBack);
+        Router.navigate('task_services');
+    });
+
+    // Закрытие pop-up
+    document.getElementById('tsp-no-giveaway-close')?.addEventListener('click', _closeNoGiveawayPopup);
+    document.getElementById('tsp-no-giveaway-overlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) _closeNoGiveawayPopup();
+    });
 }

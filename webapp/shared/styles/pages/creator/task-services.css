@@ -701,3 +701,131 @@
 :root.theme-light .ts-toast {
     background: rgba(0, 0, 0, 0.82);
 }
+
+/* ── Шапка страницы формы ─────────────────────────────────────────────── */
+.ts-page-header {
+    padding: 20px 16px 4px;
+    text-align: center;
+}
+
+.ts-page-title {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.25;
+}
+
+.ts-page-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.5;
+}
+
+/* ── Заголовки секций — стиль как «Мои каналы» ───────────────────────── */
+.ts-section-label--heading {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: normal;
+    text-transform: none;
+    margin-bottom: 10px;
+}
+
+/* ── Селектор группы задания ─────────────────────────────────────────── */
+.ts-group-select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 15px;
+    font-weight: 400;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ts-group-select-btn--selected {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.ts-group-select-btn:active {
+    background: rgba(255, 255, 255, 0.11);
+}
+
+.ts-group-select-arrow {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.35);
+    transition: transform 0.2s ease;
+}
+
+.ts-group-select-arrow--open {
+    transform: rotate(180deg);
+}
+
+/* Выпадающий список */
+.ts-group-dropdown {
+    margin-top: 6px;
+    background: rgba(40, 40, 44, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.ts-group-dropdown--open {
+    max-height: 200px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.ts-group-option {
+    display: block;
+    width: 100%;
+    padding: 14px 16px;
+    background: none;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s ease;
+}
+
+.ts-group-option:first-child {
+    border-top: none;
+}
+
+.ts-group-option:active {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Блок чипов задания — с анимацией появления */
+.ts-type-chips-block {
+    margin-top: 12px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+.ts-type-chips-block--visible {
+    max-height: 200px;
+    opacity: 1;
+    pointer-events: auto;
+}

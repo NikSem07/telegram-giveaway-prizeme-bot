@@ -5,7 +5,7 @@ const STEPS = [
     'Устанавливайте размер вознаграждения за выполнение задания — сколько дополнительных билетов получит участник',
     'Подключайте задание к конкретному активному розыгрышу',
     'Все участники розыгрыша смогут увидеть задания и выполнить их в разделе «Задания» в режиме «Участник»',
-    '1 задание стоит 199 ₽ / 199 ⭐️',
+    'Стоимость 1 задания: 199 ₽ / 199 ⭐️',
 ];
 
 export default function taskServicesPreviewTemplate() {
@@ -29,10 +29,20 @@ export default function taskServicesPreviewTemplate() {
             </div>
 
             <!-- Блок инструкции -->
+            <p class="tsp-section-title">Как это работает</p>
             <div class="tsp-steps-card">
-                <p class="tsp-steps-label">Как это работает</p>
                 <div class="tsp-steps">
                     ${steps}
+                </div>
+            </div>
+
+            <!-- Pop-up: нет активных розыгрышей -->
+            <div class="tsp-popup-overlay" id="tsp-no-giveaway-overlay">
+                <div class="tsp-popup-sheet" id="tsp-no-giveaway-sheet">
+                    <div class="tsp-popup-icon">⚠️</div>
+                    <p class="tsp-popup-title">Нет активных розыгрышей</p>
+                    <p class="tsp-popup-text">Чтобы создать задания, сначала запустите хотя бы один розыгрыш</p>
+                    <button type="button" class="tsp-popup-btn" id="tsp-no-giveaway-close">Понятно</button>
                 </div>
             </div>
 

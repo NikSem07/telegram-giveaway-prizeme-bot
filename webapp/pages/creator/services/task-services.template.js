@@ -17,6 +17,12 @@ export default function taskServicesTemplate() {
     return `
         <div class="ts-screen">
 
+            <!-- ── Шапка страницы ────────────────────────────────────── -->
+            <div class="ts-page-header">
+                <h1 class="ts-page-title">Форма создания заданий</h1>
+                <p class="ts-page-subtitle">Создайте пулл из множества заданий, которые потом сможете подключить к конкретному активному розыгрышу</p>
+            </div>
+
             <!-- ── Блок 1: Описание пулла ────────────────────────────── -->
             <div class="ts-section">
                 <p class="ts-section-label">Описание блока заданий</p>
@@ -37,7 +43,7 @@ export default function taskServicesTemplate() {
 
             <!-- ── Блок 2: Лимит выполнений ──────────────────────────── -->
             <div class="ts-section">
-                <p class="ts-section-label">Лимит выполнений</p>
+                <p class="ts-section-label ts-section-label--heading">Лимит выполнений</p>
                 <div class="ts-card ts-limit-card">
                     <div class="ts-limit-toggle">
                         <button type="button"
@@ -63,7 +69,7 @@ export default function taskServicesTemplate() {
 
             <!-- ── Блок 3: Список заданий ─────────────────────────────── -->
             <div class="ts-section">
-                <p class="ts-section-label">Задания</p>
+                <p class="ts-section-label ts-section-label--heading">Создание заданий</p>
 
                 <!-- Свёрнутые задания -->
                 <div class="ts-tasks-list" id="ts-tasks-list"></div>
@@ -72,30 +78,27 @@ export default function taskServicesTemplate() {
                 <div class="ts-task-form" id="ts-task-form" style="display:none">
                     <div class="ts-card ts-task-form-card">
 
-                        <!-- Группы типов -->
-                        <div class="ts-type-groups" id="ts-type-groups">
-                            <div class="ts-type-group">
-                                <p class="ts-type-group-label">В Telegram</p>
-                                <div class="ts-type-chips">
-                                    <button type="button" class="ts-type-chip" data-type="telegram_subscribe">Подписка на канал</button>
-                                    <button type="button" class="ts-type-chip" data-type="telegram_comment">Комментарий</button>
-                                    <button type="button" class="ts-type-chip" data-type="telegram_post">Просмотр поста</button>
-                                </div>
+                        <!-- Тип задания: селектор группы -->
+                        <div class="ts-field" id="ts-field-group">
+                            <label class="ts-field-label">Тип задания</label>
+                            <button type="button" class="ts-group-select-btn" id="ts-group-select-btn">
+                                <span id="ts-group-select-label">Выберите тип задания</span>
+                                <svg class="ts-group-select-arrow" id="ts-group-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </button>
+                            <!-- Выпадающий список групп -->
+                            <div class="ts-group-dropdown" id="ts-group-dropdown">
+                                <button type="button" class="ts-group-option" data-group="telegram">В Telegram</button>
+                                <button type="button" class="ts-group-option" data-group="external">На внешних ресурсах</button>
+                                <button type="button" class="ts-group-option" data-group="custom">Кастомное</button>
                             </div>
-                            <div class="ts-type-group">
-                                <p class="ts-type-group-label">На внешних ресурсах</p>
-                                <div class="ts-type-chips">
-                                    <button type="button" class="ts-type-chip" data-type="external_video">Просмотр видео</button>
-                                    <button type="button" class="ts-type-chip" data-type="external_post">Пост в соцсетях</button>
-                                    <button type="button" class="ts-type-chip" data-type="external_subscribe">Подписка на соцсети</button>
-                                </div>
-                            </div>
-                            <div class="ts-type-group">
-                                <p class="ts-type-group-label">Кастомное</p>
-                                <div class="ts-type-chips">
-                                    <button type="button" class="ts-type-chip" data-type="custom">Своё задание</button>
-                                </div>
-                            </div>
+                        </div>
+
+                        <!-- Чипы конкретного задания (появляются после выбора группы) -->
+                        <div class="ts-type-chips-block" id="ts-type-chips-block">
+                            <label class="ts-field-label">Задание</label>
+                            <div class="ts-type-chips" id="ts-type-chips-container"></div>
                         </div>
 
                         <!-- Название -->

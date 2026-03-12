@@ -46,19 +46,18 @@
 /* ── Блок инструкции ──────────────────────────────────────────────────────── */
 .tsp-steps-card {
     margin: 0 0 12px;
-    background: var(--card-bg);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-lg);
     padding: 16px;
 }
 
-.tsp-steps-label {
-    font-size: 11px;
+/* Заголовок секции — вынесен наружу карточки, стиль как «Мои каналы» */
+.tsp-section-title {
+    font-size: 20px;
     font-weight: 700;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin: 0 0 14px;
-    padding-left: 2px;
+    color: #fff;
+    margin: 0 0 10px;
+    padding: 0;
 }
 
 .tsp-steps {
@@ -159,6 +158,80 @@
     color: rgba(0, 0, 0, 0.55);
 }
 
-:root.theme-light .tsp-steps-label {
-    color: rgba(0, 0, 0, 0.45);
+:root.theme-light .tsp-section-title {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+:root.theme-light .tsp-steps-card {
+    background: rgba(0, 0, 0, 0.04);
+    box-shadow: none;
+}
+
+/* ── Pop-up: нет активных розыгрышей ─────────────────────────────────────── */
+.tsp-popup-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+    transition: background 0.25s ease;
+}
+
+.tsp-popup-overlay--visible {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.tsp-popup-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: #1c1c1e;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    text-align: center;
+}
+
+.tsp-popup-sheet--visible {
+    transform: translateY(0);
+}
+
+.tsp-popup-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+.tsp-popup-title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.tsp-popup-text {
+    margin: 0 0 24px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.5;
+}
+
+.tsp-popup-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(180deg, #2f7cff 0%, #1b4dff 100%);
+    border: none;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease;
+}
+
+.tsp-popup-btn:active {
+    opacity: 0.8;
 }
