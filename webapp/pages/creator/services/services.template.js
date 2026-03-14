@@ -1,28 +1,32 @@
 // webapp/pages/creator/services/services.template.js
 
 const SERVICES = [
-    {
-        id:          'top_placement',
-        emoji:       '🏆',
-        title:       'Включение в Топ-розыгрыши',
-        description: 'Розыгрыш будет опубликован в блоке «Топ-розыгрыши» на главной странице режима «Участник»',
-    },
-    {
-        id:          'bot_promotion',
-        emoji:       '📣',
-        title:       'Продвижение розыгрыша в боте',
-        description: 'Розыгрыш будет опубликован в боте и пользователи получат уведомление с возможностью принять участие',
-    },
-    {
-        id:          'tasks',
-        emoji:       '✅',
-        title:       'Задания для участников',
-        description: 'Создайте задания для участников розыгрыша, за выполнение они получат дополнительные билеты',
-    },
+  {
+    id: "top_placement",
+    emoji: "🏆",
+    title: "Включение в топ-розыгрыши",
+    description:
+      "Розыгрыш будет опубликован в блоке «Топ-розыгрыши» на главной странице режима «Участник»",
+  },
+  {
+    id: "bot_promotion",
+    emoji: "📣",
+    title: "Продвижение в боте",
+    description:
+      "Розыгрыш будет опубликован в боте и пользователи получат уведомление с возможностью принять участие",
+  },
+  {
+    id: "tasks",
+    emoji: "✅",
+    title: "Задания для участников",
+    description:
+      "Создайте задания для участников розыгрыша, за выполнение они получат дополнительные билеты",
+  },
 ];
 
 export default function servicesTemplate(context = {}) {
-    const serviceCards = SERVICES.map(s => `
+  const serviceCards = SERVICES.map(
+    (s) => `
         <div class="svc-card" data-service-id="${s.id}" role="button" tabindex="0" aria-pressed="false">
             <div class="svc-card-header">
                 <span class="svc-card-emoji">${s.emoji}</span>
@@ -30,9 +34,10 @@ export default function servicesTemplate(context = {}) {
             </div>
             <p class="svc-card-desc">${s.description}</p>
         </div>
-    `).join('');
+    `,
+  ).join("");
 
-    return `
+  return `
         <div class="svc-screen">
 
             <div class="svc-hero">

@@ -1,20 +1,62 @@
 // webapp/pages/creator/services/task-services.template.js
 
 export const TASK_TYPES = [
-    // Telegram
-    { id: 'telegram_subscribe', group: 'telegram', label: 'Подписка на канал',   hasLink: true,  hasSecret: false },
-    { id: 'telegram_comment',   group: 'telegram', label: 'Комментарий под постом', hasLink: true, hasSecret: false },
-    { id: 'telegram_post',      group: 'telegram', label: 'Просмотр поста',      hasLink: true,  hasSecret: false },
-    // Внешние
-    { id: 'external_video',     group: 'external', label: 'Просмотр видео',      hasLink: true,  hasSecret: true  },
-    { id: 'external_post',      group: 'external', label: 'Пост в соцсетях',     hasLink: true,  hasSecret: true  },
-    { id: 'external_subscribe', group: 'external', label: 'Подписка на соцсети', hasLink: true,  hasSecret: true  },
-    // Кастомное
-    { id: 'custom',             group: 'custom',   label: 'Своё задание',        hasLink: true,  hasSecret: true  },
+  // Telegram
+  {
+    id: "telegram_subscribe",
+    group: "telegram",
+    label: "Подписка на канал",
+    hasLink: true,
+    hasSecret: false,
+  },
+  {
+    id: "telegram_comment",
+    group: "telegram",
+    label: "Комментарий под постом",
+    hasLink: true,
+    hasSecret: false,
+  },
+  {
+    id: "telegram_post",
+    group: "telegram",
+    label: "Просмотр поста",
+    hasLink: true,
+    hasSecret: false,
+  },
+  // Внешние
+  {
+    id: "external_video",
+    group: "external",
+    label: "Просмотр видео",
+    hasLink: true,
+    hasSecret: true,
+  },
+  {
+    id: "external_post",
+    group: "external",
+    label: "Пост в соцсетях",
+    hasLink: true,
+    hasSecret: true,
+  },
+  {
+    id: "external_subscribe",
+    group: "external",
+    label: "Подписка на соцсети",
+    hasLink: true,
+    hasSecret: true,
+  },
+  // Кастомное
+  {
+    id: "custom",
+    group: "custom",
+    label: "Своё задание",
+    hasLink: true,
+    hasSecret: true,
+  },
 ];
 
 export default function taskServicesTemplate() {
-    return `
+  return `
         <div class="ts-screen">
 
             <!-- ── Шапка страницы ────────────────────────────────────── -->
@@ -30,20 +72,32 @@ export default function taskServicesTemplate() {
                     <textarea
                         id="ts-description"
                         class="ts-textarea"
-                        placeholder="Кратко опишите задания для участников..."
-                        maxlength="150"
+                        placeholder="Например: Увеличьте шансы победить в розыгрыше, выполнив 3 простых задания"
+                        maxlength="100"
                         rows="3"
                         enterkeyhint="done"
                     ></textarea>
                     <div class="ts-char-counter">
-                        <span id="ts-desc-count">0</span>/150
+                        <span id="ts-desc-count">0</span>/100
                     </div>
                 </div>
             </div>
 
             <!-- ── Блок 2: Лимит выполнений ──────────────────────────── -->
             <div class="ts-section">
-                <p class="ts-section-label ts-section-label--heading">Лимит выполнений</p>
+                <div class="ts-section-label ts-section-label--heading ts-section-label--with-hint">
+                    Лимит участников
+                    <button type="button" class="ts-hint-icon" id="ts-limit-hint-btn" aria-label="Подсказка">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </button>
+                    <span class="ts-hint-tooltip" id="ts-limit-hint-tooltip">
+                        Установите лимит на выполнение заданий (например 100), после достижения которого другие участники не смогут получить награду
+                    </span>
+                </div>
                 <div class="ts-card ts-limit-card">
                     <div class="ts-limit-toggle">
                         <button type="button"
@@ -163,10 +217,10 @@ export default function taskServicesTemplate() {
                         <!-- Кнопки формы -->
                         <div class="ts-form-actions">
                             <button type="button" class="ts-cancel-task-btn" id="ts-cancel-task-form">
-                                Отмена
+                                Отменить
                             </button>
                             <button type="button" class="ts-add-task-btn" id="ts-add-task-confirm">
-                                Добавить задание
+                                Подтвердить
                             </button>
                         </div>
                     </div>
